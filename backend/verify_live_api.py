@@ -17,7 +17,7 @@ def test_live_server():
             "email": email
         }
         
-        response = httpx.post(url, data=data, files=files, timeout=10.0)
+        response = httpx.post(url, data=data, files=files, timeout=60.0)
         
         print("Status Code:", response.status_code)
         if response.status_code == 200:

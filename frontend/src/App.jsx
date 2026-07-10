@@ -360,6 +360,54 @@ export default function App() {
               </div>
             </div>
 
+            {/* Email Report Status Banner */}
+            <div 
+              className="glass-panel" 
+              style={{ 
+                padding: '16px 24px', 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: '16px', 
+                borderLeft: analysisResult.email_status === 'sent' ? '4px solid #10B981' : '4px solid #6366F1',
+                background: 'rgba(255, 255, 255, 0.01)',
+                marginTop: '-16px'
+              }}
+            >
+              <div style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'center', 
+                width: '40px', 
+                height: '40px', 
+                borderRadius: '50%', 
+                background: analysisResult.email_status === 'sent' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(99, 102, 241, 0.1)',
+                color: analysisResult.email_status === 'sent' ? '#10B981' : '#6366F1',
+                flexShrink: 0
+              }}>
+                <Mail size={20} />
+              </div>
+              <div style={{ flexGrow: 1, fontSize: '0.9rem', lineHeight: '1.5' }}>
+                {analysisResult.email_status === 'sent' ? (
+                  <>
+                    <strong style={{ color: '#FFFFFF', display: 'block', marginBottom: '2px' }}>Critique Report Emailed</strong>
+                    <span style={{ color: 'var(--text-secondary)' }}>
+                      A detailed HTML report has been sent to <span style={{ color: 'var(--primary)', fontWeight: '600' }}>{analysisResult.email}</span>.
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <strong style={{ color: '#FFFFFF', display: 'block', marginBottom: '2px' }}>Critique Report Simulation</strong>
+                    <span style={{ color: 'var(--text-secondary)' }}>
+                      An email was simulated for <span style={{ color: 'var(--primary)', fontWeight: '600' }}>{analysisResult.email}</span>. Configure SMTP credentials in <span style={{ fontFamily: 'var(--font-mono)', color: '#FFFFFF' }}>backend/.env</span> to send real emails.
+                    </span>
+                    <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+                      Generated template saved to: <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--secondary)' }}>backend/email_simulation.html</span>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+
             {/* Split Dashboard Grid */}
             <div className="dashboard-grid">
               

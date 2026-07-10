@@ -27,6 +27,12 @@ def test_cv_heuristics():
 
 def test_api_endpoint():
     print("\nTesting FastAPI /analyze endpoint...")
+    import os
+    # Clear out any pre-existing email simulation files
+    sim_file = os.path.join(os.path.dirname(__file__), "email_simulation.html")
+    if os.path.exists(sim_file):
+        os.remove(sim_file)
+        
     # Create dummy image
     img = Image.new('RGB', (120, 120), color = 'blue')
     img_byte_arr = io.BytesIO()
@@ -46,7 +52,25 @@ def test_api_endpoint():
     print("API Response mode:", res_data["mode"])
     print("API Response filename:", res_data["filename"])
     print("API Response email:", res_data["email"])
+    print("API Response email_status:", res_data["email_status"])
+    
+    assert "email_status" in res_data
+    assert res_data["email_status"] in ["sent", "simulated"]
+    
+    # Check that simulation file was created (since SMTP is not configured in tests)
+    if res_data["email_status"] == "simulated":
+        assert os.path.exists(sim_file), "Simulation file was not created!"
+        with open(sim_file, "r", encoding="utf-8") as f:
+            content = f.read()
+            assert "test@focalpoint.ai" in content
+            assert "test.jpg" in content
+        print("Simulation email generated correctly and contains appropriate details.")
+        
+        # Cleanup
+        os.remove(sim_file)
+        
     print("FastAPI /analyze endpoint test passed!")
+
 
 if __name__ == "__main__":
     test_cv_heuristics()
