@@ -6,8 +6,18 @@ def test_live_server():
     email = "learner@focalpoint.ai"
     
     try:
-        # Read the sunset test image
-        with open("../test_sunset.jpg", "rb") as f:
+        import os
+        from PIL import Image
+        import io
+        
+        # Check if the sunset test image exists, if not create a dummy one
+        img_path = "../test_sunset.jpg"
+        if not os.path.exists(img_path):
+            print("test_sunset.jpg not found, creating a dummy image...")
+            img = Image.new('RGB', (400, 300), color = (235, 120, 40)) # Warm sunset orange color
+            img.save(img_path, format='JPEG')
+            
+        with open(img_path, "rb") as f:
             file_bytes = f.read()
             
         files = {

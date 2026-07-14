@@ -639,7 +639,16 @@ def send_report_email_async(
     smtp_port = os.environ.get("SMTP_PORT")
     smtp_username = os.environ.get("SMTP_USERNAME")
     smtp_password = os.environ.get("SMTP_PASSWORD")
-    smtp_sender = os.environ.get("SMTP_SENDER", "FocalPointAI <no-reply@focalpoint.ai>")
+    smtp_sender = os.environ.get("SMTP_SENDER")
+
+    # Auto-detect Gmail settings if not explicitly configured
+    if not smtp_host and smtp_username and smtp_username.endswith("@gmail.com"):
+        smtp_host = "smtp.gmail.com"
+        if not smtp_port:
+            smtp_port = "587"
+
+    if not smtp_sender:
+        smtp_sender = smtp_username or "FocalPointAI <no-reply@focalpoint.ai>"
 
     # Check if SMTP is configured.
     if not smtp_host or not smtp_username or not smtp_password:
@@ -656,7 +665,7 @@ def send_report_email_async(
 
     # Generate standard email content with CID image reference
     subject = f"[FocalPointAI] Photo Critique & Quality Report - {filename}"
-    text_content, html_content = generate_email_content(email_to, analysis_results, image_bytes, is_simulation=False)
+    text_content, html_content =    generate_email_content(email_to, analysis_results, image_bytes, is_simulation=False)
 
     try:
         port = int(smtp_port) if smtp_port else 587
@@ -767,6 +776,10 @@ async def analyze_image(
         smtp_username = os.environ.get("SMTP_USERNAME")
         smtp_password = os.environ.get("SMTP_PASSWORD")
         
+        # Auto-detect Gmail settings for status determination
+        if not smtp_host and smtp_username and smtp_username.endswith("@gmail.com"):
+            smtp_host = "smtp.gmail.com"
+            
         if smtp_host and smtp_username and smtp_password:
             email_status = "sent"
         else:
