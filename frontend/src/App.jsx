@@ -5,7 +5,7 @@ import {
   Moon, Palette, Compass, Check, Sliders
 } from 'lucide-react';
 
-const BACKEND_URL = 'http://127.0.0.1:8000';
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL?.replace(/\/$/, '');
 
 const LOADING_STEPS = [
   "Uploading photo & initiating secure connection...",
@@ -87,6 +87,10 @@ export default function App() {
 
   const handleAnalyze = async (e) => {
     e.preventDefault();
+    if (!BACKEND_URL) {
+      setError('The analysis service is not configured. Set VITE_BACKEND_URL and redeploy.');
+      return;
+    }
     if (!file) {
       setError('Please select or drop an image first.');
       return;
