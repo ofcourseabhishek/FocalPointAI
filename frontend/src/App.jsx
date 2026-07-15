@@ -8,9 +8,11 @@ import {
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL?.replace(/\/$/, '') || 'http://127.0.0.1:8000';
 
 const LOADING_STEPS = [
+  "Connecting to analysis server...",
   "Analyzing Light & Exposure...",
   "Analyzing Details & Composition...",
-  "Analyzing Colour & Hue..."
+  "Analyzing Colour & Hue...",
+  "Finalizing photography critique..."
 ];
 
 const DEMO_PRESETS = [
