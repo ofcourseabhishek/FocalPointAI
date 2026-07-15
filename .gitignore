@@ -1,3 +1,4 @@
 backend/.env
 roadmap.md
 .venv
+backend/email_simulation.html
