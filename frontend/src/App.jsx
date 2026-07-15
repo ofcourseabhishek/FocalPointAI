@@ -541,10 +541,9 @@ export default function App() {
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              <h3 style={{ fontSize: '1.4rem', fontWeight: '800', color: '#fff' }}>Analyzing Quality & Composition</h3>
-              <div className="pulse-text" style={{ fontSize: '0.95rem', color: 'var(--text-secondary)', height: '24px', fontWeight: '500' }}>
+              <h3 className="pulse-text" style={{ fontSize: '1.5rem', fontWeight: '800', color: '#fff', height: '36px' }}>
                 {LOADING_STEPS[loadingStep]}
-              </div>
+              </h3>
             </div>
             
             {/* Simple progress dot track */}

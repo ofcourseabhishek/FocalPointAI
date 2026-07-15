@@ -319,7 +319,7 @@ body::after {
   box-sizing: border-box;
 }
 
-.focal-sights::before, .focal-sights::after {
+.focal-sights::before {
   content: '';
   position: absolute;
   border-color: var(--primary);
