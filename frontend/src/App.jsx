@@ -8,11 +8,9 @@ import {
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL?.replace(/\/$/, '') || 'http://127.0.0.1:8000';
 
 const LOADING_STEPS = [
-  "Uploading photo & initiating secure connection...",
-  "Analyzing exposure levels (brightness, contrast, highlights, shadows)...",
-  "Evaluating color palette, saturation, and warmth...",
-  "Scanning structural details and micro-sharpness...",
-  "Calculating composition grids, symmetry, and crop lines..."
+  "Analyzing Light & Exposure...",
+  "Analyzing Details & Composition...",
+  "Analyzing Colour & Hue..."
 ];
 
 const DEMO_PRESETS = [
@@ -55,8 +53,71 @@ export default function App() {
   const [loadingDemo, setLoadingDemo] = useState(false);
   const [selectedDemoId, setSelectedDemoId] = useState(null);
 
+  // Quotes states
+  const [quotesList, setQuotesList] = useState([
+    { quote: "What i like about photographs is that they capture a moment that’s gone forever, impossible to reproduce.", author: "Karl Lagerfeld" },
+    { quote: "A picture is a secret about a secret, the more it tells you the less you know", author: "Diane Arbus" },
+    { quote: "Taking pictures is savoring life intensely, every hundredth of a second.", author: "Marc Riboud" },
+    { quote: "You don't take a photograph, you make it.", author: "Ansel Adams" },
+    { quote: "The camera is an instrument that teaches people how to see without a camera.", author: "Dorothea Lange" },
+    { quote: "A good snapshot keeps a moment from running away.", author: "Eudora Welty" },
+    { quote: "The Earth is Art, The Photographer is only a Witness", author: "Yann Arthus-Bertrand" },
+    { quote: "There are no rules for good photographs, there are only good photographs.", author: "Ansel Adams" },
+    { quote: "There is nothing worse than a sharp image of a fuzzy concept.", author: "Ansel Adams" },
+    { quote: "Photography is a reality so subtle that it becomes more real than reality", author: "Alfred Stieglitz" }
+  ]);
+  const [currentQuote, setCurrentQuote] = useState(null);
+
   const fileInputRef = useRef(null);
   const loadingIntervalRef = useRef(null);
+
+  // Load quotes CSV on mount
+  useEffect(() => {
+    const fetchQuotes = async () => {
+      try {
+        const response = await fetch('/quotes/qoutes.csv');
+        if (!response.ok) return;
+        const text = await response.text();
+        
+        // Custom CSV parser
+        const lines = text.split('\n');
+        const parsed = [];
+        for (let i = 1; i < lines.length; i++) {
+          const line = lines[i].trim();
+          if (!line) continue;
+          
+          let quote = '';
+          let author = '';
+          
+          if (line.includes('"""')) {
+            const parts = line.split('""",');
+            if (parts.length >= 2) {
+              quote = parts[0].replace(/^"""|"""$/g, '').trim();
+              author = parts[1].trim();
+            }
+          } else if (line.startsWith('"')) {
+            const lastQuoteIdx = line.lastIndexOf('"');
+            quote = line.substring(1, lastQuoteIdx).trim();
+            author = line.substring(lastQuoteIdx + 1).replace(/^,/, '').trim();
+          } else {
+            const lastComma = line.lastIndexOf(',');
+            quote = line.substring(0, lastComma).trim();
+            author = line.substring(lastComma + 1).trim();
+          }
+          
+          if (quote && author) {
+            parsed.push({ quote, author });
+          }
+        }
+        if (parsed.length > 0) {
+          setQuotesList(parsed);
+        }
+      } catch (e) {
+        console.error("Failed to fetch quotes CSV", e);
+      }
+    };
+    fetchQuotes();
+  }, []);
 
   // Cycle loading steps
   useEffect(() => {
@@ -149,6 +210,10 @@ export default function App() {
       setError('Please enter your email address to receive updates.');
       return;
     }
+
+    // Shuffle and select a quote for the loading screen
+    const randomIdx = Math.floor(Math.random() * quotesList.length);
+    setCurrentQuote(quotesList[randomIdx]);
 
     setIsLoading(true);
     setAnalysisResult(null);
@@ -298,12 +363,6 @@ export default function App() {
               Focalpoint<span className="gradient-text">.AI</span>
             </h1>
             <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', fontWeight: '500', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Photography Critique & Mentor</p>
-          </div>
-        </div>
-        
-        <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-          <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-            v2.0 Premium Redesign
           </div>
         </div>
       </header>
@@ -489,7 +548,7 @@ export default function App() {
             </div>
             
             {/* Simple progress dot track */}
-            <div style={{ display: 'flex', gap: '10px' }}>
+            <div style={{ display: 'flex', gap: '10px', marginBottom: '8px' }}>
               {LOADING_STEPS.map((_, idx) => (
                 <div 
                   key={idx} 
@@ -504,6 +563,18 @@ export default function App() {
                 />
               ))}
             </div>
+
+            {/* Random Quote card */}
+            {currentQuote && (
+              <div className="glass-panel" style={{ padding: '24px', maxWidth: '460px', width: '100%', display: 'flex', flexDirection: 'column', gap: '12px', background: 'rgba(255, 255, 255, 0.012)', border: '1px solid rgba(255, 255, 255, 0.04)', boxShadow: 'none' }}>
+                <p style={{ fontStyle: 'italic', fontSize: '0.95rem', color: 'var(--text-secondary)', lineHeight: '1.6', margin: 0, textAlign: 'center' }}>
+                  “{currentQuote.quote}”
+                </p>
+                <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', alignSelf: 'center', fontWeight: '600' }}>
+                  — {currentQuote.author}
+                </span>
+              </div>
+            )}
           </div>
         )}
 
