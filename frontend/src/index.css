@@ -1,4 +1,29 @@
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
+@font-face {
+  font-family: 'Google Sans';
+  src: url('/fonts/GoogleSans-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+}
+@font-face {
+  font-family: 'Google Sans';
+  src: url('/fonts/GoogleSans-Medium.ttf') format('truetype');
+  font-weight: 500;
+  font-style: normal;
+}
+@font-face {
+  font-family: 'Google Sans';
+  src: url('/fonts/GoogleSans-SemiBold.ttf') format('truetype');
+  font-weight: 600;
+  font-style: normal;
+}
+@font-face {
+  font-family: 'Google Sans';
+  src: url('/fonts/GoogleSans-Bold.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+}
 
 :root {
   --bg-dark: #04050a;
@@ -28,7 +53,7 @@
   --text-secondary: #9ca3af;
   --text-muted: #6b7280;
   
-  --font-main: 'Outfit', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-main: 'Google Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --font-mono: 'JetBrains Mono', monospace;
   
   --transition-smooth: all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
@@ -294,7 +319,7 @@ body::after {
   box-sizing: border-box;
 }
 
-.focal-sights::before, .focal-sights::after {
+.focal-sights::before {
   content: '';
   position: absolute;
   border-color: var(--primary);

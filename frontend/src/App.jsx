@@ -2,18 +2,17 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   Camera, UploadCloud, Mail, CheckCircle, AlertCircle, Sparkles, 
   RefreshCw, Sun, Contrast, Droplet, Eye, Thermometer, Info, 
-  Moon, Palette, Compass, Check, Sliders, EyeOff, LayoutGrid,
-  History, Trash2, ShieldCheck, HelpCircle
+  Moon, Palette, Compass, Check, Sliders, ShieldCheck
 } from 'lucide-react';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL?.replace(/\/$/, '') || 'http://127.0.0.1:8000';
 
 const LOADING_STEPS = [
-  "Uploading photo & initiating secure connection...",
-  "Analyzing exposure levels (brightness, contrast, highlights, shadows)...",
-  "Evaluating color palette, saturation, and warmth...",
-  "Scanning structural details and micro-sharpness...",
-  "Calculating composition grids, symmetry, and crop lines..."
+  "Connecting to analysis server...",
+  "Analyzing Light & Exposure...",
+  "Analyzing Details & Composition...",
+  "Analyzing Colour & Hue...",
+  "Finalizing photography critique..."
 ];
 
 const DEMO_PRESETS = [
@@ -52,26 +51,74 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('all');
   
   // Redesign custom features state
-  const [activeGridOverlay, setActiveGridOverlay] = useState('none'); // none, thirds, spiral, center
   const [simulateEdits, setSimulateEdits] = useState(false);
   const [loadingDemo, setLoadingDemo] = useState(false);
   const [selectedDemoId, setSelectedDemoId] = useState(null);
-  const [recentCritiques, setRecentCritiques] = useState([]);
-  const [showHistory, setShowHistory] = useState(false);
+
+  // Quotes states
+  const [quotesList, setQuotesList] = useState([
+    { quote: "What i like about photographs is that they capture a moment that’s gone forever, impossible to reproduce.", author: "Karl Lagerfeld" },
+    { quote: "A picture is a secret about a secret, the more it tells you the less you know", author: "Diane Arbus" },
+    { quote: "Taking pictures is savoring life intensely, every hundredth of a second.", author: "Marc Riboud" },
+    { quote: "You don't take a photograph, you make it.", author: "Ansel Adams" },
+    { quote: "The camera is an instrument that teaches people how to see without a camera.", author: "Dorothea Lange" },
+    { quote: "A good snapshot keeps a moment from running away.", author: "Eudora Welty" },
+    { quote: "The Earth is Art, The Photographer is only a Witness", author: "Yann Arthus-Bertrand" },
+    { quote: "There are no rules for good photographs, there are only good photographs.", author: "Ansel Adams" },
+    { quote: "There is nothing worse than a sharp image of a fuzzy concept.", author: "Ansel Adams" },
+    { quote: "Photography is a reality so subtle that it becomes more real than reality", author: "Alfred Stieglitz" }
+  ]);
+  const [currentQuote, setCurrentQuote] = useState(null);
 
   const fileInputRef = useRef(null);
   const loadingIntervalRef = useRef(null);
 
-  // Load history on mount
+  // Load quotes CSV on mount
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem('focalpoint_history');
-      if (stored) {
-        setRecentCritiques(JSON.parse(stored));
+    const fetchQuotes = async () => {
+      try {
+        const response = await fetch('/quotes/qoutes.csv');
+        if (!response.ok) return;
+        const text = await response.text();
+        
+        // Custom CSV parser
+        const lines = text.split('\n');
+        const parsed = [];
+        for (let i = 1; i < lines.length; i++) {
+          const line = lines[i].trim();
+          if (!line) continue;
+          
+          let quote = '';
+          let author = '';
+          
+          if (line.includes('"""')) {
+            const parts = line.split('""",');
+            if (parts.length >= 2) {
+              quote = parts[0].replace(/^"""|"""$/g, '').trim();
+              author = parts[1].trim();
+            }
+          } else if (line.startsWith('"')) {
+            const lastQuoteIdx = line.lastIndexOf('"');
+            quote = line.substring(1, lastQuoteIdx).trim();
+            author = line.substring(lastQuoteIdx + 1).replace(/^,/, '').trim();
+          } else {
+            const lastComma = line.lastIndexOf(',');
+            quote = line.substring(0, lastComma).trim();
+            author = line.substring(lastComma + 1).trim();
+          }
+          
+          if (quote && author) {
+            parsed.push({ quote, author });
+          }
+        }
+        if (parsed.length > 0) {
+          setQuotesList(parsed);
+        }
+      } catch (e) {
+        console.error("Failed to fetch quotes CSV", e);
       }
-    } catch (e) {
-      console.error("Failed to load history from localStorage", e);
-    }
+    };
+    fetchQuotes();
   }, []);
 
   // Cycle loading steps
@@ -92,45 +139,6 @@ export default function App() {
       }
     };
   }, [isLoading]);
-
-  // Helper to convert preview image to a small base64 thumbnail for local storage
-  const generateThumbnail = (imageSrc) => {
-    return new Promise((resolve) => {
-      const img = new Image();
-      img.crossOrigin = "anonymous"; // Avoid tainted canvas issues for demo urls
-      img.onload = () => {
-        try {
-          const canvas = document.createElement('canvas');
-          const ctx = canvas.getContext('2d');
-          const MAX_WIDTH = 120;
-          const MAX_HEIGHT = 120;
-          let width = img.width;
-          let height = img.height;
-          
-          if (width > height) {
-            if (width > MAX_WIDTH) {
-              height *= MAX_WIDTH / width;
-              width = MAX_WIDTH;
-            }
-          } else {
-            if (height > MAX_HEIGHT) {
-              width *= MAX_HEIGHT / height;
-              height = MAX_HEIGHT;
-            }
-          }
-          canvas.width = width;
-          canvas.height = height;
-          ctx.drawImage(img, 0, 0, width, height);
-          resolve(canvas.toDataURL('image/jpeg', 0.6));
-        } catch (e) {
-          // If security or canvas operations fail, resolve with empty string
-          resolve('');
-        }
-      };
-      img.onerror = () => resolve('');
-      img.src = imageSrc;
-    });
-  };
 
   const handleDragOver = (e) => {
     e.preventDefault();
@@ -205,11 +213,14 @@ export default function App() {
       return;
     }
 
+    // Shuffle and select a quote for the loading screen
+    const randomIdx = Math.floor(Math.random() * quotesList.length);
+    setCurrentQuote(quotesList[randomIdx]);
+
     setIsLoading(true);
     setAnalysisResult(null);
     setError('');
     setSimulateEdits(false);
-    setActiveGridOverlay('none');
 
     const formData = new FormData();
     formData.append('file', file);
@@ -229,46 +240,10 @@ export default function App() {
       const result = await response.json();
       setAnalysisResult(result);
 
-      // Save to local storage history with a thumbnail
-      const thumb = await generateThumbnail(previewUrl);
-      const newHistoryEntry = {
-        id: Date.now().toString(),
-        timestamp: new Date().toLocaleString(),
-        filename: file.name || 'uploaded_photo.jpg',
-        email: email,
-        overall_rating: result.overall_rating,
-        aspects: result.aspects,
-        suggested_edits: result.suggested_edits,
-        email_status: result.email_status,
-        mode: result.mode,
-        thumbnail: thumb || previewUrl // Fallback to raw object url (which is temporary but works in current session)
-      };
-
-      const updatedHistory = [newHistoryEntry, ...recentCritiques].slice(0, 10);
-      setRecentCritiques(updatedHistory);
-      localStorage.setItem('focalpoint_history', JSON.stringify(updatedHistory));
-
     } catch (err) {
       setError(err.message || 'Something went wrong. Please check that the backend is running.');
     } finally {
       setIsLoading(false);
-    }
-  };
-
-  const loadHistoryItem = (item) => {
-    setAnalysisResult(item);
-    setPreviewUrl(item.thumbnail || '');
-    setEmail(item.email);
-    setFile({ name: item.filename }); // Mock file object
-    setSimulateEdits(false);
-    setActiveGridOverlay('none');
-    setShowHistory(false);
-  };
-
-  const clearHistory = () => {
-    if (confirm("Are you sure you want to clear your critique history?")) {
-      setRecentCritiques([]);
-      localStorage.removeItem('focalpoint_history');
     }
   };
 
@@ -280,7 +255,6 @@ export default function App() {
     setActiveTab('all');
     setSelectedDemoId(null);
     setSimulateEdits(false);
-    setActiveGridOverlay('none');
   };
 
   // Aspect naming and icon mapping
@@ -377,26 +351,8 @@ export default function App() {
     };
   };
 
-  // SVG Golden Spiral points generator helper
-  const renderGoldenSpiralOverlay = () => {
-    return (
-      <svg viewBox="0 0 100 100" className="grid-overlay-spiral" style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 5 }}>
-        <path 
-          d="M 100,100 A 100,100 0 0,1 0,100 A 61.8,61.8 0 0,1 61.8,38.2 A 38.2,38.2 0 0,1 23.6,76.4 A 23.6,23.6 0 0,1 47.2,52.8 A 14.6,14.6 0 0,1 32.6,67.4 A 9,9 0 0,1 41.6,58.4 A 5.6,5.6 0 0,1 36,64" 
-          fill="none" 
-          stroke="rgba(255, 255, 255, 0.45)" 
-          strokeWidth="1" 
-          strokeDasharray="3" 
-          style={{ width: '100%', height: '100%' }}
-        />
-      </svg>
-    );
-  };
-
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: '100vh', width: '100%', maxWidth: '1280px', margin: '0 auto', padding: '24px', position: 'relative' }}>
-      
-      {/* Background radial glowing gradients (defined in index.css) */}
       
       {/* Header */}
       <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: '20px', borderBottom: '1px solid var(--border-color)', marginBottom: '32px', zIndex: 10 }}>
@@ -406,76 +362,12 @@ export default function App() {
           </div>
           <div>
             <h1 style={{ fontSize: '1.4rem', fontWeight: '900', letterSpacing: '-0.03em', margin: 0 }}>
-              FocalPoint<span className="gradient-text">.AI</span>
+              Focalpoint<span className="gradient-text">.AI</span>
             </h1>
-            <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', fontWeight: '500', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>AI Photography Critique & Mentor</p>
-          </div>
-        </div>
-        
-        <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-          {recentCritiques.length > 0 && (
-            <button 
-              onClick={() => setShowHistory(!showHistory)} 
-              className="btn-secondary" 
-              style={{ padding: '8px 16px', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '6px' }}
-            >
-              <History size={16} />
-              <span>History ({recentCritiques.length})</span>
-            </button>
-          )}
-          <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', display: 'none', md: 'block' }}>
-            v2.0 Premium Redesign
+            <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', fontWeight: '500', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Photography Critique & Mentor</p>
           </div>
         </div>
       </header>
-
-      {/* History Slide-out Drawer */}
-      {showHistory && (
-        <div style={{ position: 'fixed', top: 0, right: 0, height: '100vh', width: '380px', backgroundColor: 'rgba(7, 9, 19, 0.98)', borderLeft: '1px solid var(--border-color)', boxShadow: '-10px 0 30px rgba(0,0,0,0.7)', zIndex: 1000, padding: '24px', display: 'flex', flexDirection: 'column', gap: '20px', backdropFilter: 'blur(20px)' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-color)', paddingBottom: '16px' }}>
-            <h3 style={{ fontSize: '1.2rem', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <History size={20} className="text-secondary" />
-              Critique History
-            </h3>
-            <button onClick={() => setShowHistory(false)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '1.4rem', cursor: 'pointer' }}>&times;</button>
-          </div>
-
-          <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '12px', paddingRight: '4px' }}>
-            {recentCritiques.map((item) => (
-              <div 
-                key={item.id} 
-                onClick={() => loadHistoryItem(item)}
-                style={{ display: 'flex', gap: '12px', padding: '12px', borderRadius: '12px', border: '1px solid var(--border-color)', backgroundColor: 'rgba(255,255,255,0.02)', cursor: 'pointer', transition: 'var(--transition-fast)' }}
-                className="aspect-card"
-              >
-                {item.thumbnail ? (
-                  <img src={item.thumbnail} alt={item.filename} style={{ width: '56px', height: '56px', borderRadius: '8px', objectFit: 'cover', border: '1px solid rgba(255,255,255,0.05)' }} />
-                ) : (
-                  <div style={{ width: '56px', height: '56px', borderRadius: '8px', backgroundColor: 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <Camera size={20} color="var(--text-muted)" />
-                  </div>
-                )}
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <p style={{ fontWeight: '600', fontSize: '0.88rem', margin: 0, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>{item.filename}</p>
-                  <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: '2px 0 4px 0' }}>{item.timestamp}</p>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <span style={{ fontSize: '0.72rem', backgroundColor: 'rgba(99, 102, 241, 0.12)', color: 'var(--primary)', padding: '2px 6px', borderRadius: '4px', fontWeight: '600' }}>
-                      Rating: {item.overall_rating}/10
-                    </span>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div style={{ display: 'flex', gap: '12px', borderTop: '1px solid var(--border-color)', paddingTop: '16px' }}>
-            <button onClick={clearHistory} className="btn-secondary" style={{ flex: 1, justifyContent: 'center', padding: '10px', fontSize: '0.85rem' }}>
-              <Trash2 size={16} />
-              Clear History
-            </button>
-          </div>
-        </div>
-      )}
 
       {/* Main Content Area */}
       <main style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', zIndex: 5 }}>
@@ -496,7 +388,7 @@ export default function App() {
                 Perfect Your Technique with <span className="gradient-text">Instant Critique</span>
               </h2>
               <p style={{ color: 'var(--text-secondary)', fontSize: '1.1rem', lineHeight: '1.6', maxWidth: '640px', margin: '0 auto' }}>
-                Upload your photograph to get a complete technical audit on light, color balance, sharp details, and composition overlay grid lines.
+                Upload your photograph to get a complete technical audit on light, color balance, sharp details, and composition.
               </p>
             </div>
 
@@ -604,7 +496,7 @@ export default function App() {
                     required
                   />
                 </div>
-                <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>We use your email to tie your analysis critiques together. Reports are saved in history.</span>
+                <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>We use your email to tie your analysis critiques together.</span>
               </div>
 
               {/* Submit Button */}
@@ -634,7 +526,7 @@ export default function App() {
                   style={{ width: '92%', height: '92%', objectFit: 'contain', opacity: 0.45, borderRadius: '16px' }} 
                 />
               )}
-              {/* Camera Sights Corner HUD overlays */}
+              {/* Focus Corner HUD overlays */}
               <div className="focal-sights">
                 <div className="focal-sights-corner-tr"></div>
                 <div className="focal-sights-corner-bl"></div>
@@ -651,14 +543,13 @@ export default function App() {
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              <h3 style={{ fontSize: '1.4rem', fontWeight: '800', color: '#fff' }}>Analyzing Quality & Composition</h3>
-              <div className="pulse-text" style={{ fontSize: '0.95rem', color: 'var(--text-secondary)', height: '24px', fontWeight: '500' }}>
+              <h3 className="pulse-text" style={{ fontSize: '1.5rem', fontWeight: '800', color: '#fff', height: '36px' }}>
                 {LOADING_STEPS[loadingStep]}
-              </div>
+              </h3>
             </div>
             
             {/* Simple progress dot track */}
-            <div style={{ display: 'flex', gap: '10px' }}>
+            <div style={{ display: 'flex', gap: '10px', marginBottom: '8px' }}>
               {LOADING_STEPS.map((_, idx) => (
                 <div 
                   key={idx} 
@@ -673,6 +564,18 @@ export default function App() {
                 />
               ))}
             </div>
+
+            {/* Random Quote card */}
+            {currentQuote && (
+              <div className="glass-panel" style={{ padding: '24px', maxWidth: '460px', width: '100%', display: 'flex', flexDirection: 'column', gap: '12px', background: 'rgba(255, 255, 255, 0.012)', border: '1px solid rgba(255, 255, 255, 0.04)', boxShadow: 'none' }}>
+                <p style={{ fontStyle: 'italic', fontSize: '0.95rem', color: 'var(--text-secondary)', lineHeight: '1.6', margin: 0, textAlign: 'center' }}>
+                  “{currentQuote.quote}”
+                </p>
+                <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', alignSelf: 'center', fontWeight: '600' }}>
+                  — {currentQuote.author}
+                </span>
+              </div>
+            )}
           </div>
         )}
 
@@ -712,7 +615,7 @@ export default function App() {
               </div>
             </div>
 
-            {/* Email Config Alert Banner (Requested modification) */}
+            {/* Email Config Alert Banner */}
             <div 
               className={`alert-banner ${
                 analysisResult.email_status === 'sent' ? 'alert-banner-success' : 'alert-banner-warning'
@@ -760,7 +663,7 @@ export default function App() {
               {/* Left Column - Image controls & Suggested Edits */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
                 
-                {/* Image Showcase Card with Overlays & CSS filter simulation */}
+                {/* Image Showcase Card with CSS filter simulation */}
                 <div className="glass-panel" style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
                   
                   {/* Aspect Ratio Box holding the image */}
@@ -787,31 +690,6 @@ export default function App() {
                       }} 
                     />
 
-                    {/* Camera Overlay grids absolute layers */}
-                    {activeGridOverlay === 'thirds' && (
-                      <div className="grid-overlay-third">
-                        <div className="grid-line-v"></div>
-                        <div className="grid-line-v"></div>
-                        <div></div>
-                        <div className="grid-line-h"></div>
-                        <div className="grid-line-h"></div>
-                        <div></div>
-                        <div></div>
-                        <div></div>
-                        <div></div>
-                      </div>
-                    )}
-
-                    {activeGridOverlay === 'center' && (
-                      <div className="grid-overlay-center">
-                        <div className="grid-line-center-v"></div>
-                        <div className="grid-line-center-h"></div>
-                        <div className="grid-center-reticle"></div>
-                      </div>
-                    )}
-
-                    {activeGridOverlay === 'spiral' && renderGoldenSpiralOverlay()}
-
                     {/* Simulated edits status badge overlay */}
                     {simulateEdits && (
                       <div style={{ position: 'absolute', top: '12px', left: '12px', backgroundColor: 'rgba(16, 185, 129, 0.85)', color: '#fff', fontSize: '0.72rem', fontWeight: '800', padding: '4px 10px', borderRadius: '6px', display: 'flex', alignItems: 'center', gap: '4px', textTransform: 'uppercase', letterSpacing: '0.05em', boxShadow: '0 4px 10px rgba(0,0,0,0.5)', zIndex: 10 }}>
@@ -825,44 +703,6 @@ export default function App() {
                   <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '200px' }}>{file?.name || 'critique_image.jpg'}</span>
                     <span>Composition & Edits Sandbox</span>
-                  </div>
-
-                  {/* Interactive Overlays HUD Controls */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', borderTop: '1px solid var(--border-color)', paddingTop: '14px' }}>
-                    <span style={{ fontSize: '0.78rem', fontWeight: '700', color: 'var(--text-secondary)' }}>Composition Grid Overlays:</span>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '6px' }}>
-                      {[
-                        { id: 'none', label: 'Off', icon: EyeOff },
-                        { id: 'thirds', label: 'Thirds', icon: LayoutGrid },
-                        { id: 'spiral', label: 'Spiral', icon: Palette },
-                        { id: 'center', label: 'Center', icon: Compass }
-                      ].map((grid) => (
-                        <button
-                          key={grid.id}
-                          type="button"
-                          onClick={() => setActiveGridOverlay(grid.id)}
-                          style={{
-                            padding: '8px 4px',
-                            borderRadius: '8px',
-                            border: '1px solid',
-                            borderColor: activeGridOverlay === grid.id ? 'var(--primary)' : 'var(--border-color)',
-                            backgroundColor: activeGridOverlay === grid.id ? 'rgba(99, 102, 241, 0.1)' : 'rgba(255,255,255,0.01)',
-                            color: activeGridOverlay === grid.id ? '#fff' : 'var(--text-secondary)',
-                            fontSize: '0.78rem',
-                            fontWeight: '600',
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            gap: '4px',
-                            transition: 'var(--transition-fast)'
-                          }}
-                        >
-                          <grid.icon size={13} />
-                          {grid.label}
-                        </button>
-                      ))}
-                    </div>
                   </div>
 
                   {/* Interactive Simulation Switcher */}
@@ -1017,7 +857,7 @@ export default function App() {
                             </div>
                           </div>
 
-                          {/* Lightroom Style slider track (Requested change) */}
+                          {/* Lightroom Style slider track */}
                           <div className="metric-slider-wrapper">
                             <div className="metric-slider-track">
                               {/* Optimal Target Sweet Spot Overlay */}
@@ -1095,7 +935,7 @@ export default function App() {
 
       {/* Footer */}
       <footer style={{ marginTop: '48px', padding: '24px 0', borderTop: '1px solid var(--border-color)', textAlign: 'center', fontSize: '0.8rem', color: 'var(--text-muted)', zIndex: 10 }}>
-        <p style={{ marginBottom: '6px' }}>© 2026 FocalPointAI. Designed as a real-time photography mentor for aperture, shadows, details, crops, and color composition.</p>
+        <p style={{ marginBottom: '6px' }}>© 2026 FocalpointAI. Designed as a real-time photography mentor for aperture, shadows, details, crops, and color composition.</p>
         <p style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
           <ShieldCheck size={14} style={{ color: 'var(--success)' }} />
           Local computer vision fallbacks fully active.
