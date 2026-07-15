@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   Camera, UploadCloud, Mail, CheckCircle, AlertCircle, Sparkles, 
   RefreshCw, Sun, Contrast, Droplet, Eye, Thermometer, Info, 
-  Moon, Palette, Compass, Check, Sliders, ShieldCheck
+  Moon, Palette, Compass, Check, Sliders, ShieldCheck, Target, Cpu, AlertTriangle
 } from 'lucide-react';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL?.replace(/\/$/, '') || 'http://127.0.0.1:8000';
@@ -39,6 +39,28 @@ const DEMO_PRESETS = [
   }
 ];
 
+const drawGoldenSpiralSVG = (cx, cy) => {
+  let points = [];
+  const a = 0.003;
+  const b = 0.3063489; // ln(golden_ratio)/(pi/2)
+  for (let theta = 0; theta < 40; theta += 0.08) {
+    const r = a * Math.exp(b * theta);
+    if (r > 1.8) break;
+    const x = cx + r * Math.cos(theta);
+    const y = cy + r * Math.sin(theta);
+    points.push(`${x.toFixed(3)},${y.toFixed(3)}`);
+  }
+  return (
+    <polyline
+      points={points.join(' ')}
+      fill="none"
+      stroke="#fbbf24"
+      strokeWidth="0.005"
+      strokeDasharray="0.008 0.005"
+    />
+  );
+};
+
 export default function App() {
   const [file, setFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState('');
@@ -48,12 +70,42 @@ export default function App() {
   const [analysisResult, setAnalysisResult] = useState(null);
   const [error, setError] = useState('');
   const [dragOver, setDragOver] = useState(false);
-  const [activeTab, setActiveTab] = useState('all');
+  const [activeTab, setActiveTab] = useState('composition');
   
   // Redesign custom features state
-  const [simulateEdits, setSimulateEdits] = useState(false);
   const [loadingDemo, setLoadingDemo] = useState(false);
   const [selectedDemoId, setSelectedDemoId] = useState(null);
+  const [copiedColor, setCopiedColor] = useState('');
+  
+  const imgRef = useRef(null);
+  const [imgDimensions, setImgDimensions] = useState({ width: 0, height: 0 });
+
+  const updateImgDimensions = () => {
+    if (imgRef.current) {
+      setImgDimensions({
+        width: imgRef.current.clientWidth,
+        height: imgRef.current.clientHeight
+      });
+    }
+  };
+
+  const copyColorToClipboard = (hex) => {
+    navigator.clipboard.writeText(hex);
+    setCopiedColor(hex);
+    setTimeout(() => setCopiedColor(''), 1500);
+  };
+
+  useEffect(() => {
+    if (analysisResult) {
+      const timer = setTimeout(updateImgDimensions, 200);
+      return () => clearTimeout(timer);
+    }
+  }, [analysisResult, activeTab]);
+
+  useEffect(() => {
+    window.addEventListener('resize', updateImgDimensions);
+    return () => window.removeEventListener('resize', updateImgDimensions);
+  }, []);
 
   // Quotes states
   const [quotesList, setQuotesList] = useState([
@@ -220,7 +272,6 @@ export default function App() {
     setIsLoading(true);
     setAnalysisResult(null);
     setError('');
-    setSimulateEdits(false);
 
     const formData = new FormData();
     formData.append('file', file);
@@ -252,23 +303,206 @@ export default function App() {
     setPreviewUrl('');
     setAnalysisResult(null);
     setError('');
-    setActiveTab('all');
+    setActiveTab('composition');
     setSelectedDemoId(null);
-    setSimulateEdits(false);
   };
 
-  // Aspect naming and icon mapping
-  const aspectConfig = {
-    brightness: { label: 'Exposure / Brightness', icon: Sun, category: 'light', minSweet: 40, maxSweet: 75 },
-    contrast: { label: 'Tonal Contrast', icon: Contrast, category: 'light', minSweet: 45, maxSweet: 75 },
-    highlights: { label: 'Highlights & Whites', icon: Sparkles, category: 'light', minSweet: 40, maxSweet: 75 },
-    shadows: { label: 'Shadows & Blacks', icon: Moon, category: 'light', minSweet: 40, maxSweet: 75 },
-    ambiance: { label: 'Ambiance / Tone Map', icon: Sliders, category: 'light', minSweet: 40, maxSweet: 75 },
-    colour: { label: 'Colour Palette Harmony', icon: Palette, category: 'color', minSweet: 50, maxSweet: 80 },
-    saturation: { label: 'Color Saturation', icon: Droplet, category: 'color', minSweet: 40, maxSweet: 70 },
-    warmth: { label: 'Warmth / White Balance', icon: Thermometer, category: 'color', minSweet: 45, maxSweet: 75 },
-    details: { label: 'Details & Micro-sharpness', icon: Eye, category: 'details', minSweet: 55, maxSweet: 85 },
-    crop: { label: 'Composition & Grid Crop', icon: Compass, category: 'details', minSweet: 50, maxSweet: 80 }
+  // Sub-aspect naming, icons, and sweet spots
+  const subAspectConfig = {
+    composition: { label: 'Composition Rules', icon: Compass, minSweet: 50, maxSweet: 80 },
+    crop: { label: 'Grid & Crop', icon: Sliders, minSweet: 50, maxSweet: 80 },
+    angle_and_viewpoint: { label: 'Angle & Viewpoint', icon: Camera, minSweet: 40, maxSweet: 75 },
+    horizon: { label: 'Horizon Alignment', icon: Target, minSweet: 90, maxSweet: 100 },
+    thirds: { label: 'Rule of Thirds Alignment', icon: Compass, minSweet: 70, maxSweet: 100 },
+
+    brightness: { label: 'Exposure / Brightness', icon: Sun, minSweet: 40, maxSweet: 75 },
+    contrast: { label: 'Tonal Contrast', icon: Contrast, minSweet: 45, maxSweet: 75 },
+    highlights: { label: 'Highlights & Whites', icon: Sparkles, minSweet: 40, maxSweet: 75 },
+    shadows: { label: 'Shadows & Blacks', icon: Moon, minSweet: 40, maxSweet: 75 },
+    ambiance: { label: 'Ambiance / Tone Map', icon: Sliders, minSweet: 40, maxSweet: 75 },
+
+    details: { label: 'Details & Micro-sharpness', icon: Eye, minSweet: 55, maxSweet: 85 },
+    sharpness: { label: 'Edge Definition', icon: Cpu, minSweet: 60, maxSweet: 90 },
+
+    colour: { label: 'Colour Palette Harmony', icon: Palette, minSweet: 50, maxSweet: 80 },
+    saturation: { label: 'Color Saturation', icon: Droplet, minSweet: 40, maxSweet: 70 },
+    warmth: { label: 'Warmth / White Balance', icon: Thermometer, minSweet: 45, maxSweet: 75 },
+
+    wow_factor: { label: 'Wow Factor & Engagement', icon: Sparkles, minSweet: 50, maxSweet: 85 },
+    emotional_impact: { label: 'Emotional Impact', icon: Target, minSweet: 45, maxSweet: 80 },
+    intention: { label: 'Photographic Intent', icon: Target, minSweet: 70, maxSweet: 100 },
+
+    edits_needed: { label: 'Slider Adjustments Needed', icon: Sliders, minSweet: 70, maxSweet: 100 },
+    exif_settings: { label: 'Camera Settings Audit', icon: ShieldCheck, minSweet: 80, maxSweet: 100 }
+  };
+
+  const getMajorParams = (result) => {
+    if (!result) return [];
+
+    const aspects = result.aspects || {};
+    const exif = result.exif_analysis || {};
+    const edits = result.suggested_edits || [];
+
+    const getAspectData = (key, defaultLabel) => {
+      if (key.includes('.')) {
+        const [parent, child] = key.split('.');
+        if (aspects[parent] && aspects[parent][child]) {
+          return {
+            rating: aspects[parent][child].rating,
+            what_works: aspects[parent][child].what_works,
+            what_could_be_improved: aspects[parent][child].what_could_be_improved,
+            label: defaultLabel
+          };
+        }
+      }
+      if (aspects[key]) {
+        return {
+          rating: aspects[key].rating,
+          what_works: aspects[key].what_works,
+          what_could_be_improved: aspects[key].what_could_be_improved,
+          label: defaultLabel
+        };
+      }
+      return null;
+    };
+
+    // 1. Composition
+    const compSub = [];
+    const rawComp = getAspectData('composition', 'Composition Rules');
+    if (rawComp) compSub.push({ ...rawComp, key: 'composition' });
+    const rawCrop = getAspectData('crop', 'Grid & Crop');
+    if (rawCrop) compSub.push({ ...rawCrop, key: 'crop' });
+    const rawAngle = getAspectData('feel.angle_and_viewpoint', 'Angle & Viewpoint');
+    if (rawAngle) compSub.push({ ...rawAngle, key: 'angle_and_viewpoint' });
+
+    if (result.advanced_cv) {
+      const cv = result.advanced_cv;
+      if (cv.horizon) {
+        compSub.push({
+          key: 'horizon',
+          label: 'Horizon Alignment',
+          rating: cv.horizon.is_level ? 95 : Math.max(40, Math.round(90 - Math.abs(cv.horizon.angle) * 5)),
+          what_works: cv.horizon.is_level ? "Horizon is perfectly level, ensuring a balanced frame." : `Horizon is aligned at ${cv.horizon.angle} degrees.`,
+          what_could_be_improved: cv.horizon.is_level ? "No alignment adjustment needed." : "Rotate the image slightly to level the horizon line."
+        });
+      }
+      if (cv.subject_centering) {
+        const isThirds = cv.subject_centering.thirds_distance < 0.15;
+        compSub.push({
+          key: 'thirds',
+          label: 'Rule of Thirds Alignment',
+          rating: Math.max(50, Math.min(100, Math.round(100 - cv.subject_centering.thirds_distance * 100))),
+          what_works: isThirds ? "Subject placement aligns beautifully with the Rule of Thirds intersections." : "Centering creates a stable and classic focal point.",
+          what_could_be_improved: isThirds ? "Keep this off-center composition." : "Consider cropping slightly to place the main subject elements on a vertical third line."
+        });
+      }
+    }
+
+    // 2. Lighting & Exposure
+    const lightSub = [];
+    ['brightness', 'contrast', 'highlights', 'shadows', 'ambiance'].forEach(k => {
+      const data = getAspectData(k, k === 'brightness' ? 'Exposure / Brightness' : 
+                                 k === 'contrast' ? 'Tonal Contrast' : 
+                                 k === 'highlights' ? 'Highlights & Whites' : 
+                                 k === 'shadows' ? 'Shadows & Blacks' : 'Ambiance / Tone Map');
+      if (data) lightSub.push({ ...data, key: k });
+    });
+
+    // 3. Focus & Sharpness
+    const focusSub = [];
+    const rawDetails = getAspectData('details', 'Details & Micro-sharpness');
+    if (rawDetails) focusSub.push({ ...rawDetails, key: 'details' });
+    
+    if (result.advanced_cv?.sharpness) {
+      const s = result.advanced_cv.sharpness;
+      focusSub.push({
+        key: 'sharpness',
+        label: 'Edge Definition',
+        rating: Math.round(s.score || 75),
+        what_works: s.score >= 70 ? "Edges are crisp and clear in the subject focus regions." : "Soft details create a gentle transition.",
+        what_could_be_improved: s.score >= 70 ? "Focus looks solid." : "Increase details sharpness or verify focus lock on subject."
+      });
+    }
+
+    // 4. Color & Tones
+    const colorSub = [];
+    ['colour', 'saturation', 'warmth'].forEach(k => {
+      const data = getAspectData(k, k === 'colour' ? 'Colour Palette Harmony' : 
+                                 k === 'saturation' ? 'Color Saturation' : 'Warmth / White Balance');
+      if (data) colorSub.push({ ...data, key: k });
+    });
+
+    // 5. Subject & Story
+    const subjectSub = [];
+    const rawWow = getAspectData('feel.wow_factor', 'Wow Factor & Engagement');
+    if (rawWow) subjectSub.push({ ...rawWow, key: 'wow_factor' });
+    const rawEmo = getAspectData('feel.emotional_impact', 'Emotional Impact');
+    if (rawEmo) subjectSub.push({ ...rawEmo, key: 'emotional_impact' });
+    
+
+
+    // 6. Post-Processing
+    const postSub = [];
+    let postScore = 100;
+    if (edits.length > 0) postScore -= edits.length * 6;
+    if (exif && exif.diagnostics) {
+      const status = exif.diagnostics.status;
+      if (status === 'warning') postScore -= 15;
+      else if (status === 'critical') postScore -= 30;
+    }
+    postScore = Math.max(30, Math.min(100, postScore));
+
+    postSub.push({
+      key: 'edits_needed',
+      label: 'Slider Adjustments Needed',
+      rating: postScore,
+      what_works: edits.length === 0 ? "Minimal editing required; the exposure and color are excellent straight out of camera." : `Only ${edits.length} minor adjustments suggested.`,
+      what_could_be_improved: edits.length > 0 ? `Apply recommended changes: ${edits.join(', ')}` : "No urgent edits suggested."
+    });
+
+    if (exif && exif.diagnostics) {
+      const diag = exif.diagnostics;
+      postSub.push({
+        key: 'exif_settings',
+        label: 'Camera Settings Audit',
+        rating: diag.status === 'ok' ? 95 : diag.status === 'warning' ? 70 : 45,
+        what_works: diag.status === 'ok' ? "Optimal camera settings selected for this photography style." : "Exposure is acceptable.",
+        what_could_be_improved: diag.issue ? `${diag.issue}. Suggestion: ${diag.suggestion}` : "Verify camera parameters."
+      });
+    }
+
+    const params = [
+      { id: 'composition', label: 'Composition', subAspects: compSub },
+      { id: 'lighting', label: 'Lighting & Exposure', subAspects: lightSub },
+      { id: 'focus', label: 'Focus & Sharpness', subAspects: focusSub },
+      { id: 'color', label: 'Color & Tones', subAspects: colorSub },
+      { id: 'subject', label: 'Subject & Story', subAspects: subjectSub },
+      { id: 'post-processing', label: 'Post-Processing', subAspects: postSub }
+    ];
+
+    params.forEach(p => {
+      const validRatings = p.subAspects.filter(s => s.rating !== undefined);
+      const avgRating = validRatings.length > 0 
+        ? Math.round(validRatings.reduce((sum, s) => sum + s.rating, 0) / validRatings.length)
+        : 70;
+      p.rating = avgRating;
+
+      const worksList = p.subAspects
+        .filter(s => s.what_works && s.what_works.trim().length > 3)
+        .map(s => s.what_works);
+      p.what_works = worksList.length > 0 
+        ? worksList.join(' ')
+        : "The overall technical elements in this aspect are stable and serve the image well.";
+
+      const impList = p.subAspects
+        .filter(s => s.what_could_be_improved && s.what_could_be_improved.trim().length > 3 && !s.what_could_be_improved.includes("No alignment adjustment") && !s.what_could_be_improved.includes("No urgent edits"))
+        .map(s => s.what_could_be_improved);
+      p.what_could_be_improved = impList.length > 0 
+        ? impList.join(' ')
+        : "No major improvements needed. The aspect is well executed.";
+    });
+
+    return params;
   };
 
   const getScoreColor = (score) => {
@@ -277,79 +511,7 @@ export default function App() {
     return 'var(--danger)';
   };
 
-  // Generate CSS filter settings based on image critique feedback
-  const getSimulatedFilters = () => {
-    if (!analysisResult) return {};
-    let brightnessVal = 1;
-    let contrastVal = 1;
-    let saturateVal = 1;
-    let sepiaVal = 0;
-    let zoomVal = 1;
-    let hueVal = 0;
 
-    const aspects = analysisResult.aspects;
-
-    if (aspects.brightness) {
-      const r = aspects.brightness.rating;
-      if (r < 75) {
-        const text = (aspects.brightness.what_could_be_improved || '').toLowerCase();
-        if (text.includes('underexposed') || text.includes('dark') || text.includes('boost') || text.includes('increase')) {
-          brightnessVal = 1.25;
-        } else if (text.includes('overexposed') || text.includes('bright') || text.includes('reduce') || text.includes('clip')) {
-          brightnessVal = 0.82;
-        }
-      }
-    }
-
-    if (aspects.contrast) {
-      const r = aspects.contrast.rating;
-      if (r < 75) {
-        const text = (aspects.contrast.what_could_be_improved || '').toLowerCase();
-        if (text.includes('flat') || text.includes('increase') || text.includes('lacks') || text.includes('contrast')) {
-          contrastVal = 1.22;
-        } else if (text.includes('harsh') || text.includes('decrease') || text.includes('soften')) {
-          contrastVal = 0.85;
-        }
-      }
-    }
-
-    if (aspects.saturation) {
-      const r = aspects.saturation.rating;
-      if (r < 75) {
-        const text = (aspects.saturation.what_could_be_improved || '').toLowerCase();
-        if (text.includes('lifeless') || text.includes('muted') || text.includes('increase') || text.includes('vibrance')) {
-          saturateVal = 1.30;
-        } else if (text.includes('oversaturated') || text.includes('reduce') || text.includes('intense')) {
-          saturateVal = 0.78;
-        }
-      }
-    }
-
-    if (aspects.warmth) {
-      const r = aspects.warmth.rating;
-      if (r < 75) {
-        const text = (aspects.warmth.what_could_be_improved || '').toLowerCase();
-        if (text.includes('yellow') || text.includes('warm') || text.includes('orange') || text.includes('cast')) {
-          hueVal = -10; // Cooler tone shift
-        } else if (text.includes('cool') || text.includes('cold') || text.includes('blue')) {
-          sepiaVal = 0.22; // Warmer tone addition
-        }
-      }
-    }
-
-    if (aspects.crop) {
-      const r = aspects.crop.rating;
-      if (r < 75) {
-        zoomVal = 1.08; // Simulate dynamic cropping zoom
-      }
-    }
-
-    return {
-      filter: `brightness(${brightnessVal}) contrast(${contrastVal}) saturate(${saturateVal}) sepia(${sepiaVal}) hue-rotate(${hueVal}deg)`,
-      transform: `scale(${zoomVal})`,
-      transition: 'all 0.6s cubic-bezier(0.2, 0.8, 0.2, 1)'
-    };
-  };
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: '100vh', width: '100%', maxWidth: '1280px', margin: '0 auto', padding: '24px', position: 'relative' }}>
@@ -679,101 +841,173 @@ export default function App() {
                     minHeight: '260px',
                     maxHeight: '420px'
                   }}>
-                    <img 
-                      src={previewUrl} 
-                      alt="Critiqued Photograph" 
-                      style={{ 
-                        maxWidth: '100%', 
-                        maxHeight: '420px', 
-                        objectFit: 'contain',
-                        ...(simulateEdits ? getSimulatedFilters() : { transition: 'all 0.5s ease' })
-                      }} 
-                    />
-
-                    {/* Simulated edits status badge overlay */}
-                    {simulateEdits && (
-                      <div style={{ position: 'absolute', top: '12px', left: '12px', backgroundColor: 'rgba(16, 185, 129, 0.85)', color: '#fff', fontSize: '0.72rem', fontWeight: '800', padding: '4px 10px', borderRadius: '6px', display: 'flex', alignItems: 'center', gap: '4px', textTransform: 'uppercase', letterSpacing: '0.05em', boxShadow: '0 4px 10px rgba(0,0,0,0.5)', zIndex: 10 }}>
-                        <Sparkles size={12} />
-                        Edits Applied
-                      </div>
-                    )}
+                    <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <img 
+                        ref={imgRef}
+                        src={previewUrl} 
+                        alt="Critiqued Photograph" 
+                        onLoad={updateImgDimensions}
+                        style={{ 
+                          maxWidth: '100%', 
+                          maxHeight: '420px', 
+                          objectFit: 'contain'
+                        }} 
+                      />
+                    </div>
                   </div>
 
                   {/* Metadata display */}
                   <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '200px' }}>{file?.name || 'critique_image.jpg'}</span>
-                    <span>Composition & Edits Sandbox</span>
+                    <span>Photography Evaluation Workspace</span>
                   </div>
 
-                  {/* Interactive Simulation Switcher */}
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid var(--border-color)', paddingTop: '14px' }}>
-                    <div style={{ display: 'flex', flexDirection: 'column' }}>
-                      <span style={{ fontSize: '0.88rem', fontWeight: '700', color: '#fff' }}>Simulate Recommended Edits</span>
-                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Preview tone and crops based on critique scores</span>
+                  {/* First Impression Box */}
+                  <div className="glass-panel" style={{ padding: '18px', display: 'flex', flexDirection: 'column', gap: '8px', borderLeft: '4px solid var(--primary)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <Sparkles size={16} style={{ color: 'var(--primary)' }} />
+                      <span style={{ fontSize: '0.88rem', fontWeight: '800', color: '#fff', textTransform: 'uppercase', letterSpacing: '0.04em' }}>First Impression</span>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => setSimulateEdits(!simulateEdits)}
-                      style={{
-                        width: '50px',
-                        height: '26px',
-                        borderRadius: '15px',
-                        backgroundColor: simulateEdits ? 'var(--success)' : 'rgba(255,255,255,0.08)',
-                        border: '1px solid rgba(255,255,255,0.1)',
-                        position: 'relative',
-                        cursor: 'pointer',
-                        transition: 'var(--transition-fast)'
-                      }}
-                    >
-                      <div style={{
-                        width: '20px',
-                        height: '20px',
-                        borderRadius: '50%',
-                        backgroundColor: '#fff',
-                        position: 'absolute',
-                        top: '2px',
-                        left: simulateEdits ? '26px' : '2px',
-                        transition: 'all 0.2s cubic-bezier(0.25, 0.8, 0.25, 1)',
-                        boxShadow: '0 2px 4px rgba(0,0,0,0.3)'
-                      }} />
-                    </button>
+                    <p style={{ margin: 0, fontSize: '0.88rem', color: 'var(--text-secondary)', lineHeight: '1.5' }}>
+                      {analysisResult.first_impression || "No initial impression data was computed for this photograph."}
+                    </p>
                   </div>
+
+                  {/* Merged Camera Settings (EXIF) */}
+                  {analysisResult.exif_analysis ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', borderTop: '1px solid var(--border-color)', paddingTop: '16px' }}>
+                      {/* Premium LCD Camera Settings Display */}
+                      <div className="camera-lcd" style={{
+                        background: 'radial-gradient(ellipse at center, #1b2030 0%, #0d1017 100%)',
+                        border: '1px solid #1E293B',
+                        borderRadius: '12px',
+                        padding: '16px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '12px',
+                        boxShadow: 'inset 0 2px 8px rgba(0,0,0,0.5)',
+                        fontFamily: 'system-ui, -apple-system, sans-serif'
+                      }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', textAlign: 'center', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '10px' }}>
+                          <div>
+                            <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', display: 'block', letterSpacing: '0.05em' }}>Shutter Speed</span>
+                            <span style={{ fontSize: '1.2rem', fontWeight: '900', color: '#38BDF8', letterSpacing: '-0.02em' }}>
+                              {analysisResult.exif_analysis.camera_settings.shutter_speed || 'N/A'}
+                            </span>
+                          </div>
+                          <div style={{ borderLeft: '1px solid rgba(255,255,255,0.05)', borderRight: '1px solid rgba(255,255,255,0.05)' }}>
+                            <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', display: 'block', letterSpacing: '0.05em' }}>Aperture</span>
+                            <span style={{ fontSize: '1.2rem', fontWeight: '900', color: '#34D399', letterSpacing: '-0.02em' }}>
+                              {analysisResult.exif_analysis.camera_settings.aperture || 'N/A'}
+                            </span>
+                          </div>
+                          <div>
+                            <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', display: 'block', letterSpacing: '0.05em' }}>ISO</span>
+                            <span style={{ fontSize: '1.2rem', fontWeight: '900', color: '#F59E0B', letterSpacing: '-0.02em' }}>
+                              {analysisResult.exif_analysis.camera_settings.iso || 'N/A'}
+                            </span>
+                          </div>
+                        </div>
+                        
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '12px', fontSize: '0.8rem', paddingTop: '4px' }}>
+                          <div>
+                            <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', display: 'block', letterSpacing: '0.05em' }}>Focal Length</span>
+                            <span style={{ color: '#fff', fontWeight: '600' }}>
+                              {analysisResult.exif_analysis.camera_settings.focal_length || 'N/A'}
+                            </span>
+                          </div>
+                          <div style={{ borderLeft: '1px solid rgba(255,255,255,0.05)', paddingLeft: '12px' }}>
+                            <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', display: 'block', letterSpacing: '0.05em' }}>Gear Model</span>
+                            <span style={{ color: '#fff', fontWeight: '600', display: 'block', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }} title={analysisResult.exif_analysis.camera_settings.camera}>
+                              {analysisResult.exif_analysis.camera_settings.camera || 'Generic Camera'}
+                            </span>
+                            {analysisResult.exif_analysis.camera_settings.lens && (
+                              <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', display: 'block', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }} title={analysisResult.exif_analysis.camera_settings.lens}>
+                                {analysisResult.exif_analysis.camera_settings.lens}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      {(() => {
+                        const status = analysisResult.exif_analysis.diagnostics.status;
+                        let statusColor = 'var(--success)';
+                        let statusBg = 'rgba(16, 185, 129, 0.05)';
+                        let statusBorder = 'rgba(16, 185, 129, 0.15)';
+                        let StatusIcon = CheckCircle;
+
+                        if (status === 'critical') {
+                          statusColor = 'var(--danger)';
+                          statusBg = 'rgba(239, 68, 68, 0.05)';
+                          statusBorder = 'rgba(239, 68, 68, 0.15)';
+                          StatusIcon = AlertTriangle;
+                        } else if (status === 'warning') {
+                          statusColor = 'var(--warning)';
+                          statusBg = 'rgba(245, 158, 11, 0.05)';
+                          statusBorder = 'rgba(245, 158, 11, 0.15)';
+                          StatusIcon = AlertCircle;
+                        }
+
+                        return (
+                          <div style={{
+                            padding: '14px',
+                            backgroundColor: statusBg,
+                            border: `1px solid ${statusBorder}`,
+                            borderLeft: `4px solid ${statusColor}`,
+                            borderRadius: '8px',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '8px',
+                            marginTop: '4px'
+                          }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: statusColor }}>
+                              <StatusIcon size={16} style={{ flexShrink: 0 }} />
+                              <span style={{ fontSize: '0.78rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                Settings Audit: {status}
+                              </span>
+                            </div>
+                            <div>
+                              <p style={{ margin: '0 0 4px 0', fontSize: '0.85rem', fontWeight: '700', color: '#fff' }}>
+                                {analysisResult.exif_analysis.diagnostics.issue}
+                              </p>
+                              <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-secondary)', lineHeight: '1.4' }}>
+                                <strong>Recommendation:</strong> {analysisResult.exif_analysis.diagnostics.suggestion}
+                              </p>
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', borderTop: '1px solid var(--border-color)', paddingTop: '16px' }}>
+                      <div style={{
+                        display: 'flex',
+                        gap: '12px',
+                        padding: '14px',
+                        background: 'rgba(255,255,255,0.02)',
+                        borderRadius: '10px',
+                        border: '1px dashed var(--border-color)',
+                        alignItems: 'flex-start'
+                      }}>
+                        <Info size={16} style={{ color: 'var(--text-muted)', flexShrink: 0, marginTop: '2px' }} />
+                        <div style={{ fontSize: '0.8rem', lineHeight: '1.4', color: 'var(--text-secondary)' }}>
+                          <strong style={{ color: '#fff', display: 'block', marginBottom: '2px' }}>No EXIF Metadata Found</strong>
+                          EXIF details are missing or have been stripped from this file. Using computer vision visual default settings.
+                        </div>
+                      </div>
+                      
+                      {/* Suggested baseline rules */}
+                      <div style={{ background: 'rgba(0,0,0,0.1)', padding: '12px', borderRadius: '8px', fontSize: '0.78rem', color: 'var(--text-muted)', lineHeight: '1.5' }}>
+                        <span style={{ fontWeight: '700', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>Recommended Standard Settings:</span>
+                        • Handheld snapshot: 1/125s, f/4.0, ISO 200<br/>
+                        • Portrait depth isolation: 1/250s, f/1.8 - f/2.8, ISO 100<br/>
+                        • Landscape deep sharpness: 1/60s, f/8.0 - f/11, ISO 100 (tripod advised)
+                      </div>
+                    </div>
+                  )}
                 </div>
 
-                {/* Suggested Edits Panel */}
-                <div className="glass-panel" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <Sliders size={20} className="text-secondary" />
-                    <h4 style={{ fontSize: '1.15rem', fontWeight: '800', color: '#fff', margin: 0 }}>Actionable Presets & Edits</h4>
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                    {analysisResult.suggested_edits && analysisResult.suggested_edits.length > 0 ? (
-                      analysisResult.suggested_edits.map((edit, idx) => (
-                        <div 
-                          key={idx} 
-                          style={{
-                            display: 'flex',
-                            gap: '12px',
-                            padding: '12px 14px',
-                            background: 'rgba(255,255,255,0.015)',
-                            borderRadius: '10px',
-                            borderLeft: '4px solid var(--secondary)',
-                            fontSize: '0.88rem',
-                            lineHeight: '1.4',
-                            alignItems: 'flex-start'
-                          }}
-                        >
-                          <div style={{ width: '18px', height: '18px', borderRadius: '50%', backgroundColor: 'rgba(139, 92, 246, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: '2px' }}>
-                            <Check size={12} style={{ color: 'var(--secondary)', margin: 'auto' }} />
-                          </div>
-                          <span style={{ color: 'var(--text-primary)' }}>{edit}</span>
-                        </div>
-                      ))
-                    ) : (
-                      <p style={{ color: 'var(--text-muted)', fontSize: '0.88rem' }}>No specific slider tweaks suggested for this photo.</p>
-                    )}
-                  </div>
-                </div>
+
 
                 {/* Reset button */}
                 <button onClick={handleReset} className="btn-secondary" style={{ width: '100%', justifyContent: 'center', padding: '14px' }}>
@@ -788,10 +1022,12 @@ export default function App() {
                 {/* Tabs for Category Selection */}
                 <div style={{ display: 'flex', gap: '6px', padding: '4px', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-color)', borderRadius: '12px', overflowX: 'auto' }}>
                   {[
-                    { id: 'all', label: 'All Audits' },
-                    { id: 'light', label: 'Light & Exposure' },
-                    { id: 'color', label: 'Color & Hue' },
-                    { id: 'details', label: 'Details & Composition' }
+                    { id: 'composition', label: 'Composition' },
+                    { id: 'lighting', label: 'Lighting & Exposure' },
+                    { id: 'focus', label: 'Focus & Sharpness' },
+                    { id: 'color', label: 'Color & Tones' },
+                    { id: 'subject', label: 'Subject & Story' },
+                    { id: 'post-processing', label: 'Post-Processing' }
                   ].map((tab) => (
                     <button
                       key={tab.id}
@@ -816,86 +1052,37 @@ export default function App() {
 
                 {/* Aspect Cards List styled as adjustment dials */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                  {Object.entries(analysisResult.aspects)
-                    .filter(([key]) => {
-                      if (activeTab === 'all') return true;
-                      return aspectConfig[key]?.category === activeTab;
-                    })
-                    .map(([key, data]) => {
-                      const cfg = aspectConfig[key] || { label: key, icon: Info, minSweet: 40, maxSweet: 75 };
-                      const IconComponent = cfg.icon;
-                      const color = getScoreColor(data.rating);
-                      
-                      return (
+                  {(() => {
+                    const params = getMajorParams(analysisResult);
+                    const selectedParam = params.find(p => p.id === activeTab);
+                    if (!selectedParam) return null;
+
+                    return (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                        {/* Overall Aspect Review Card */}
                         <div 
-                          key={key} 
-                          className="glass-panel aspect-card" 
+                          className="glass-panel" 
                           style={{ 
-                            padding: '22px', 
+                            padding: '24px', 
                             display: 'flex', 
                             flexDirection: 'column', 
                             gap: '16px',
-                            borderLeft: `4px solid ${color}`
+                            borderLeft: `6px solid ${getScoreColor(selectedParam.rating)}`
                           }}
                         >
-                          {/* Aspect Header */}
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                              <div style={{ color: color, display: 'flex', alignItems: 'center', width: '32px', height: '32px', borderRadius: '8px', backgroundColor: 'rgba(255,255,255,0.02)', justifyContent: 'center' }}>
-                                <IconComponent size={18} />
-                              </div>
-                              <h5 style={{ fontSize: '1.05rem', fontWeight: '800', margin: 0, color: '#fff' }}>
-                                {cfg.label}
-                              </h5>
-                            </div>
-                            
+                            <h4 style={{ margin: 0, color: '#fff', fontSize: '1.2rem', fontWeight: '800' }}>
+                              Overall {selectedParam.label} Review
+                            </h4>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                              <span style={{ fontSize: '1.25rem', fontWeight: '800', color: color, fontFamily: 'var(--font-mono)' }}>
-                                {data.rating}
+                              <span style={{ fontSize: '1.5rem', fontWeight: '900', color: getScoreColor(selectedParam.rating), fontFamily: 'var(--font-mono)' }}>
+                                {selectedParam.rating}
                               </span>
-                              <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>/ 100</span>
+                              <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>/ 100</span>
                             </div>
                           </div>
 
-                          {/* Lightroom Style slider track */}
-                          <div className="metric-slider-wrapper">
-                            <div className="metric-slider-track">
-                              {/* Optimal Target Sweet Spot Overlay */}
-                              <div 
-                                className="metric-slider-target"
-                                style={{
-                                  left: `${cfg.minSweet}%`,
-                                  width: `${cfg.maxSweet - cfg.minSweet}%`
-                                }}
-                              />
-                              {/* Glowing track filling up to value */}
-                              <div 
-                                className="metric-slider-fill"
-                                style={{
-                                  width: `${data.rating}%`,
-                                  backgroundColor: color,
-                                  boxShadow: `0 0 10px ${color}`
-                                }}
-                              />
-                              {/* Slider thumb */}
-                              <div 
-                                className="metric-slider-thumb"
-                                style={{
-                                  left: `${data.rating}%`,
-                                  color: color
-                                }}
-                              />
-                            </div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: '500' }}>
-                              <span>Under</span>
-                              <span style={{ color: 'var(--primary)', fontWeight: '600' }}>Target Range ({cfg.minSweet}% - {cfg.maxSweet}%)</span>
-                              <span>Over</span>
-                            </div>
-                          </div>
-
-                          {/* Advice layout (Success/Works & Advice/Improved) */}
-                          <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '14px', borderTop: '1px solid rgba(255,255,255,0.03)', paddingTop: '14px' }}>
-                            
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '14px', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '14px' }}>
                             {/* What Works */}
                             <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
                               <div style={{ color: 'var(--success)', marginTop: '2px', backgroundColor: 'rgba(16, 185, 129, 0.08)', borderRadius: '50%', padding: '2px', display: 'flex' }}>
@@ -903,7 +1090,7 @@ export default function App() {
                               </div>
                               <div style={{ fontSize: '0.88rem', lineHeight: '1.4' }}>
                                 <span style={{ fontWeight: '700', color: 'var(--success)', display: 'block', marginBottom: '2px', textTransform: 'uppercase', fontSize: '0.75rem', letterSpacing: '0.04em' }}>What Works</span>
-                                <span style={{ color: 'var(--text-secondary)' }}>{data.what_works}</span>
+                                <span style={{ color: 'var(--text-secondary)' }}>{selectedParam.what_works}</span>
                               </div>
                             </div>
 
@@ -914,14 +1101,360 @@ export default function App() {
                               </div>
                               <div style={{ fontSize: '0.88rem', lineHeight: '1.4' }}>
                                 <span style={{ fontWeight: '700', color: 'var(--warning)', display: 'block', marginBottom: '2px', textTransform: 'uppercase', fontSize: '0.75rem', letterSpacing: '0.04em' }}>Areas For Improvement</span>
-                                <span style={{ color: 'var(--text-secondary)' }}>{data.what_could_be_improved}</span>
+                                <span style={{ color: 'var(--text-secondary)' }}>{selectedParam.what_could_be_improved}</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Heading for Sub-Aspects */}
+                        {activeTab !== 'post-processing' && (
+                          <div style={{ marginTop: '10px', marginBottom: '-5px' }}>
+                            <h5 style={{ margin: 0, color: 'var(--text-secondary)', fontSize: '0.85rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                              Sub-Aspect Breakdown & Attention Ratings
+                            </h5>
+                          </div>
+                        )}
+
+                        {/* List of sub-aspects */}
+                        {activeTab !== 'post-processing' && selectedParam.subAspects.map((sub) => {
+                          const cfg = subAspectConfig[sub.key] || { label: sub.label, icon: Info, minSweet: 40, maxSweet: 75 };
+                          const IconComponent = cfg.icon;
+                          const color = getScoreColor(sub.rating);
+
+                          return (
+                            <div 
+                              key={sub.key} 
+                              className="glass-panel aspect-card" 
+                              style={{ 
+                                padding: '22px', 
+                                display: 'flex', 
+                                flexDirection: 'column', 
+                                gap: '16px',
+                                borderLeft: `4px solid ${color}`
+                              }}
+                            >
+                              {/* Sub Header */}
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                  <div style={{ color: color, display: 'flex', alignItems: 'center', width: '32px', height: '32px', borderRadius: '8px', backgroundColor: 'rgba(255,255,255,0.02)', justifyContent: 'center' }}>
+                                    <IconComponent size={18} />
+                                  </div>
+                                  <h5 style={{ fontSize: '1.05rem', fontWeight: '800', margin: 0, color: '#fff' }}>
+                                    {cfg.label}
+                                  </h5>
+                                </div>
+                                
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                  <span style={{ fontSize: '1.25rem', fontWeight: '800', color: color, fontFamily: 'var(--font-mono)' }}>
+                                    {sub.rating}
+                                  </span>
+                                  <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>/ 100</span>
+                                </div>
+                              </div>
+
+                              {/* Sweet Spot Slider Track */}
+                              <div className="metric-slider-wrapper">
+                                <div className="metric-slider-track">
+                                  {/* Optimal Target Sweet Spot Overlay */}
+                                  <div 
+                                    className="metric-slider-target"
+                                    style={{
+                                      left: `${cfg.minSweet}%`,
+                                      width: `${cfg.maxSweet - cfg.minSweet}%`
+                                    }}
+                                  />
+                                  {/* Glowing track filling up to value */}
+                                  <div 
+                                    className="metric-slider-fill"
+                                    style={{
+                                      width: `${sub.rating}%`,
+                                      backgroundColor: color,
+                                      boxShadow: `0 0 10px ${color}`
+                                    }}
+                                  />
+                                  {/* Slider thumb */}
+                                  <div 
+                                    className="metric-slider-thumb"
+                                    style={{
+                                      left: `${sub.rating}%`,
+                                      color: color
+                                    }}
+                                  />
+                                </div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: '500' }}>
+                                  <span>Under</span>
+                                  <span style={{ color: 'var(--primary)', fontWeight: '600' }}>Target Range ({cfg.minSweet}% - {cfg.maxSweet}%)</span>
+                                  <span>Over</span>
+                                </div>
+                              </div>
+
+                              {/* What Works & What Could Be Improved */}
+                              <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '14px', borderTop: '1px solid rgba(255,255,255,0.03)', paddingTop: '14px' }}>
+                                {sub.what_works && (
+                                  <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
+                                    <div style={{ color: 'var(--success)', marginTop: '2px', backgroundColor: 'rgba(16, 185, 129, 0.08)', borderRadius: '50%', padding: '2px', display: 'flex' }}>
+                                      <CheckCircle size={14} />
+                                    </div>
+                                    <div style={{ fontSize: '0.88rem', lineHeight: '1.4' }}>
+                                      <span style={{ fontWeight: '700', color: 'var(--success)', display: 'block', marginBottom: '2px', textTransform: 'uppercase', fontSize: '0.75rem', letterSpacing: '0.04em' }}>What Works</span>
+                                      <span style={{ color: 'var(--text-secondary)' }}>{sub.what_works}</span>
+                                    </div>
+                                  </div>
+                                )}
+
+                                {sub.what_could_be_improved && (
+                                  <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
+                                    <div style={{ color: 'var(--warning)', marginTop: '2px', backgroundColor: 'rgba(245, 158, 11, 0.08)', borderRadius: '50%', padding: '2px', display: 'flex' }}>
+                                      <AlertCircle size={14} />
+                                    </div>
+                                    <div style={{ fontSize: '0.88rem', lineHeight: '1.4' }}>
+                                      <span style={{ fontWeight: '700', color: 'var(--warning)', display: 'block', marginBottom: '2px', textTransform: 'uppercase', fontSize: '0.75rem', letterSpacing: '0.04em' }}>Areas For Improvement</span>
+                                      <span style={{ color: 'var(--text-secondary)' }}>{sub.what_could_be_improved}</span>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+
+                        {/* Category-Specific Visual Analysis & Details */}
+                        
+                        {/* Post-Processing Presets & Edits suggestion */}
+                        {activeTab === 'post-processing' && (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', marginTop: '10px' }}>
+                            <div className="glass-panel" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                <Sliders size={20} className="text-secondary" />
+                                <h4 style={{ fontSize: '1.15rem', fontWeight: '800', color: '#fff', margin: 0 }}>Actionable Presets & Edits</h4>
+                              </div>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                                {analysisResult.suggested_edits && analysisResult.suggested_edits.length > 0 ? (
+                                  analysisResult.suggested_edits.map((edit, idx) => (
+                                    <div 
+                                      key={idx} 
+                                      style={{
+                                        display: 'flex',
+                                        gap: '12px',
+                                        padding: '12px 14px',
+                                        background: 'rgba(255,255,255,0.015)',
+                                        borderRadius: '10px',
+                                        borderLeft: '4px solid var(--secondary)',
+                                        fontSize: '0.88rem',
+                                        lineHeight: '1.4',
+                                        alignItems: 'flex-start'
+                                      }}
+                                    >
+                                      <div style={{ width: '18px', height: '18px', borderRadius: '50%', backgroundColor: 'rgba(139, 92, 246, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: '2px' }}>
+                                        <Check size={12} style={{ color: 'var(--secondary)', margin: 'auto' }} />
+                                      </div>
+                                      <span style={{ color: 'var(--text-primary)' }}>{edit}</span>
+                                    </div>
+                                  ))
+                                ) : (
+                                  <p style={{ color: 'var(--text-muted)', fontSize: '0.88rem' }}>No specific slider tweaks suggested for this photo.</p>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* 1. Composition Category specific cards */}
+                        {activeTab === 'composition' && analysisResult.advanced_cv && (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', marginTop: '10px' }}>
+                            {/* Composition Rules Breakdown */}
+                            <div className="glass-panel" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                              <h4 style={{ margin: 0, color: '#fff', fontSize: '1rem', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <Compass size={18} className="text-secondary" />
+                                Computer Vision Composition Analysis
+                              </h4>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                                {[
+                                  { label: 'Rule of Thirds Alignment', data: analysisResult.advanced_cv?.composition?.rule_of_thirds, color: 'var(--primary)' },
+                                  { label: 'Golden Ratio (Fibonacci) Balance', data: analysisResult.advanced_cv?.composition?.golden_ratio, color: '#fbbf24' },
+                                  { label: 'Symmetry & Texture Patterns', data: analysisResult.advanced_cv?.composition?.symmetry_patterns, color: '#10b981' },
+                                  { label: 'Natural Edge Framing', data: analysisResult.advanced_cv?.composition?.framing, color: '#f43f5e' },
+                                  { label: 'Negative Space Breathing Room', data: analysisResult.advanced_cv?.composition?.negative_space, color: '#06b6d4' },
+                                  { label: 'Leading Lines Convergence', data: analysisResult.advanced_cv?.composition?.leading_lines, color: '#a855f7' }
+                                ].map((rule, idx) => {
+                                  const score = rule.data?.score || 0;
+                                  let statusColor = 'var(--danger)';
+                                  if (score >= 75) statusColor = 'var(--success)';
+                                  else if (score >= 45) statusColor = 'var(--warning)';
+
+                                  return (
+                                    <div key={idx} style={{ paddingBottom: idx < 5 ? '12px' : 0, borderBottom: idx < 5 ? '1px solid rgba(255,255,255,0.03)' : 'none' }}>
+                                      <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: '600', fontSize: '0.85rem', color: '#fff', marginBottom: '4px' }}>
+                                        <span>{rule.label}</span>
+                                        <span style={{ color: statusColor, fontWeight: '800' }}>{score}<span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 'normal' }}>/100</span></span>
+                                      </div>
+                                      <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', lineHeight: '1.4' }}>
+                                        {rule.data?.description}
+                                      </div>
+                                    </div>
+                                  );
+                                })}
                               </div>
                             </div>
 
+                            {/* Heuristics for Composition */}
+                            <div className="glass-panel" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                              <h4 style={{ margin: 0, color: '#fff', fontSize: '1rem', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <Cpu size={18} style={{ color: '#10b981' }} />
+                                Composition Heuristics
+                              </h4>
+                              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px' }}>
+                                <div style={{ padding: '10px', background: 'rgba(255,255,255,0.01)', border: '1px solid rgba(255,255,255,0.03)', borderRadius: '8px' }}>
+                                  <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', display: 'block', letterSpacing: '0.04em' }}>Centering Status</span>
+                                  <span style={{ fontSize: '0.9rem', fontWeight: '700', color: analysisResult.advanced_cv?.subject_centering?.is_centered ? 'var(--success)' : 'var(--warning)' }}>
+                                    {analysisResult.advanced_cv?.subject_centering?.is_centered ? 'Centered' : 'Off-Center'}
+                                  </span>
+                                  <span style={{ fontSize: '0.65rem', display: 'block', color: 'var(--text-muted)', marginTop: '2px' }}>
+                                    Offset: dx={analysisResult.advanced_cv?.subject_centering?.offset_x}, dy={analysisResult.advanced_cv?.subject_centering?.offset_y}
+                                  </span>
+                                </div>
+                                <div style={{ padding: '10px', background: 'rgba(255,255,255,0.01)', border: '1px solid rgba(255,255,255,0.03)', borderRadius: '8px' }}>
+                                  <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', display: 'block', letterSpacing: '0.04em' }}>Horizon Tilt</span>
+                                  <span style={{ fontSize: '0.9rem', fontWeight: '700', color: !analysisResult.advanced_cv?.horizon?.detected ? 'var(--text-muted)' : (analysisResult.advanced_cv?.horizon?.is_level ? 'var(--success)' : 'var(--danger)') }}>
+                                    {!analysisResult.advanced_cv?.horizon?.detected ? 'Not Detected' : (analysisResult.advanced_cv?.horizon?.is_level ? 'Level' : 'Tilted')}
+                                  </span>
+                                  <span style={{ fontSize: '0.65rem', display: 'block', color: 'var(--text-muted)', marginTop: '2px' }}>
+                                    {analysisResult.advanced_cv?.horizon?.detected ? `Angle: ${analysisResult.advanced_cv.horizon.angle}°` : 'No distinct horizon'}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
                           </div>
-                        </div>
-                      );
-                    })}
+                        )}
+
+                        {/* 2. Color & Tones Category specific cards */}
+                        {activeTab === 'color' && analysisResult.advanced_cv && (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', marginTop: '10px' }}>
+                            {/* Color Swatch Palette */}
+                            <div className="glass-panel" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                              <h4 style={{ margin: 0, color: '#fff', fontSize: '1rem', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <Palette size={18} className="text-secondary" />
+                                Extracted Color Palette
+                              </h4>
+                              <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                                Click on a swatch color bubble to copy its hex value to clipboard.
+                              </p>
+                              <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginTop: '6px' }}>
+                                {analysisResult.advanced_cv?.color_palette?.map((col, idx) => (
+                                  <div 
+                                    key={idx} 
+                                    onClick={() => copyColorToClipboard(col.hex)}
+                                    style={{ 
+                                      display: 'flex', 
+                                      flexDirection: 'column', 
+                                      alignItems: 'center', 
+                                      gap: '6px',
+                                      cursor: 'pointer',
+                                      position: 'relative'
+                                    }}
+                                  >
+                                    <div style={{
+                                      width: '42px',
+                                      height: '42px',
+                                      borderRadius: '50%',
+                                      backgroundColor: col.hex,
+                                      border: '2px solid rgba(255,255,255,0.15)',
+                                      boxShadow: '0 4px 10px rgba(0,0,0,0.3)',
+                                      transition: 'transform 0.2s ease',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center'
+                                    }}
+                                    onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.15)'}
+                                    onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                                    >
+                                      {copiedColor === col.hex && <Check size={16} style={{ color: '#fff', filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.8))' }} />}
+                                    </div>
+                                    <span style={{ fontSize: '0.7rem', color: '#fff', fontWeight: '600' }}>{col.percentage}%</span>
+                                    <span style={{ fontSize: '0.62rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>{col.hex.toUpperCase()}</span>
+                                  </div>
+                                ))}
+                              </div>
+                              {copiedColor && (
+                                <div style={{ fontSize: '0.78rem', color: 'var(--success)', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '4px', alignSelf: 'flex-start' }}>
+                                  <CheckCircle size={12} />
+                                  Copied {copiedColor.toUpperCase()} to clipboard!
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* 3. Focus & Sharpness Category specific cards */}
+                        {activeTab === 'focus' && analysisResult.advanced_cv && (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', marginTop: '10px' }}>
+                            <div className="glass-panel" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                              <h4 style={{ margin: 0, color: '#fff', fontSize: '1rem', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <Cpu size={18} style={{ color: '#38bdf8' }} />
+                                Sharpness & Focus Heuristics
+                              </h4>
+                              
+                              {/* Blur Details */}
+                              <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
+                                <div style={{ color: 'var(--primary)', marginTop: '2px' }}>
+                                  <Eye size={16} />
+                                </div>
+                                <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                                  <strong>Sharpness Audit:</strong> {analysisResult.advanced_cv?.blur?.description}
+                                </div>
+                              </div>
+
+                              {/* Background Clutter Details */}
+                              <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start', borderTop: '1px solid rgba(255,255,255,0.03)', paddingTop: '10px' }}>
+                                <div style={{ color: analysisResult.advanced_cv?.background_clutter?.score > 50 ? 'var(--warning)' : 'var(--success)', marginTop: '2px' }}>
+                                  <AlertTriangle size={16} />
+                                </div>
+                                <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                                  <strong>Background Clutter (Score: {analysisResult.advanced_cv?.background_clutter?.score}/100):</strong>{' '}
+                                  {analysisResult.advanced_cv?.background_clutter?.description}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* 4. Subject & Story Category specific cards */}
+                        {activeTab === 'subject' && analysisResult.advanced_cv && (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', marginTop: '10px' }}>
+                            <div className="glass-panel" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                              <h4 style={{ margin: 0, color: '#fff', fontSize: '1rem', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <Cpu size={18} style={{ color: '#fbbf24' }} />
+                                Subject & Human Elements
+                              </h4>
+                              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px' }}>
+                                <div style={{ padding: '10px', background: 'rgba(255,255,255,0.01)', border: '1px solid rgba(255,255,255,0.03)', borderRadius: '8px' }}>
+                                  <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', display: 'block', letterSpacing: '0.04em' }}>Face Count</span>
+                                  <span style={{ fontSize: '0.9rem', fontWeight: '700', color: analysisResult.advanced_cv?.faces?.length > 0 ? 'var(--success)' : '#fff' }}>
+                                    {analysisResult.advanced_cv?.faces?.length || 0} Detected
+                                  </span>
+                                </div>
+                                <div style={{ padding: '10px', background: 'rgba(255,255,255,0.01)', border: '1px solid rgba(255,255,255,0.03)', borderRadius: '8px' }}>
+                                  <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', display: 'block', letterSpacing: '0.04em' }}>Eye Contact</span>
+                                  <span style={{ fontSize: '0.9rem', fontWeight: '700', color: '#fff' }}>
+                                    {analysisResult.advanced_cv?.faces?.length > 0 ? (analysisResult.advanced_cv.faces.some(f => f.eye_contact) ? 'Direct 👁' : 'Indirect') : 'N/A'}
+                                  </span>
+                                </div>
+                              </div>
+
+                              <div style={{ padding: '10px', background: 'rgba(255,255,255,0.01)', border: '1px solid rgba(255,255,255,0.03)', borderRadius: '8px' }}>
+                                <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', display: 'block', letterSpacing: '0.04em' }}>Sky Coverage</span>
+                                <span style={{ fontSize: '0.9rem', fontWeight: '700', color: '#fff' }}>
+                                  {analysisResult.advanced_cv?.sky_segmentation?.percentage}% of Frame
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                      </div>
+                    );
+                  })()}
                 </div>
 
               </div>
