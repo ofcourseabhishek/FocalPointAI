@@ -2,10 +2,11 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   Camera, UploadCloud, Mail, CheckCircle, AlertCircle, Sparkles, 
   RefreshCw, Sun, Contrast, Droplet, Eye, Thermometer, Info, 
-  Moon, Palette, Compass, Check, Sliders
+  Moon, Palette, Compass, Check, Sliders, EyeOff, LayoutGrid,
+  History, Trash2, ShieldCheck, HelpCircle
 } from 'lucide-react';
 
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL?.replace(/\/$/, '');
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL?.replace(/\/$/, '') || 'http://127.0.0.1:8000';
 
 const LOADING_STEPS = [
   "Uploading photo & initiating secure connection...",
@@ -13,6 +14,30 @@ const LOADING_STEPS = [
   "Evaluating color palette, saturation, and warmth...",
   "Scanning structural details and micro-sharpness...",
   "Calculating composition grids, symmetry, and crop lines..."
+];
+
+const DEMO_PRESETS = [
+  {
+    id: 'sunset',
+    name: 'Beach Sunset',
+    description: 'Moody low-light & high dynamic range',
+    url: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=800&q=80',
+    email: 'sunset.learner@focalpoint.ai'
+  },
+  {
+    id: 'portrait',
+    name: 'Studio Portrait',
+    description: 'Soft lighting & high-detail face focus',
+    url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=800&q=80',
+    email: 'portrait.learner@focalpoint.ai'
+  },
+  {
+    id: 'neon',
+    name: 'Cyberpunk Alley',
+    description: 'Harsh contrast & heavy color saturation',
+    url: 'https://images.unsplash.com/photo-1515621061946-eff1c2a352bd?auto=format&fit=crop&w=800&q=80',
+    email: 'neon.learner@focalpoint.ai'
+  }
 ];
 
 export default function App() {
@@ -25,9 +50,29 @@ export default function App() {
   const [error, setError] = useState('');
   const [dragOver, setDragOver] = useState(false);
   const [activeTab, setActiveTab] = useState('all');
+  
+  // Redesign custom features state
+  const [activeGridOverlay, setActiveGridOverlay] = useState('none'); // none, thirds, spiral, center
+  const [simulateEdits, setSimulateEdits] = useState(false);
+  const [loadingDemo, setLoadingDemo] = useState(false);
+  const [selectedDemoId, setSelectedDemoId] = useState(null);
+  const [recentCritiques, setRecentCritiques] = useState([]);
+  const [showHistory, setShowHistory] = useState(false);
 
   const fileInputRef = useRef(null);
   const loadingIntervalRef = useRef(null);
+
+  // Load history on mount
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('focalpoint_history');
+      if (stored) {
+        setRecentCritiques(JSON.parse(stored));
+      }
+    } catch (e) {
+      console.error("Failed to load history from localStorage", e);
+    }
+  }, []);
 
   // Cycle loading steps
   useEffect(() => {
@@ -35,7 +80,7 @@ export default function App() {
       setLoadingStep(0);
       loadingIntervalRef.current = setInterval(() => {
         setLoadingStep((prev) => (prev < LOADING_STEPS.length - 1 ? prev + 1 : prev));
-      }, 1500);
+      }, 1800);
     } else {
       if (loadingIntervalRef.current) {
         clearInterval(loadingIntervalRef.current);
@@ -47,6 +92,45 @@ export default function App() {
       }
     };
   }, [isLoading]);
+
+  // Helper to convert preview image to a small base64 thumbnail for local storage
+  const generateThumbnail = (imageSrc) => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.crossOrigin = "anonymous"; // Avoid tainted canvas issues for demo urls
+      img.onload = () => {
+        try {
+          const canvas = document.createElement('canvas');
+          const ctx = canvas.getContext('2d');
+          const MAX_WIDTH = 120;
+          const MAX_HEIGHT = 120;
+          let width = img.width;
+          let height = img.height;
+          
+          if (width > height) {
+            if (width > MAX_WIDTH) {
+              height *= MAX_WIDTH / width;
+              width = MAX_WIDTH;
+            }
+          } else {
+            if (height > MAX_HEIGHT) {
+              width *= MAX_HEIGHT / height;
+              height = MAX_HEIGHT;
+            }
+          }
+          canvas.width = width;
+          canvas.height = height;
+          ctx.drawImage(img, 0, 0, width, height);
+          resolve(canvas.toDataURL('image/jpeg', 0.6));
+        } catch (e) {
+          // If security or canvas operations fail, resolve with empty string
+          resolve('');
+        }
+      };
+      img.onerror = () => resolve('');
+      img.src = imageSrc;
+    });
+  };
 
   const handleDragOver = (e) => {
     e.preventDefault();
@@ -60,6 +144,7 @@ export default function App() {
   const handleDrop = (e) => {
     e.preventDefault();
     setDragOver(false);
+    setSelectedDemoId(null);
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
       const droppedFile = e.dataTransfer.files[0];
       if (droppedFile.type.startsWith('image/')) {
@@ -78,6 +163,7 @@ export default function App() {
       setFile(selectedFile);
       setPreviewUrl(URL.createObjectURL(selectedFile));
       setError('');
+      setSelectedDemoId(null);
     }
   };
 
@@ -85,12 +171,31 @@ export default function App() {
     fileInputRef.current.click();
   };
 
+  const loadDemoPreset = async (preset) => {
+    setLoadingDemo(true);
+    setError('');
+    setSelectedDemoId(preset.id);
+    try {
+      const response = await fetch(preset.url);
+      if (!response.ok) throw new Error("Could not retrieve preset photo");
+      const blob = await response.blob();
+      const ext = preset.url.split('.').pop().split('?')[0] || 'jpg';
+      const demoFile = new File([blob], `demo_${preset.id}.${ext}`, { type: blob.type });
+      
+      setFile(demoFile);
+      setPreviewUrl(URL.createObjectURL(demoFile));
+      setEmail(preset.email);
+    } catch (err) {
+      console.error(err);
+      setError(`Failed to load preset photo: ${err.message}. Please upload your own instead.`);
+      setSelectedDemoId(null);
+    } finally {
+      setLoadingDemo(false);
+    }
+  };
+
   const handleAnalyze = async (e) => {
     e.preventDefault();
-    if (!BACKEND_URL) {
-      setError('The analysis service is not configured. Set VITE_BACKEND_URL and redeploy.');
-      return;
-    }
     if (!file) {
       setError('Please select or drop an image first.');
       return;
@@ -103,6 +208,8 @@ export default function App() {
     setIsLoading(true);
     setAnalysisResult(null);
     setError('');
+    setSimulateEdits(false);
+    setActiveGridOverlay('none');
 
     const formData = new FormData();
     formData.append('file', file);
@@ -121,10 +228,47 @@ export default function App() {
 
       const result = await response.json();
       setAnalysisResult(result);
+
+      // Save to local storage history with a thumbnail
+      const thumb = await generateThumbnail(previewUrl);
+      const newHistoryEntry = {
+        id: Date.now().toString(),
+        timestamp: new Date().toLocaleString(),
+        filename: file.name || 'uploaded_photo.jpg',
+        email: email,
+        overall_rating: result.overall_rating,
+        aspects: result.aspects,
+        suggested_edits: result.suggested_edits,
+        email_status: result.email_status,
+        mode: result.mode,
+        thumbnail: thumb || previewUrl // Fallback to raw object url (which is temporary but works in current session)
+      };
+
+      const updatedHistory = [newHistoryEntry, ...recentCritiques].slice(0, 10);
+      setRecentCritiques(updatedHistory);
+      localStorage.setItem('focalpoint_history', JSON.stringify(updatedHistory));
+
     } catch (err) {
       setError(err.message || 'Something went wrong. Please check that the backend is running.');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const loadHistoryItem = (item) => {
+    setAnalysisResult(item);
+    setPreviewUrl(item.thumbnail || '');
+    setEmail(item.email);
+    setFile({ name: item.filename }); // Mock file object
+    setSimulateEdits(false);
+    setActiveGridOverlay('none');
+    setShowHistory(false);
+  };
+
+  const clearHistory = () => {
+    if (confirm("Are you sure you want to clear your critique history?")) {
+      setRecentCritiques([]);
+      localStorage.removeItem('focalpoint_history');
     }
   };
 
@@ -134,73 +278,258 @@ export default function App() {
     setAnalysisResult(null);
     setError('');
     setActiveTab('all');
+    setSelectedDemoId(null);
+    setSimulateEdits(false);
+    setActiveGridOverlay('none');
   };
 
-  // Helper: map aspect keys to Icons and Categories
+  // Aspect naming and icon mapping
   const aspectConfig = {
-    brightness: { label: 'Brightness', icon: Sun, category: 'light' },
-    contrast: { label: 'Contrast', icon: Contrast, category: 'light' },
-    highlights: { label: 'Highlights', icon: Sparkles, category: 'light' },
-    shadows: { label: 'Shadows', icon: Moon, category: 'light' },
-    ambiance: { label: 'Ambiance', icon: Sliders, category: 'light' },
-    colour: { label: 'Colour Palette', icon: Palette, category: 'color' },
-    saturation: { label: 'Saturation', icon: Droplet, category: 'color' },
-    warmth: { label: 'Warmth / Temperature', icon: Thermometer, category: 'color' },
-    details: { label: 'Details & Sharpening', icon: Eye, category: 'details' },
-    crop: { label: 'Composition & Crop', icon: Compass, category: 'details' }
+    brightness: { label: 'Exposure / Brightness', icon: Sun, category: 'light', minSweet: 40, maxSweet: 75 },
+    contrast: { label: 'Tonal Contrast', icon: Contrast, category: 'light', minSweet: 45, maxSweet: 75 },
+    highlights: { label: 'Highlights & Whites', icon: Sparkles, category: 'light', minSweet: 40, maxSweet: 75 },
+    shadows: { label: 'Shadows & Blacks', icon: Moon, category: 'light', minSweet: 40, maxSweet: 75 },
+    ambiance: { label: 'Ambiance / Tone Map', icon: Sliders, category: 'light', minSweet: 40, maxSweet: 75 },
+    colour: { label: 'Colour Palette Harmony', icon: Palette, category: 'color', minSweet: 50, maxSweet: 80 },
+    saturation: { label: 'Color Saturation', icon: Droplet, category: 'color', minSweet: 40, maxSweet: 70 },
+    warmth: { label: 'Warmth / White Balance', icon: Thermometer, category: 'color', minSweet: 45, maxSweet: 75 },
+    details: { label: 'Details & Micro-sharpness', icon: Eye, category: 'details', minSweet: 55, maxSweet: 85 },
+    crop: { label: 'Composition & Grid Crop', icon: Compass, category: 'details', minSweet: 50, maxSweet: 80 }
   };
 
-  // Get score color
   const getScoreColor = (score) => {
     if (score >= 80) return 'var(--success)';
     if (score >= 60) return 'var(--warning)';
     return 'var(--danger)';
   };
 
+  // Generate CSS filter settings based on image critique feedback
+  const getSimulatedFilters = () => {
+    if (!analysisResult) return {};
+    let brightnessVal = 1;
+    let contrastVal = 1;
+    let saturateVal = 1;
+    let sepiaVal = 0;
+    let zoomVal = 1;
+    let hueVal = 0;
+
+    const aspects = analysisResult.aspects;
+
+    if (aspects.brightness) {
+      const r = aspects.brightness.rating;
+      if (r < 75) {
+        const text = (aspects.brightness.what_could_be_improved || '').toLowerCase();
+        if (text.includes('underexposed') || text.includes('dark') || text.includes('boost') || text.includes('increase')) {
+          brightnessVal = 1.25;
+        } else if (text.includes('overexposed') || text.includes('bright') || text.includes('reduce') || text.includes('clip')) {
+          brightnessVal = 0.82;
+        }
+      }
+    }
+
+    if (aspects.contrast) {
+      const r = aspects.contrast.rating;
+      if (r < 75) {
+        const text = (aspects.contrast.what_could_be_improved || '').toLowerCase();
+        if (text.includes('flat') || text.includes('increase') || text.includes('lacks') || text.includes('contrast')) {
+          contrastVal = 1.22;
+        } else if (text.includes('harsh') || text.includes('decrease') || text.includes('soften')) {
+          contrastVal = 0.85;
+        }
+      }
+    }
+
+    if (aspects.saturation) {
+      const r = aspects.saturation.rating;
+      if (r < 75) {
+        const text = (aspects.saturation.what_could_be_improved || '').toLowerCase();
+        if (text.includes('lifeless') || text.includes('muted') || text.includes('increase') || text.includes('vibrance')) {
+          saturateVal = 1.30;
+        } else if (text.includes('oversaturated') || text.includes('reduce') || text.includes('intense')) {
+          saturateVal = 0.78;
+        }
+      }
+    }
+
+    if (aspects.warmth) {
+      const r = aspects.warmth.rating;
+      if (r < 75) {
+        const text = (aspects.warmth.what_could_be_improved || '').toLowerCase();
+        if (text.includes('yellow') || text.includes('warm') || text.includes('orange') || text.includes('cast')) {
+          hueVal = -10; // Cooler tone shift
+        } else if (text.includes('cool') || text.includes('cold') || text.includes('blue')) {
+          sepiaVal = 0.22; // Warmer tone addition
+        }
+      }
+    }
+
+    if (aspects.crop) {
+      const r = aspects.crop.rating;
+      if (r < 75) {
+        zoomVal = 1.08; // Simulate dynamic cropping zoom
+      }
+    }
+
+    return {
+      filter: `brightness(${brightnessVal}) contrast(${contrastVal}) saturate(${saturateVal}) sepia(${sepiaVal}) hue-rotate(${hueVal}deg)`,
+      transform: `scale(${zoomVal})`,
+      transition: 'all 0.6s cubic-bezier(0.2, 0.8, 0.2, 1)'
+    };
+  };
+
+  // SVG Golden Spiral points generator helper
+  const renderGoldenSpiralOverlay = () => {
+    return (
+      <svg viewBox="0 0 100 100" className="grid-overlay-spiral" style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 5 }}>
+        <path 
+          d="M 100,100 A 100,100 0 0,1 0,100 A 61.8,61.8 0 0,1 61.8,38.2 A 38.2,38.2 0 0,1 23.6,76.4 A 23.6,23.6 0 0,1 47.2,52.8 A 14.6,14.6 0 0,1 32.6,67.4 A 9,9 0 0,1 41.6,58.4 A 5.6,5.6 0 0,1 36,64" 
+          fill="none" 
+          stroke="rgba(255, 255, 255, 0.45)" 
+          strokeWidth="1" 
+          strokeDasharray="3" 
+          style={{ width: '100%', height: '100%' }}
+        />
+      </svg>
+    );
+  };
+
   return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: '100vh', width: '100%', maxWidth: '1200px', margin: '0 auto', padding: '24px' }}>
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: '100vh', width: '100%', maxWidth: '1280px', margin: '0 auto', padding: '24px', position: 'relative' }}>
+      
+      {/* Background radial glowing gradients (defined in index.css) */}
       
       {/* Header */}
-      <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: '24px', borderBottom: '1px solid var(--border-color)', marginBottom: '32px' }}>
+      <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: '20px', borderBottom: '1px solid var(--border-color)', marginBottom: '32px', zIndex: 10 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: 'linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 10px rgba(99,102,241,0.3)' }}>
-            <Camera size={20} color="#fff" />
+          <div style={{ width: '42px', height: '42px', borderRadius: '12px', background: 'linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 15px rgba(99,102,241,0.4)' }}>
+            <Camera size={22} color="#fff" />
           </div>
           <div>
-            <h1 style={{ fontSize: '1.25rem', fontWeight: '800', tracking: '-0.02em', margin: 0 }}>
+            <h1 style={{ fontSize: '1.4rem', fontWeight: '900', letterSpacing: '-0.03em', margin: 0 }}>
               FocalPoint<span className="gradient-text">.AI</span>
             </h1>
-            <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: 0 }}>Smart Photography Critique</p>
+            <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', fontWeight: '500', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>AI Photography Critique & Mentor</p>
           </div>
         </div>
-        <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-          For Photography Learners
+        
+        <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+          {recentCritiques.length > 0 && (
+            <button 
+              onClick={() => setShowHistory(!showHistory)} 
+              className="btn-secondary" 
+              style={{ padding: '8px 16px', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '6px' }}
+            >
+              <History size={16} />
+              <span>History ({recentCritiques.length})</span>
+            </button>
+          )}
+          <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', display: 'none', md: 'block' }}>
+            v2.0 Premium Redesign
+          </div>
         </div>
       </header>
 
+      {/* History Slide-out Drawer */}
+      {showHistory && (
+        <div style={{ position: 'fixed', top: 0, right: 0, height: '100vh', width: '380px', backgroundColor: 'rgba(7, 9, 19, 0.98)', borderLeft: '1px solid var(--border-color)', boxShadow: '-10px 0 30px rgba(0,0,0,0.7)', zIndex: 1000, padding: '24px', display: 'flex', flexDirection: 'column', gap: '20px', backdropFilter: 'blur(20px)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-color)', paddingBottom: '16px' }}>
+            <h3 style={{ fontSize: '1.2rem', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <History size={20} className="text-secondary" />
+              Critique History
+            </h3>
+            <button onClick={() => setShowHistory(false)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '1.4rem', cursor: 'pointer' }}>&times;</button>
+          </div>
+
+          <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '12px', paddingRight: '4px' }}>
+            {recentCritiques.map((item) => (
+              <div 
+                key={item.id} 
+                onClick={() => loadHistoryItem(item)}
+                style={{ display: 'flex', gap: '12px', padding: '12px', borderRadius: '12px', border: '1px solid var(--border-color)', backgroundColor: 'rgba(255,255,255,0.02)', cursor: 'pointer', transition: 'var(--transition-fast)' }}
+                className="aspect-card"
+              >
+                {item.thumbnail ? (
+                  <img src={item.thumbnail} alt={item.filename} style={{ width: '56px', height: '56px', borderRadius: '8px', objectFit: 'cover', border: '1px solid rgba(255,255,255,0.05)' }} />
+                ) : (
+                  <div style={{ width: '56px', height: '56px', borderRadius: '8px', backgroundColor: 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Camera size={20} color="var(--text-muted)" />
+                  </div>
+                )}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={{ fontWeight: '600', fontSize: '0.88rem', margin: 0, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>{item.filename}</p>
+                  <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: '2px 0 4px 0' }}>{item.timestamp}</p>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span style={{ fontSize: '0.72rem', backgroundColor: 'rgba(99, 102, 241, 0.12)', color: 'var(--primary)', padding: '2px 6px', borderRadius: '4px', fontWeight: '600' }}>
+                      Rating: {item.overall_rating}/10
+                    </span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div style={{ display: 'flex', gap: '12px', borderTop: '1px solid var(--border-color)', paddingTop: '16px' }}>
+            <button onClick={clearHistory} className="btn-secondary" style={{ flex: 1, justifyContent: 'center', padding: '10px', fontSize: '0.85rem' }}>
+              <Trash2 size={16} />
+              Clear History
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Main Content Area */}
-      <main style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+      <main style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', zIndex: 5 }}>
         
         {error && (
-          <div style={{ backgroundColor: 'rgba(239, 68, 68, 0.1)', border: '1px solid var(--danger)', padding: '16px', borderRadius: '12px', color: 'var(--danger)', display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px', fontSize: '0.95rem' }}>
-            <AlertCircle size={20} />
-            <span>{error}</span>
+          <div style={{ backgroundColor: 'rgba(239, 68, 68, 0.08)', border: '1px solid var(--danger)', padding: '16px 20px', borderRadius: '16px', color: 'var(--danger)', display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '24px', fontSize: '0.95rem' }} className="fade-in">
+            <AlertCircle size={22} style={{ flexShrink: 0 }} />
+            <div style={{ flex: 1 }}>{error}</div>
+            <button onClick={() => setError('')} style={{ background: 'none', border: 'none', color: 'var(--danger)', fontSize: '1.2rem', cursor: 'pointer', padding: '0 4px' }}>&times;</button>
           </div>
         )}
 
         {/* 1. Upload View */}
         {!isLoading && !analysisResult && (
-          <div style={{ maxWidth: '640px', margin: '0 auto', width: '100%', display: 'flex', flexDirection: 'column', gap: '32px' }}>
+          <div style={{ maxWidth: '780px', margin: '0 auto', width: '100%', display: 'flex', flexDirection: 'column', gap: '32px' }} className="fade-in">
             <div style={{ textAlign: 'center' }}>
-              <h2 style={{ fontSize: '2.5rem', fontWeight: '800', marginBottom: '12px', letterSpacing: '-0.03em' }} className="gradient-text">
-                Elevate Your Photography
+              <h2 style={{ fontSize: '2.8rem', fontWeight: '900', marginBottom: '12px', letterSpacing: '-0.04em', lineHeight: '1.2' }}>
+                Perfect Your Technique with <span className="gradient-text">Instant Critique</span>
               </h2>
-              <p style={{ color: 'var(--text-secondary)', fontSize: '1.05rem', lineHeight: '1.6' }}>
-                Upload your photograph to get real-time constructive analysis on lighting, color balance, details, and composition, along with recommended edits.
+              <p style={{ color: 'var(--text-secondary)', fontSize: '1.1rem', lineHeight: '1.6', maxWidth: '640px', margin: '0 auto' }}>
+                Upload your photograph to get a complete technical audit on light, color balance, sharp details, and composition overlay grid lines.
               </p>
             </div>
 
-            <form onSubmit={handleAnalyze} className="glass-panel" style={{ padding: '32px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
+            {/* Demo Presets Sandbox */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <p style={{ fontSize: '0.88rem', fontWeight: '700', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '6px', margin: 0 }}>
+                <Sparkles size={16} className="text-secondary" />
+                No photo ready? Test with a Demo Image Sandbox:
+              </p>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>
+                {DEMO_PRESETS.map((preset) => (
+                  <div 
+                    key={preset.id}
+                    onClick={() => loadDemoPreset(preset)}
+                    className={`demo-preset-card ${selectedDemoId === preset.id ? 'active' : ''}`}
+                    style={{ position: 'relative', height: '90px', display: 'flex', alignItems: 'center', padding: '8px' }}
+                  >
+                    <img src={preset.url} alt={preset.name} style={{ width: '74px', height: '74px', borderRadius: '8px', objectFit: 'cover', border: '1px solid rgba(255,255,255,0.05)', marginRight: '12px' }} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ fontWeight: '700', fontSize: '0.9rem', margin: 0, color: '#fff' }}>{preset.name}</p>
+                      <p style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', margin: '2px 0 0 0', lineHeight: '1.3' }}>{preset.description}</p>
+                    </div>
+                    {loadingDemo && selectedDemoId === preset.id && (
+                      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <RefreshCw size={20} className="pulse-text" style={{ color: 'var(--primary)', animation: 'spin 2s linear infinite' }} />
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <form onSubmit={handleAnalyze} className="glass-panel" style={{ padding: '36px', display: 'flex', flexDirection: 'column', gap: '28px' }}>
               
               {/* Drag and Drop Zone */}
               <div 
@@ -209,10 +538,10 @@ export default function App() {
                 onDrop={handleDrop}
                 onClick={handleBrowseClick}
                 style={{
-                  height: '240px',
-                  borderRadius: '12px',
+                  height: '260px',
+                  borderRadius: '16px',
                   border: `2px dashed ${dragOver ? 'var(--primary)' : 'var(--border-color)'}`,
-                  background: dragOver ? 'rgba(99, 102, 241, 0.05)' : 'rgba(255, 255, 255, 0.01)',
+                  background: dragOver ? 'rgba(99, 102, 241, 0.04)' : 'rgba(255, 255, 255, 0.01)',
                   display: 'flex',
                   flexDirection: 'column',
                   alignItems: 'center',
@@ -232,26 +561,26 @@ export default function App() {
                 />
 
                 {previewUrl ? (
-                  <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '12px' }}>
+                  <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
                     <img 
                       src={previewUrl} 
                       alt="Upload Preview" 
-                      style={{ maxWidth: '100%', maxHeight: '100%', borderRadius: '8px', objectFit: 'contain', boxShadow: '0 4px 12px rgba(0,0,0,0.5)' }} 
+                      style={{ maxWidth: '100%', maxHeight: '100%', borderRadius: '12px', objectFit: 'contain', boxShadow: '0 10px 30px rgba(0,0,0,0.6)' }} 
                     />
-                    <div style={{ position: 'absolute', bottom: '12px', right: '12px', backgroundColor: 'rgba(0,0,0,0.7)', padding: '6px 12px', borderRadius: '20px', fontSize: '0.75rem', border: '1px solid var(--border-color)' }}>
+                    <div style={{ position: 'absolute', bottom: '16px', right: '16px', backgroundColor: 'rgba(15, 23, 42, 0.85)', backdropFilter: 'blur(10px)', padding: '8px 16px', borderRadius: '20px', fontSize: '0.8rem', border: '1px solid var(--border-color)', fontWeight: '600', color: '#fff' }}>
                       Click to Change
                     </div>
                   </div>
                 ) : (
-                  <div style={{ textAlign: 'center', padding: '24px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
-                    <div style={{ color: 'var(--primary)', opacity: 0.8 }}>
-                      <UploadCloud size={48} />
+                  <div style={{ textAlign: 'center', padding: '24px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '14px' }}>
+                    <div style={{ width: '64px', height: '64px', borderRadius: '50%', backgroundColor: 'rgba(99, 102, 241, 0.06)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)', marginBottom: '4px' }}>
+                      <UploadCloud size={32} />
                     </div>
                     <div>
-                      <p style={{ fontWeight: '600', fontSize: '1.05rem', marginBottom: '4px' }}>Drag & drop your photograph here</p>
-                      <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>PNG, JPG or WEBP (max 15MB)</p>
+                      <p style={{ fontWeight: '700', fontSize: '1.1rem', color: '#fff', marginBottom: '4px' }}>Drag & drop your photograph here</p>
+                      <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>Supports PNG, JPG, WEBP formats (max 15MB)</p>
                     </div>
-                    <button type="button" className="btn-secondary" style={{ padding: '8px 18px', fontSize: '0.85rem', marginTop: '4px' }}>
+                    <button type="button" className="btn-secondary" style={{ padding: '10px 22px', fontSize: '0.88rem', marginTop: '6px' }}>
                       Browse Files
                     </button>
                   </div>
@@ -259,34 +588,33 @@ export default function App() {
               </div>
 
               {/* Email Input */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                <label style={{ fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-secondary)' }} htmlFor="email">
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                <label style={{ fontSize: '0.9rem', fontWeight: '700', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '6px' }} htmlFor="email">
+                  <Mail size={16} className="text-secondary" />
                   Your Email Address
                 </label>
                 <div style={{ position: 'relative' }}>
-                  <Mail size={18} style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
                   <input 
                     id="email"
                     type="email" 
-                    placeholder="learner@focalpoint.ai" 
+                    placeholder="photographer@focalpoint.ai" 
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     className="form-input"
-                    style={{ paddingLeft: '48px' }}
                     required
                   />
                 </div>
-                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>We'll use this email to associate your photography workspace.</span>
+                <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>We use your email to tie your analysis critiques together. Reports are saved in history.</span>
               </div>
 
               {/* Submit Button */}
               <button 
                 type="submit" 
                 className="btn-primary" 
-                style={{ width: '100%', justifyContent: 'center', marginTop: '8px' }}
+                style={{ width: '100%', justifyContent: 'center', padding: '16px', fontSize: '1.05rem', marginTop: '4px' }}
                 disabled={!file}
               >
-                <Sparkles size={18} />
+                <Sparkles size={20} />
                 Analyze Photograph
               </button>
             </form>
@@ -295,41 +623,51 @@ export default function App() {
 
         {/* 2. Loading Scan View */}
         {isLoading && (
-          <div style={{ maxWidth: '480px', margin: '0 auto', width: '100%', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '32px', padding: '40px 0' }}>
+          <div style={{ maxWidth: '520px', margin: '0 auto', width: '100%', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '36px', padding: '40px 0' }} className="fade-in">
             
             {/* Visual Pulse / Scanner Frame */}
-            <div style={{ position: 'relative', width: '220px', height: '220px', borderRadius: '16px', border: '1px solid var(--border-color)', background: 'rgba(17, 22, 40, 0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', boxShadow: '0 0 30px var(--border-glow)' }}>
+            <div className="scanner-container" style={{ position: 'relative', width: '260px', height: '260px', borderRadius: '24px', border: '1px solid var(--border-color)', background: 'rgba(10, 14, 28, 0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', boxShadow: '0 0 50px var(--border-color-glow)', backdropFilter: 'blur(10px)' }}>
               {previewUrl && (
                 <img 
                   src={previewUrl} 
                   alt="Scanning Preview" 
-                  style={{ width: '90%', height: '90%', objectFit: 'contain', opacity: 0.5, borderRadius: '8px' }} 
+                  style={{ width: '92%', height: '92%', objectFit: 'contain', opacity: 0.45, borderRadius: '16px' }} 
                 />
               )}
+              {/* Camera Sights Corner HUD overlays */}
+              <div className="focal-sights">
+                <div className="focal-sights-corner-tr"></div>
+                <div className="focal-sights-corner-bl"></div>
+                <div className="focal-sights-corner-br"></div>
+              </div>
+              
               <div className="scanner-line"></div>
+              
               <div style={{ position: 'absolute', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Camera size={44} className="pulse-text" style={{ color: 'var(--primary)' }} />
+                <div style={{ width: '64px', height: '64px', borderRadius: '50%', backgroundColor: 'rgba(99,102,241,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Camera size={34} className="pulse-text" style={{ color: 'var(--primary)' }} />
+                </div>
               </div>
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <h3 style={{ fontSize: '1.25rem', fontWeight: '700' }}>Analyzing Photograph Quality</h3>
-              <div className="pulse-text" style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', height: '24px', transition: 'var(--transition-smooth)' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <h3 style={{ fontSize: '1.4rem', fontWeight: '800', color: '#fff' }}>Analyzing Quality & Composition</h3>
+              <div className="pulse-text" style={{ fontSize: '0.95rem', color: 'var(--text-secondary)', height: '24px', fontWeight: '500' }}>
                 {LOADING_STEPS[loadingStep]}
               </div>
             </div>
             
             {/* Simple progress dot track */}
-            <div style={{ display: 'flex', gap: '8px' }}>
+            <div style={{ display: 'flex', gap: '10px' }}>
               {LOADING_STEPS.map((_, idx) => (
                 <div 
                   key={idx} 
                   style={{
-                    width: '10px',
-                    height: '10px',
+                    width: '12px',
+                    height: '12px',
                     borderRadius: '50%',
-                    backgroundColor: idx <= loadingStep ? 'var(--primary)' : 'rgba(255,255,255,0.1)',
-                    boxShadow: idx <= loadingStep ? '0 0 8px var(--primary)' : 'none',
+                    backgroundColor: idx <= loadingStep ? 'var(--primary)' : 'rgba(255,255,255,0.06)',
+                    boxShadow: idx <= loadingStep ? '0 0 10px var(--primary)' : 'none',
                     transition: 'var(--transition-smooth)'
                   }}
                 />
@@ -340,72 +678,76 @@ export default function App() {
 
         {/* 3. Results View */}
         {!isLoading && analysisResult && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }} className="fade-in">
             
-            {/* Upper Quick Summary Card */}
-            <div className="glass-panel" style={{ padding: '24px', display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '24px' }}>
+            {/* Redesigned Upper Summary Panel with SVG radial gauge */}
+            <div className="glass-panel" style={{ padding: '28px', display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '28px' }}>
               <div>
-                <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', fontWeight: '600', textTransform: 'uppercase', tracking: '0.05em', marginBottom: '4px' }}>Analysis Complete</p>
-                <h3 style={{ fontSize: '1.5rem', fontWeight: '800', marginBottom: '4px' }}>Constructive Critique</h3>
-                <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
-                  Workspace: <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-primary)' }}>{analysisResult.email}</span> • Mode: <span style={{ color: 'var(--primary)', fontWeight: '600' }}>{analysisResult.mode === 'gemini_ai' ? 'Gemini AI Engine' : 'Local Computer Vision'}</span>
+                <span style={{ color: 'var(--primary)', fontSize: '0.78rem', fontWeight: '800', textTransform: 'uppercase', tracking: '0.08em', display: 'inline-block', marginBottom: '6px', border: '1px solid var(--primary-glow)', padding: '2px 8px', borderRadius: '6px', backgroundColor: 'rgba(99, 102, 241, 0.05)' }}>Analysis Complete</span>
+                <h3 style={{ fontSize: '1.8rem', fontWeight: '900', marginBottom: '6px', letterSpacing: '-0.02em', color: '#fff' }}>Constructive Critique Dashboard</h3>
+                <p style={{ color: 'var(--text-secondary)', fontSize: '0.88rem', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+                  Workspace: <span style={{ fontFamily: 'var(--font-mono)', color: '#fff', fontWeight: '600' }}>{analysisResult.email}</span> 
+                  • Engine: <span style={{ color: 'var(--secondary)', fontWeight: '700' }}>{analysisResult.mode === 'gemini_ai' ? 'Gemini 3.5 Pro AI Engine' : 'Local OpenCV Core'}</span>
                 </p>
               </div>
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-                <div style={{ textAlign: 'right' }}>
-                  <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', margin: 0 }}>Overall Rating</p>
-                  <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', margin: 0 }}>Based on 10 aspects</p>
-                </div>
-                <div className="rating-circle" style={{ border: `4px solid ${getScoreColor(analysisResult.overall_rating * 10)}` }}>
-                  <span className="rating-circle-val">{analysisResult.overall_rating}</span>
-                  <span className="rating-circle-max">/ 10</span>
+              {/* Radial Rating Circular SVG */}
+              <div className="radial-score-container">
+                <svg className="radial-score-svg">
+                  <circle className="radial-score-bg" cx="65" cy="65" r="50"></circle>
+                  <circle 
+                    className="radial-score-fill" 
+                    cx="65" 
+                    cy="65" 
+                    r="50"
+                    stroke={getScoreColor(analysisResult.overall_rating * 10)}
+                    strokeDasharray="314.16"
+                    strokeDashoffset={314.16 - ((analysisResult.overall_rating) / 10.0) * 314.16}
+                  ></circle>
+                </svg>
+                <div className="radial-score-content">
+                  <span className="radial-score-value">{analysisResult.overall_rating}</span>
+                  <span className="radial-score-label">rating</span>
                 </div>
               </div>
             </div>
 
-            {/* Email Report Status Banner */}
+            {/* Email Config Alert Banner (Requested modification) */}
             <div 
-              className="glass-panel" 
-              style={{ 
-                padding: '16px 24px', 
-                display: 'flex', 
-                alignItems: 'center', 
-                gap: '16px', 
-                borderLeft: analysisResult.email_status === 'sent' ? '4px solid #10B981' : '4px solid #6366F1',
-                background: 'rgba(255, 255, 255, 0.01)',
-                marginTop: '-16px'
-              }}
+              className={`alert-banner ${
+                analysisResult.email_status === 'sent' ? 'alert-banner-success' : 'alert-banner-warning'
+              }`}
             >
               <div style={{ 
                 display: 'flex', 
                 alignItems: 'center', 
                 justifyContent: 'center', 
-                width: '40px', 
-                height: '40px', 
-                borderRadius: '50%', 
-                background: analysisResult.email_status === 'sent' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(99, 102, 241, 0.1)',
-                color: analysisResult.email_status === 'sent' ? '#10B981' : '#6366F1',
+                width: '42px', 
+                height: '42px', 
+                borderRadius: '10px', 
+                backgroundColor: analysisResult.email_status === 'sent' ? 'rgba(16, 185, 129, 0.12)' : 'rgba(245, 158, 11, 0.12)',
+                color: analysisResult.email_status === 'sent' ? 'var(--success)' : 'var(--warning)',
                 flexShrink: 0
               }}>
-                <Mail size={20} />
+                <Mail size={22} />
               </div>
-              <div style={{ flexGrow: 1, fontSize: '0.9rem', lineHeight: '1.5' }}>
+              <div style={{ flex: 1, fontSize: '0.9rem', lineHeight: '1.5' }}>
                 {analysisResult.email_status === 'sent' ? (
                   <>
-                    <strong style={{ color: '#FFFFFF', display: 'block', marginBottom: '2px' }}>Critique Report Emailed</strong>
+                    <strong style={{ color: '#FFFFFF', display: 'block', fontSize: '0.98rem', marginBottom: '2px' }}>Live SMTP Report Dispatched</strong>
                     <span style={{ color: 'var(--text-secondary)' }}>
-                      A detailed HTML report has been sent to <span style={{ color: 'var(--primary)', fontWeight: '600' }}>{analysisResult.email}</span>.
+                      A premium, styled HTML analysis report has been sent to your active inbox at <span style={{ color: '#fff', fontWeight: '600' }}>{analysisResult.email}</span>. Please check your spam folder if it doesn't arrive within 1 minute.
                     </span>
                   </>
                 ) : (
                   <>
-                    <strong style={{ color: '#FFFFFF', display: 'block', marginBottom: '2px' }}>Critique Report Simulation</strong>
+                    <strong style={{ color: '#FFFFFF', display: 'block', fontSize: '0.98rem', marginBottom: '2px' }}>SMTP Simulation Mode Active</strong>
                     <span style={{ color: 'var(--text-secondary)' }}>
-                      An email was simulated for <span style={{ color: 'var(--primary)', fontWeight: '600' }}>{analysisResult.email}</span>. Configure SMTP credentials in <span style={{ fontFamily: 'var(--font-mono)', color: '#FFFFFF' }}>backend/.env</span> to send real emails.
+                      The email critique report was saved as a simulated file because SMTP settings are offline. 
+                      To receive live critiques directly in your inbox, set environment variables (`SMTP_HOST`, `SMTP_USERNAME`, `SMTP_PASSWORD`) inside the <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--secondary)', fontWeight: '600' }}>backend/.env</span> file.
                     </span>
-                    <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '4px' }}>
-                      Generated template saved to: <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--secondary)' }}>backend/email_simulation.html</span>
+                    <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '6px', padding: '6px 12px', borderRadius: '6px', backgroundColor: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.03)', fontFamily: 'var(--font-mono)', display: 'inline-block' }}>
+                      Mock HTML output written to: <span style={{ color: '#fff' }}>backend/email_simulation.html</span>
                     </div>
                   </>
                 )}
@@ -415,31 +757,156 @@ export default function App() {
             {/* Split Dashboard Grid */}
             <div className="dashboard-grid">
               
-              {/* Left Column - Image & Suggested Edits */}
+              {/* Left Column - Image controls & Suggested Edits */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
                 
-                {/* Image Showcase Card */}
+                {/* Image Showcase Card with Overlays & CSS filter simulation */}
                 <div className="glass-panel" style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                  <div style={{ borderRadius: '8px', overflow: 'hidden', background: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid rgba(255,255,255,0.05)' }}>
+                  
+                  {/* Aspect Ratio Box holding the image */}
+                  <div style={{ 
+                    position: 'relative',
+                    borderRadius: '12px', 
+                    overflow: 'hidden', 
+                    background: '#020306', 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    justifyContent: 'center', 
+                    border: '1px solid rgba(255,255,255,0.05)',
+                    minHeight: '260px',
+                    maxHeight: '420px'
+                  }}>
                     <img 
                       src={previewUrl} 
-                      alt="Analyzed" 
-                      style={{ width: '100%', maxHeight: '400px', objectFit: 'contain' }} 
+                      alt="Critiqued Photograph" 
+                      style={{ 
+                        maxWidth: '100%', 
+                        maxHeight: '420px', 
+                        objectFit: 'contain',
+                        ...(simulateEdits ? getSimulatedFilters() : { transition: 'all 0.5s ease' })
+                      }} 
                     />
+
+                    {/* Camera Overlay grids absolute layers */}
+                    {activeGridOverlay === 'thirds' && (
+                      <div className="grid-overlay-third">
+                        <div className="grid-line-v"></div>
+                        <div className="grid-line-v"></div>
+                        <div></div>
+                        <div className="grid-line-h"></div>
+                        <div className="grid-line-h"></div>
+                        <div></div>
+                        <div></div>
+                        <div></div>
+                        <div></div>
+                      </div>
+                    )}
+
+                    {activeGridOverlay === 'center' && (
+                      <div className="grid-overlay-center">
+                        <div className="grid-line-center-v"></div>
+                        <div className="grid-line-center-h"></div>
+                        <div className="grid-center-reticle"></div>
+                      </div>
+                    )}
+
+                    {activeGridOverlay === 'spiral' && renderGoldenSpiralOverlay()}
+
+                    {/* Simulated edits status badge overlay */}
+                    {simulateEdits && (
+                      <div style={{ position: 'absolute', top: '12px', left: '12px', backgroundColor: 'rgba(16, 185, 129, 0.85)', color: '#fff', fontSize: '0.72rem', fontWeight: '800', padding: '4px 10px', borderRadius: '6px', display: 'flex', alignItems: 'center', gap: '4px', textTransform: 'uppercase', letterSpacing: '0.05em', boxShadow: '0 4px 10px rgba(0,0,0,0.5)', zIndex: 10 }}>
+                        <Sparkles size={12} />
+                        Edits Applied
+                      </div>
+                    )}
                   </div>
-                  <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'flex', justifyContent: 'space-between' }}>
-                    <span>{analysisResult.filename}</span>
-                    <span>Evaluation Target</span>
+
+                  {/* Metadata display */}
+                  <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '200px' }}>{file?.name || 'critique_image.jpg'}</span>
+                    <span>Composition & Edits Sandbox</span>
+                  </div>
+
+                  {/* Interactive Overlays HUD Controls */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', borderTop: '1px solid var(--border-color)', paddingTop: '14px' }}>
+                    <span style={{ fontSize: '0.78rem', fontWeight: '700', color: 'var(--text-secondary)' }}>Composition Grid Overlays:</span>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '6px' }}>
+                      {[
+                        { id: 'none', label: 'Off', icon: EyeOff },
+                        { id: 'thirds', label: 'Thirds', icon: LayoutGrid },
+                        { id: 'spiral', label: 'Spiral', icon: Palette },
+                        { id: 'center', label: 'Center', icon: Compass }
+                      ].map((grid) => (
+                        <button
+                          key={grid.id}
+                          type="button"
+                          onClick={() => setActiveGridOverlay(grid.id)}
+                          style={{
+                            padding: '8px 4px',
+                            borderRadius: '8px',
+                            border: '1px solid',
+                            borderColor: activeGridOverlay === grid.id ? 'var(--primary)' : 'var(--border-color)',
+                            backgroundColor: activeGridOverlay === grid.id ? 'rgba(99, 102, 241, 0.1)' : 'rgba(255,255,255,0.01)',
+                            color: activeGridOverlay === grid.id ? '#fff' : 'var(--text-secondary)',
+                            fontSize: '0.78rem',
+                            fontWeight: '600',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '4px',
+                            transition: 'var(--transition-fast)'
+                          }}
+                        >
+                          <grid.icon size={13} />
+                          {grid.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Interactive Simulation Switcher */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid var(--border-color)', paddingTop: '14px' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                      <span style={{ fontSize: '0.88rem', fontWeight: '700', color: '#fff' }}>Simulate Recommended Edits</span>
+                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Preview tone and crops based on critique scores</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setSimulateEdits(!simulateEdits)}
+                      style={{
+                        width: '50px',
+                        height: '26px',
+                        borderRadius: '15px',
+                        backgroundColor: simulateEdits ? 'var(--success)' : 'rgba(255,255,255,0.08)',
+                        border: '1px solid rgba(255,255,255,0.1)',
+                        position: 'relative',
+                        cursor: 'pointer',
+                        transition: 'var(--transition-fast)'
+                      }}
+                    >
+                      <div style={{
+                        width: '20px',
+                        height: '20px',
+                        borderRadius: '50%',
+                        backgroundColor: '#fff',
+                        position: 'absolute',
+                        top: '2px',
+                        left: simulateEdits ? '26px' : '2px',
+                        transition: 'all 0.2s cubic-bezier(0.25, 0.8, 0.25, 1)',
+                        boxShadow: '0 2px 4px rgba(0,0,0,0.3)'
+                      }} />
+                    </button>
                   </div>
                 </div>
 
-                {/* Suggested Edits Card */}
-                <div className="glass-panel" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                {/* Suggested Edits Panel */}
+                <div className="glass-panel" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <Sliders size={20} style={{ color: 'var(--secondary)' }} />
-                    <h4 style={{ fontSize: '1.1rem', fontWeight: '700', margin: 0 }}>Suggested Edits</h4>
+                    <Sliders size={20} className="text-secondary" />
+                    <h4 style={{ fontSize: '1.15rem', fontWeight: '800', color: '#fff', margin: 0 }}>Actionable Presets & Edits</h4>
                   </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                     {analysisResult.suggested_edits && analysisResult.suggested_edits.length > 0 ? (
                       analysisResult.suggested_edits.map((edit, idx) => (
                         <div 
@@ -447,84 +914,84 @@ export default function App() {
                           style={{
                             display: 'flex',
                             gap: '12px',
-                            padding: '12px 16px',
-                            background: 'rgba(255,255,255,0.02)',
-                            borderRadius: '8px',
-                            borderLeft: '3px solid var(--secondary)',
-                            fontSize: '0.9rem',
+                            padding: '12px 14px',
+                            background: 'rgba(255,255,255,0.015)',
+                            borderRadius: '10px',
+                            borderLeft: '4px solid var(--secondary)',
+                            fontSize: '0.88rem',
                             lineHeight: '1.4',
                             alignItems: 'flex-start'
                           }}
                         >
-                          <div style={{ width: '18px', height: '18px', borderRadius: '50%', backgroundColor: 'rgba(139, 92, 246, 0.1)', display: 'flex', alignItems: 'center', justifyCenter: 'center', flexShrink: 0, marginTop: '2px' }}>
+                          <div style={{ width: '18px', height: '18px', borderRadius: '50%', backgroundColor: 'rgba(139, 92, 246, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: '2px' }}>
                             <Check size={12} style={{ color: 'var(--secondary)', margin: 'auto' }} />
                           </div>
                           <span style={{ color: 'var(--text-primary)' }}>{edit}</span>
                         </div>
                       ))
                     ) : (
-                      <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>No specific edits suggested.</p>
+                      <p style={{ color: 'var(--text-muted)', fontSize: '0.88rem' }}>No specific slider tweaks suggested for this photo.</p>
                     )}
                   </div>
                 </div>
 
-                <button onClick={handleReset} className="btn-secondary" style={{ width: '100%', justifyContent: 'center' }}>
+                {/* Reset button */}
+                <button onClick={handleReset} className="btn-secondary" style={{ width: '100%', justifyContent: 'center', padding: '14px' }}>
                   <RefreshCw size={16} />
                   Analyze Another Photo
                 </button>
               </div>
 
-              {/* Right Column - Breakdown of Aspects */}
+              {/* Right Column - Detailed breakdown and sliders */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
                 
                 {/* Tabs for Category Selection */}
-                <div style={{ display: 'flex', gap: '8px', padding: '4px', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border-color)', borderRadius: '10px', overflowX: 'auto' }}>
+                <div style={{ display: 'flex', gap: '6px', padding: '4px', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-color)', borderRadius: '12px', overflowX: 'auto' }}>
                   {[
-                    { id: 'all', label: 'All Aspects' },
-                    { id: 'light', label: 'Exposure & Light' },
-                    { id: 'color', label: 'Color & Warmth' },
-                    { id: 'details', label: 'Details & Crop' }
+                    { id: 'all', label: 'All Audits' },
+                    { id: 'light', label: 'Light & Exposure' },
+                    { id: 'color', label: 'Color & Hue' },
+                    { id: 'details', label: 'Details & Composition' }
                   ].map((tab) => (
                     <button
                       key={tab.id}
                       onClick={() => setActiveTab(tab.id)}
                       style={{
-                        padding: '8px 16px',
-                        borderRadius: '6px',
+                        padding: '10px 18px',
+                        borderRadius: '8px',
                         border: 'none',
                         background: activeTab === tab.id ? 'rgba(99, 102, 241, 0.15)' : 'transparent',
-                        color: activeTab === tab.id ? 'var(--text-primary)' : 'var(--text-muted)',
-                        fontWeight: activeTab === tab.id ? '600' : '500',
+                        color: activeTab === tab.id ? '#fff' : 'var(--text-secondary)',
+                        fontWeight: activeTab === tab.id ? '700' : '500',
                         fontSize: '0.85rem',
                         cursor: 'pointer',
                         whiteSpace: 'nowrap',
                         transition: 'var(--transition-smooth)'
                       }}
                     >
-                      {tab.id === 'all' ? '' : ''}
                       {tab.label}
                     </button>
                   ))}
                 </div>
 
-                {/* Aspect Cards List */}
+                {/* Aspect Cards List styled as adjustment dials */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                   {Object.entries(analysisResult.aspects)
-                    .filter(([key, data]) => {
+                    .filter(([key]) => {
                       if (activeTab === 'all') return true;
                       return aspectConfig[key]?.category === activeTab;
                     })
                     .map(([key, data]) => {
-                      const cfg = aspectConfig[key] || { label: key, icon: Info };
+                      const cfg = aspectConfig[key] || { label: key, icon: Info, minSweet: 40, maxSweet: 75 };
                       const IconComponent = cfg.icon;
                       const color = getScoreColor(data.rating);
                       
                       return (
                         <div 
                           key={key} 
-                          className="glass-panel" 
+                          className="glass-panel aspect-card" 
                           style={{ 
-                            padding: '20px', 
+                            padding: '22px', 
                             display: 'flex', 
                             flexDirection: 'column', 
                             gap: '16px',
@@ -534,53 +1001,79 @@ export default function App() {
                           {/* Aspect Header */}
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                              <div style={{ color: color, display: 'flex', alignItems: 'center' }}>
-                                <IconComponent size={20} />
+                              <div style={{ color: color, display: 'flex', alignItems: 'center', width: '32px', height: '32px', borderRadius: '8px', backgroundColor: 'rgba(255,255,255,0.02)', justifyContent: 'center' }}>
+                                <IconComponent size={18} />
                               </div>
-                              <h5 style={{ fontSize: '1.05rem', fontWeight: '700', margin: 0, textTransform: 'capitalize' }}>
+                              <h5 style={{ fontSize: '1.05rem', fontWeight: '800', margin: 0, color: '#fff' }}>
                                 {cfg.label}
                               </h5>
                             </div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: '600' }}>
-                                Score:
-                              </span>
-                              <span style={{ fontSize: '1.15rem', fontWeight: '800', color: color }}>
+                            
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <span style={{ fontSize: '1.25rem', fontWeight: '800', color: color, fontFamily: 'var(--font-mono)' }}>
                                 {data.rating}
                               </span>
                               <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>/ 100</span>
                             </div>
                           </div>
 
-                          {/* Progress bar slider */}
-                          <div className="progress-bar-container">
-                            <div 
-                              className="progress-bar-fill" 
-                              style={{ 
-                                width: `${data.rating}%`, 
-                                backgroundColor: color,
-                                boxShadow: `0 0 10px ${color}`
-                              }}
-                            />
+                          {/* Lightroom Style slider track (Requested change) */}
+                          <div className="metric-slider-wrapper">
+                            <div className="metric-slider-track">
+                              {/* Optimal Target Sweet Spot Overlay */}
+                              <div 
+                                className="metric-slider-target"
+                                style={{
+                                  left: `${cfg.minSweet}%`,
+                                  width: `${cfg.maxSweet - cfg.minSweet}%`
+                                }}
+                              />
+                              {/* Glowing track filling up to value */}
+                              <div 
+                                className="metric-slider-fill"
+                                style={{
+                                  width: `${data.rating}%`,
+                                  backgroundColor: color,
+                                  boxShadow: `0 0 10px ${color}`
+                                }}
+                              />
+                              {/* Slider thumb */}
+                              <div 
+                                className="metric-slider-thumb"
+                                style={{
+                                  left: `${data.rating}%`,
+                                  color: color
+                                }}
+                              />
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: '500' }}>
+                              <span>Under</span>
+                              <span style={{ color: 'var(--primary)', fontWeight: '600' }}>Target Range ({cfg.minSweet}% - {cfg.maxSweet}%)</span>
+                              <span>Over</span>
+                            </div>
                           </div>
 
-                          {/* Feedback Breakdown */}
-                          <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '12px', marginTop: '4px' }}>
+                          {/* Advice layout (Success/Works & Advice/Improved) */}
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '14px', borderTop: '1px solid rgba(255,255,255,0.03)', paddingTop: '14px' }}>
                             
                             {/* What Works */}
                             <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
-                              <CheckCircle size={16} className="text-success" style={{ flexShrink: 0, marginTop: '2px' }} />
+                              <div style={{ color: 'var(--success)', marginTop: '2px', backgroundColor: 'rgba(16, 185, 129, 0.08)', borderRadius: '50%', padding: '2px', display: 'flex' }}>
+                                <CheckCircle size={14} />
+                              </div>
                               <div style={{ fontSize: '0.88rem', lineHeight: '1.4' }}>
-                                <span style={{ fontWeight: '600', color: 'var(--text-primary)', display: 'block', marginBottom: '2px' }}>What Works</span>
+                                <span style={{ fontWeight: '700', color: 'var(--success)', display: 'block', marginBottom: '2px', textTransform: 'uppercase', fontSize: '0.75rem', letterSpacing: '0.04em' }}>What Works</span>
                                 <span style={{ color: 'var(--text-secondary)' }}>{data.what_works}</span>
                               </div>
                             </div>
 
                             {/* What could be improved */}
                             <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
-                              <AlertCircle size={16} className="text-warning" style={{ flexShrink: 0, marginTop: '2px' }} />
+                              <div style={{ color: 'var(--warning)', marginTop: '2px', backgroundColor: 'rgba(245, 158, 11, 0.08)', borderRadius: '50%', padding: '2px', display: 'flex' }}>
+                                <AlertCircle size={14} />
+                              </div>
                               <div style={{ fontSize: '0.88rem', lineHeight: '1.4' }}>
-                                <span style={{ fontWeight: '600', color: 'var(--text-primary)', display: 'block', marginBottom: '2px' }}>What Could Be Done Better</span>
+                                <span style={{ fontWeight: '700', color: 'var(--warning)', display: 'block', marginBottom: '2px', textTransform: 'uppercase', fontSize: '0.75rem', letterSpacing: '0.04em' }}>Areas For Improvement</span>
                                 <span style={{ color: 'var(--text-secondary)' }}>{data.what_could_be_improved}</span>
                               </div>
                             </div>
@@ -601,8 +1094,12 @@ export default function App() {
       </main>
 
       {/* Footer */}
-      <footer style={{ marginTop: '48px', padding: '24px 0', borderTop: '1px solid var(--border-color)', textAlign: 'center', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-        <p>© 2026 FocalPointAI. Designed to provide constructive critique on brightness, contrast, highlights, shadows, crop, warmth, colour, saturation, and ambiance.</p>
+      <footer style={{ marginTop: '48px', padding: '24px 0', borderTop: '1px solid var(--border-color)', textAlign: 'center', fontSize: '0.8rem', color: 'var(--text-muted)', zIndex: 10 }}>
+        <p style={{ marginBottom: '6px' }}>© 2026 FocalPointAI. Designed as a real-time photography mentor for aperture, shadows, details, crops, and color composition.</p>
+        <p style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
+          <ShieldCheck size={14} style={{ color: 'var(--success)' }} />
+          Local computer vision fallbacks fully active.
+        </p>
       </footer>
 
     </div>
