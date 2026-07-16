@@ -47,6 +47,8 @@ def generate_email_content(email_to: str, analysis_results: dict, image_bytes: b
     mode = analysis_results.get("mode", "unknown")
     mode_str = "Gemini AI Engine" if mode == "gemini_ai" else "Computer Vision"
     suggested_edits = analysis_results.get("suggested_edits", [])
+    # Helper: extract plain text regardless of whether edits are flat strings or {key, text} dicts
+    def edit_text(e): return e["text"] if isinstance(e, dict) else e
     aspects = analysis_results.get("aspects", {})
     exif_analysis = analysis_results.get("exif_analysis")
 
@@ -67,7 +69,7 @@ def generate_email_content(email_to: str, analysis_results: dict, image_bytes: b
         "----------------"
     ]
     for edit in suggested_edits:
-        text_lines.append(f"- {edit}")
+        text_lines.append(f"- {edit_text(edit)}")
 
     if exif_analysis:
         settings = exif_analysis.get("camera_settings", {})
@@ -176,11 +178,12 @@ def generate_email_content(email_to: str, analysis_results: dict, image_bytes: b
         if st == "warning": post_score -= 15
         elif st == "critical": post_score -= 30
     post_score = max(30, min(100, post_score))
+    edit_texts = [edit_text(e) for e in suggested_edits]
     post_sub.append({
         "key": "edits_needed", "label": "Slider Adjustments Needed",
         "rating": post_score,
         "what_works": "Minimal editing required." if len(suggested_edits) == 0 else f"Only {len(suggested_edits)} tweaks suggested.",
-        "what_could_be_improved": f"Apply tweaks: {', '.join(suggested_edits)}" if len(suggested_edits) > 0 else "No urgent edits."
+        "what_could_be_improved": f"Apply tweaks: {', '.join(edit_texts)}" if len(suggested_edits) > 0 else "No urgent edits."
     })
     if exif_analysis and exif_analysis.get("diagnostics"):
         diag = exif_analysis.get("diagnostics", {})
@@ -312,7 +315,7 @@ def generate_email_content(email_to: str, analysis_results: dict, image_bytes: b
     for edit in suggested_edits:
         edits_html += f"""
         <li style="margin-bottom: 8px; color: #BAC4D1; font-size: 14px; line-height: 1.4; text-align: left;">
-            <span style="color: #8B5CF6; margin-right: 8px;">✔</span> {edit}
+            <span style="color: #8B5CF6; margin-right: 8px;">✔</span> {edit_text(edit)}
         </li>
         """
     if not edits_html:

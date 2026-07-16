@@ -617,3 +617,16 @@ body::after {
   border-color: var(--primary);
   box-shadow: 0 0 12px var(--primary-glow);
 }
+
+.top-split-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 32px;
+  width: 100%;
+}
+
+@media (min-width: 1024px) {
+  .top-split-grid {
+    grid-template-columns: 1.2fr 1fr;
+  }
+}

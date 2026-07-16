@@ -343,6 +343,27 @@ export default function App() {
     const exif = result.exif_analysis || {};
     const edits = result.suggested_edits || [];
 
+    // Helper: get plain text from either flat-string or {key, text} edit
+    const editText = (e) => (e && typeof e === 'object' ? e.text : e) || '';
+
+    // Build a lookup map: aspect key → edit text (from keyed edits only)
+    const editsByKey = {};
+    edits.forEach(e => {
+      if (e && typeof e === 'object' && e.key) {
+        editsByKey[e.key] = e.text;
+      }
+    });
+
+    // Store the edit as a separate hint field — keeps what_could_be_improved clean
+    // so it never bleeds into the overall category review aggregation
+    const withEdit = (sub) => {
+      const edit = editsByKey[sub.key];
+      if (edit) {
+        return { ...sub, suggested_edit_hint: edit };
+      }
+      return sub;
+    };
+
     const getAspectData = (key, defaultLabel) => {
       if (key.includes('.')) {
         const [parent, child] = key.split('.');
@@ -369,32 +390,32 @@ export default function App() {
     // 1. Composition
     const compSub = [];
     const rawComp = getAspectData('composition', 'Composition Rules');
-    if (rawComp) compSub.push({ ...rawComp, key: 'composition' });
+    if (rawComp) compSub.push(withEdit({ ...rawComp, key: 'composition' }));
     const rawCrop = getAspectData('crop', 'Grid & Crop');
-    if (rawCrop) compSub.push({ ...rawCrop, key: 'crop' });
+    if (rawCrop) compSub.push(withEdit({ ...rawCrop, key: 'crop' }));
     const rawAngle = getAspectData('feel.angle_and_viewpoint', 'Angle & Viewpoint');
-    if (rawAngle) compSub.push({ ...rawAngle, key: 'angle_and_viewpoint' });
+    if (rawAngle) compSub.push(withEdit({ ...rawAngle, key: 'angle_and_viewpoint' }));
 
     if (result.advanced_cv) {
       const cv = result.advanced_cv;
       if (cv.horizon) {
-        compSub.push({
+        compSub.push(withEdit({
           key: 'horizon',
           label: 'Horizon Alignment',
-          rating: cv.horizon.is_level ? 95 : Math.max(40, Math.round(90 - Math.abs(cv.horizon.angle) * 5)),
-          what_works: cv.horizon.is_level ? "Horizon is perfectly level, ensuring a balanced frame." : `Horizon is aligned at ${cv.horizon.angle} degrees.`,
+          rating: cv.horizon.is_level ? 95 : Math.max(40, Math.round(90 - Math.abs(cv.horizon.angle || 0) * 5)),
+          what_works: cv.horizon.is_level ? "Horizon is perfectly level, ensuring a balanced frame." : `Horizon is aligned at ${cv.horizon.angle || 0} degrees.`,
           what_could_be_improved: cv.horizon.is_level ? "No alignment adjustment needed." : "Rotate the image slightly to level the horizon line."
-        });
+        }));
       }
       if (cv.subject_centering) {
         const isThirds = cv.subject_centering.thirds_distance < 0.15;
-        compSub.push({
+        compSub.push(withEdit({
           key: 'thirds',
           label: 'Rule of Thirds Alignment',
           rating: Math.max(50, Math.min(100, Math.round(100 - cv.subject_centering.thirds_distance * 100))),
           what_works: isThirds ? "Subject placement aligns beautifully with the Rule of Thirds intersections." : "Centering creates a stable and classic focal point.",
           what_could_be_improved: isThirds ? "Keep this off-center composition." : "Consider cropping slightly to place the main subject elements on a vertical third line."
-        });
+        }));
       }
     }
 
@@ -405,23 +426,23 @@ export default function App() {
                                  k === 'contrast' ? 'Tonal Contrast' : 
                                  k === 'highlights' ? 'Highlights & Whites' : 
                                  k === 'shadows' ? 'Shadows & Blacks' : 'Ambiance / Tone Map');
-      if (data) lightSub.push({ ...data, key: k });
+      if (data) lightSub.push(withEdit({ ...data, key: k }));
     });
 
     // 3. Focus & Sharpness
     const focusSub = [];
     const rawDetails = getAspectData('details', 'Details & Micro-sharpness');
-    if (rawDetails) focusSub.push({ ...rawDetails, key: 'details' });
+    if (rawDetails) focusSub.push(withEdit({ ...rawDetails, key: 'details' }));
     
     if (result.advanced_cv?.sharpness) {
       const s = result.advanced_cv.sharpness;
-      focusSub.push({
+      focusSub.push(withEdit({
         key: 'sharpness',
         label: 'Edge Definition',
         rating: Math.round(s.score || 75),
         what_works: s.score >= 70 ? "Edges are crisp and clear in the subject focus regions." : "Soft details create a gentle transition.",
         what_could_be_improved: s.score >= 70 ? "Focus looks solid." : "Increase details sharpness or verify focus lock on subject."
-      });
+      }));
     }
 
     // 4. Color & Tones
@@ -429,17 +450,15 @@ export default function App() {
     ['colour', 'saturation', 'warmth'].forEach(k => {
       const data = getAspectData(k, k === 'colour' ? 'Colour Palette Harmony' : 
                                  k === 'saturation' ? 'Color Saturation' : 'Warmth / White Balance');
-      if (data) colorSub.push({ ...data, key: k });
+      if (data) colorSub.push(withEdit({ ...data, key: k }));
     });
 
     // 5. Subject & Story
     const subjectSub = [];
     const rawWow = getAspectData('feel.wow_factor', 'Wow Factor & Engagement');
-    if (rawWow) subjectSub.push({ ...rawWow, key: 'wow_factor' });
+    if (rawWow) subjectSub.push(withEdit({ ...rawWow, key: 'wow_factor' }));
     const rawEmo = getAspectData('feel.emotional_impact', 'Emotional Impact');
-    if (rawEmo) subjectSub.push({ ...rawEmo, key: 'emotional_impact' });
-    
-
+    if (rawEmo) subjectSub.push(withEdit({ ...rawEmo, key: 'emotional_impact' }));
 
     // 6. Post-Processing
     const postSub = [];
@@ -451,13 +470,28 @@ export default function App() {
       else if (status === 'critical') postScore -= 30;
     }
     postScore = Math.max(30, Math.min(100, postScore));
+    const editTextList = edits.map(editText).filter(Boolean);
+
+    // Build narrative prose for the post-processing overall review card
+    const keyedEdits = edits.filter(e => e && typeof e === 'object' && e.key);
+    const noEditsNeeded = editTextList.length === 0;
+
+    const postWhatWorks = noEditsNeeded
+      ? "The image is technically well-processed straight out of camera. Exposure, colour balance, contrast and sharpness are all sitting in a solid range — minimal post-production intervention is needed to make it print-ready."
+      : editTextList.length <= 3
+        ? "The overall look is clean and relatively well-processed. Only minor refinements are suggested, and the core tonal and colour qualities already serve the image well."
+        : "Despite the number of suggested tweaks, the image has a solid foundation to work from — the scene is readable and the tones are within recoverable range for post-processing.";
+
+    const postWhatCouldBeImproved = noEditsNeeded
+      ? "No specific post-processing adjustments are flagged. Consider experimenting with subtle creative grading — a slight lift in shadows, a gentle vignette, or a controlled colour grade — to elevate the mood."
+      : `To really elevate this image, consider making targeted post-processing adjustments. ${editTextList.slice(0, 3).join(' ')}${editTextList.length > 3 ? ` Additionally: ${editTextList.slice(3).join(' ')}` : ''}`;
 
     postSub.push({
       key: 'edits_needed',
-      label: 'Slider Adjustments Needed',
+      label: 'Post-Processing Assessment',
       rating: postScore,
-      what_works: edits.length === 0 ? "Minimal editing required; the exposure and color are excellent straight out of camera." : `Only ${edits.length} minor adjustments suggested.`,
-      what_could_be_improved: edits.length > 0 ? `Apply recommended changes: ${edits.join(', ')}` : "No urgent edits suggested."
+      what_works: postWhatWorks,
+      what_could_be_improved: postWhatCouldBeImproved
     });
 
     if (exif && exif.diagnostics) {
@@ -481,7 +515,7 @@ export default function App() {
     ];
 
     params.forEach(p => {
-      const validRatings = p.subAspects.filter(s => s.rating !== undefined);
+      const validRatings = p.subAspects.filter(s => typeof s.rating === 'number' && !isNaN(s.rating));
       const avgRating = validRatings.length > 0 
         ? Math.round(validRatings.reduce((sum, s) => sum + s.rating, 0) / validRatings.length)
         : 70;
@@ -812,21 +846,21 @@ export default function App() {
                       To receive live critiques directly in your inbox, set environment variables (`SMTP_HOST`, `SMTP_USERNAME`, `SMTP_PASSWORD`) inside the <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--secondary)', fontWeight: '600' }}>backend/.env</span> file.
                     </span>
                     <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '6px', padding: '6px 12px', borderRadius: '6px', backgroundColor: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.03)', fontFamily: 'var(--font-mono)', display: 'inline-block' }}>
-                      Mock HTML output written to: <span style={{ color: '#fff' }}>backend/email_simulation.html</span>
+Mock HTML output written to: <span style={{ color: '#fff' }}>backend/email_simulation.html</span>
                     </div>
                   </>
                 )}
               </div>
             </div>
 
-            {/* Split Dashboard Grid */}
-            <div className="dashboard-grid">
+            {/* Redesigned Critique Dashboard Layout */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
               
-              {/* Left Column - Image controls & Suggested Edits */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+              {/* Top Split Layout - Photo on Left, Details & Settings on Right */}
+              <div className="top-split-grid">
                 
-                {/* Image Showcase Card with CSS filter simulation */}
-                <div className="glass-panel" style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                {/* Top Left: Photograph Showcase */}
+                <div className="glass-panel" style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '16px', height: '100%' }}>
                   
                   {/* Aspect Ratio Box holding the image */}
                   <div style={{ 
@@ -838,8 +872,9 @@ export default function App() {
                     alignItems: 'center', 
                     justifyContent: 'center', 
                     border: '1px solid rgba(255,255,255,0.05)',
-                    minHeight: '260px',
-                    maxHeight: '420px'
+                    minHeight: '320px',
+                    maxHeight: '480px',
+                    flex: 1
                   }}>
                     <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                       <img 
@@ -849,7 +884,7 @@ export default function App() {
                         onLoad={updateImgDimensions}
                         style={{ 
                           maxWidth: '100%', 
-                          maxHeight: '420px', 
+                          maxHeight: '480px', 
                           objectFit: 'contain'
                         }} 
                       />
@@ -858,10 +893,14 @@ export default function App() {
 
                   {/* Metadata display */}
                   <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '200px' }}>{file?.name || 'critique_image.jpg'}</span>
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '250px' }}>{file?.name || 'critique_image.jpg'}</span>
                     <span>Photography Evaluation Workspace</span>
                   </div>
+                </div>
 
+                {/* Top Right: First Impression, EXIF Details, Reset Button */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+                  
                   {/* First Impression Box */}
                   <div className="glass-panel" style={{ padding: '18px', display: 'flex', flexDirection: 'column', gap: '8px', borderLeft: '4px solid var(--primary)' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -875,7 +914,12 @@ export default function App() {
 
                   {/* Merged Camera Settings (EXIF) */}
                   {analysisResult.exif_analysis ? (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', borderTop: '1px solid var(--border-color)', paddingTop: '16px' }}>
+                    <div className="glass-panel" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <Camera size={16} style={{ color: 'var(--secondary)' }} />
+                        <span style={{ fontSize: '0.82rem', fontWeight: '800', color: '#fff', textTransform: 'uppercase', letterSpacing: '0.03em' }}>Camera Settings (EXIF)</span>
+                      </div>
+                      
                       {/* Premium LCD Camera Settings Display */}
                       <div className="camera-lcd" style={{
                         background: 'radial-gradient(ellipse at center, #1b2030 0%, #0d1017 100%)',
@@ -917,7 +961,6 @@ export default function App() {
                             </span>
                           </div>
                           <div style={{ borderLeft: '1px solid rgba(255,255,255,0.05)', paddingLeft: '12px' }}>
-                            <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', display: 'block', letterSpacing: '0.05em' }}>Gear Model</span>
                             <span style={{ color: '#fff', fontWeight: '600', display: 'block', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }} title={analysisResult.exif_analysis.camera_settings.camera}>
                               {analysisResult.exif_analysis.camera_settings.camera || 'Generic Camera'}
                             </span>
@@ -979,7 +1022,7 @@ export default function App() {
                       })()}
                     </div>
                   ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', borderTop: '1px solid var(--border-color)', paddingTop: '16px' }}>
+                    <div className="glass-panel" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
                       <div style={{
                         display: 'flex',
                         gap: '12px',
@@ -1005,18 +1048,17 @@ export default function App() {
                       </div>
                     </div>
                   )}
+
+                  {/* Reset button */}
+                  <button onClick={handleReset} className="btn-secondary" style={{ width: '100%', justifyContent: 'center', padding: '14px' }}>
+                    <RefreshCw size={16} />
+                    Analyze Another Photo
+                  </button>
+
                 </div>
-
-
-
-                {/* Reset button */}
-                <button onClick={handleReset} className="btn-secondary" style={{ width: '100%', justifyContent: 'center', padding: '14px' }}>
-                  <RefreshCw size={16} />
-                  Analyze Another Photo
-                </button>
               </div>
 
-              {/* Right Column - Detailed breakdown and sliders */}
+              {/* Bottom Section - Wide Detailed Review Block */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
                 
                 {/* Tabs for Category Selection */}
@@ -1214,6 +1256,18 @@ export default function App() {
                                     </div>
                                   </div>
                                 )}
+
+                                {sub.suggested_edit_hint && (
+                                  <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start', marginTop: '2px' }}>
+                                    <div style={{ color: 'var(--secondary)', marginTop: '2px', backgroundColor: 'rgba(139, 92, 246, 0.08)', borderRadius: '50%', padding: '2px', display: 'flex', flexShrink: 0 }}>
+                                      <Sliders size={14} />
+                                    </div>
+                                    <div style={{ fontSize: '0.85rem', lineHeight: '1.4', padding: '8px 12px', background: 'rgba(139, 92, 246, 0.06)', borderRadius: '8px', borderLeft: '3px solid var(--secondary)', flex: 1 }}>
+                                      <span style={{ fontWeight: '700', color: 'var(--secondary)', display: 'block', marginBottom: '2px', textTransform: 'uppercase', fontSize: '0.72rem', letterSpacing: '0.04em' }}>💡 Suggested Edit</span>
+                                      <span style={{ color: 'var(--text-secondary)' }}>{sub.suggested_edit_hint}</span>
+                                    </div>
+                                  </div>
+                                )}
                               </div>
                             </div>
                           );
@@ -1222,43 +1276,54 @@ export default function App() {
                         {/* Category-Specific Visual Analysis & Details */}
                         
                         {/* Post-Processing Presets & Edits suggestion */}
-                        {activeTab === 'post-processing' && (
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', marginTop: '10px' }}>
-                            <div className="glass-panel" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                <Sliders size={20} className="text-secondary" />
-                                <h4 style={{ fontSize: '1.15rem', fontWeight: '800', color: '#fff', margin: 0 }}>Actionable Presets & Edits</h4>
+                        {activeTab === 'post-processing' && (() => {
+                          const allEdits = analysisResult.suggested_edits || [];
+                          const keyedEdits = allEdits.filter(e => e && typeof e === 'object' && e.key);
+                          const aspectLabels = {
+                            brightness: 'Exposure & Brightness', contrast: 'Tonal Contrast',
+                            saturation: 'Color Saturation', warmth: 'White Balance / Warmth',
+                            details: 'Detail & Sharpening', highlights: 'Highlights & Whites',
+                            shadows: 'Shadows & Blacks', ambiance: 'Ambiance & Tone',
+                            colour: 'Colour Palette', crop: 'Crop & Framing'
+                          };
+                          if (keyedEdits.length === 0) return null;
+                          return (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '10px' }}>
+                              <div style={{ marginBottom: '-4px' }}>
+                                <h5 style={{ margin: 0, color: 'var(--text-secondary)', fontSize: '0.82rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                                  Edit Opportunities · {keyedEdits.length} adjustment{keyedEdits.length !== 1 ? 's' : ''} flagged
+                                </h5>
                               </div>
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                                {analysisResult.suggested_edits && analysisResult.suggested_edits.length > 0 ? (
-                                  analysisResult.suggested_edits.map((edit, idx) => (
-                                    <div 
-                                      key={idx} 
-                                      style={{
-                                        display: 'flex',
-                                        gap: '12px',
-                                        padding: '12px 14px',
-                                        background: 'rgba(255,255,255,0.015)',
-                                        borderRadius: '10px',
-                                        borderLeft: '4px solid var(--secondary)',
-                                        fontSize: '0.88rem',
-                                        lineHeight: '1.4',
-                                        alignItems: 'flex-start'
-                                      }}
-                                    >
-                                      <div style={{ width: '18px', height: '18px', borderRadius: '50%', backgroundColor: 'rgba(139, 92, 246, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: '2px' }}>
-                                        <Check size={12} style={{ color: 'var(--secondary)', margin: 'auto' }} />
-                                      </div>
-                                      <span style={{ color: 'var(--text-primary)' }}>{edit}</span>
-                                    </div>
-                                  ))
-                                ) : (
-                                  <p style={{ color: 'var(--text-muted)', fontSize: '0.88rem' }}>No specific slider tweaks suggested for this photo.</p>
-                                )}
-                              </div>
+                              {keyedEdits.map((edit, idx) => (
+                                <div
+                                  key={idx}
+                                  style={{
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    gap: '6px',
+                                    padding: '14px 16px',
+                                    background: 'rgba(255,255,255,0.02)',
+                                    borderRadius: '10px',
+                                    border: '1px solid rgba(255,255,255,0.04)',
+                                    borderLeft: '4px solid var(--secondary)'
+                                  }}
+                                >
+                                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                    <span style={{ fontSize: '0.72rem', fontWeight: '700', color: 'var(--secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                      {aspectLabels[edit.key] || edit.key}
+                                    </span>
+                                    <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', background: 'rgba(139,92,246,0.08)', padding: '2px 8px', borderRadius: '20px', border: '1px solid rgba(139,92,246,0.15)' }}>
+                                      Suggested Adjustment
+                                    </span>
+                                  </div>
+                                  <p style={{ margin: 0, fontSize: '0.88rem', color: 'var(--text-primary)', lineHeight: '1.5' }}>
+                                    {edit.text}
+                                  </p>
+                                </div>
+                              ))}
                             </div>
-                          </div>
-                        )}
+                          );
+                        })()}
 
                         {/* 1. Composition Category specific cards */}
                         {activeTab === 'composition' && analysisResult.advanced_cv && (

@@ -680,8 +680,26 @@ def analyze_cv_heuristics(image_bytes: bytes, exif_summary: dict = None) -> dict
               high_score, shadow_score, amb_score, col_score, crop_score]
     overall_rating = round(sum(scores) / len(scores) / 10.0, 1)
 
-    # Compile the final suggestions
-    suggested_edits = list(set([b_edit, c_edit, s_edit, w_edit, d_edit, h_edit, sh_edit, amb_edit, col_edit]))[:5]
+    # Compile the final suggestions — keyed to the aspect they belong to
+    all_edits_keyed = [
+        {"key": "brightness",  "text": b_edit},
+        {"key": "contrast",    "text": c_edit},
+        {"key": "saturation",  "text": s_edit},
+        {"key": "warmth",      "text": w_edit},
+        {"key": "details",     "text": d_edit},
+        {"key": "highlights",  "text": h_edit},
+        {"key": "shadows",     "text": sh_edit},
+        {"key": "ambiance",    "text": amb_edit},
+        {"key": "colour",      "text": col_edit},
+        {"key": "crop",        "text": crop_edit},
+    ]
+    # De-duplicate by text and keep all unique entries
+    seen_texts = set()
+    suggested_edits = []
+    for e in all_edits_keyed:
+        if e["text"] not in seen_texts:
+            seen_texts.add(e["text"])
+            suggested_edits.append(e)
 
     # EXIF-based camera settings diagnostics
     exif_analysis = None
