@@ -823,42 +823,6 @@ def analyze_cv_heuristics(image_bytes: bytes, exif_summary: dict = None) -> dict
     else:
         first_impression_text += " The image has acceptable sharpness, though some areas could benefit from slightly tighter focus definition."
 
-    if high_pixels > 0.10:
-        histogram_summary = "Significant highlight clipping"
-    elif high_pixels > 0.02:
-        histogram_summary = "Slight highlight clipping"
-    elif shadow_pixels > 0.15:
-        histogram_summary = "Significant shadow clipping"
-    elif shadow_pixels > 0.03:
-        histogram_summary = "Slight shadow clipping"
-    else:
-        histogram_summary = "No significant clipping"
-
-    eye_count = sum(len(face.get("eyes", [])) for face in advanced_cv.get("faces", []))
-    image_statistics = {
-        "dimensions": f"{w}x{h}",
-        "brightness": {
-            "value": round(mean_brightness / 255.0, 2),
-            "level": "Low" if mean_brightness < 90 else "High" if mean_brightness > 160 else "Balanced",
-        },
-        "contrast": {
-            "value": round(std_contrast, 1),
-            "level": "Low" if std_contrast < 40 else "High" if std_contrast > 75 else "Medium",
-        },
-        "sharpness": {
-            "value": round(variance_sharp, 1),
-            "level": "Low" if variance_sharp < 80 else "High" if variance_sharp > 500 else "Medium",
-        },
-        "leading_lines": advanced_cv["composition"]["leading_lines"]["score"] >= 40,
-        "rule_of_thirds": advanced_cv["composition"]["rule_of_thirds"]["score"] >= 65,
-        "faces": len(advanced_cv.get("faces", [])),
-        "eyes_detected": eye_count > 0,
-        "eye_count": eye_count,
-        "histogram": histogram_summary,
-        "highlight_clipping_percent": round(high_pixels * 100, 1),
-        "shadow_clipping_percent": round(shadow_pixels * 100, 1),
-    }
-
     return {
         "overall_rating": overall_rating,
         "first_impression": first_impression_text,
@@ -916,7 +880,6 @@ def analyze_cv_heuristics(image_bytes: bytes, exif_summary: dict = None) -> dict
         },
         "suggested_edits": suggested_edits,
         "exif_analysis": exif_analysis,
-        "image_statistics": image_statistics,
         "advanced_cv": advanced_cv,
         "mode": "computer_vision"
     }
