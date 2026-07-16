@@ -1,12 +1,14 @@
+import io
 import os
 import uvicorn
-import re
-import json
-import base64
-import numpy as np
-from PIL import Image
 import cv2
-import httpx
+import numpy as np
+
+import base64
+from PIL import Image
+from PIL.ExifTags import TAGS, GPSTAGS
+from PIL.TiffImagePlugin import IFDRational
+
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
@@ -17,6 +19,8 @@ from email.mime.text import MIMEText
 from email.mime.application import MIMEApplication
 from email.mime.image import MIMEImage
 
+from cv_fallback import *
+from gemini_request import *
 
 # Load environment variables
 load_dotenv()
@@ -32,426 +36,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-def analyze_cv_heuristics(image_bytes: bytes) -> dict:
-    """
-    Fallback CV Analyzer that uses OpenCV/PIL to analyze the image
-    and generate structured response metrics.
-    """
-    # Load image in OpenCV
-    nparr = np.frombuffer(image_bytes, np.uint8)
-    img_bgr = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-    
-    if img_bgr is None:
-        raise ValueError("Could not decode image")
-        
-    img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
-    img_gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
-    h, w, _ = img_bgr.shape
-    
-    # 1. Brightness
-    mean_brightness = float(np.mean(img_gray))
-    # Optimal brightness is around 125.
-    if mean_brightness < 90:
-        brightness_score = int(max(0, (mean_brightness / 90) * 70))
-        b_works = "Captures a moody, low-key lighting scheme, keeping the brightest spots detailed."
-        b_imp = "The image is underexposed, resulting in dark shadow areas losing critical details. A slight boost in exposure could bring out hidden elements."
-        b_edit = "Increase exposure by +0.5 to +1.0 EV."
-    elif mean_brightness > 160:
-        brightness_score = int(max(0, ((255 - mean_brightness) / 95) * 70))
-        b_works = "Generates a bright, airy, high-key feel that conveys a clean, modern aesthetic."
-        b_imp = "The image is overexposed, leading to blown-out highlights where details are permanently lost (e.g., in skies or white shirts)."
-        b_edit = "Reduce exposure by -0.4 to -0.8 EV and pull down highlights."
-    else:
-        diff = abs(mean_brightness - 125)
-        # Optimal brightness range. We use a stricter baseline of 75 (down from 85).
-        brightness_score = int(75 + (25 - (diff / 35) * 25))
-        brightness_score = min(100, max(0, brightness_score))
-        b_works = "Well-balanced exposure that keeps the image looking natural and captures a full range of tones."
-        b_imp = "Exposure is solid, though you could experiment with localized dodge and burn to create more depth."
-        b_edit = "Apply minor contrast adjustments to enhance depth."
 
-    # 2. Contrast
-    std_contrast = float(np.std(img_gray))
-    # Optimal standard deviation is around 50-70.
-    if std_contrast < 40:
-        contrast_score = int(max(0, (std_contrast / 40) * 70))
-        c_works = "Low contrast gives a soft, vintage, or misty atmosphere that works well for dreamy portraits or foggy scenes."
-        c_imp = "The image looks a bit flat and lacks punch. Increasing contrast would help separate the subject from the background."
-        c_edit = "Increase contrast by +15 or adjust the black point to deepen shadows."
-    elif std_contrast > 75:
-        contrast_score = int(max(0, (1 - (std_contrast - 75) / 52) * 70))
-        c_works = "High contrast creates dramatic impact, bold silhouettes, and strong graphic shapes."
-        c_imp = "The contrast is very harsh, which can make transition zones look abrupt and clip the highlights/shadows."
-        c_edit = "Decrease contrast by -10, or soften the shadows."
-    else:
-        diff = abs(std_contrast - 58)
-        # Stricter baseline of 75 (down from 85)
-        contrast_score = int(75 + (25 - (diff / 18) * 25))
-        contrast_score = min(100, max(0, contrast_score))
-        c_works = "Excellent tonal separation. The subject pops nicely from the background without losing fine detail in shadows and highlights."
-        c_imp = "Contrast is well managed. You can add a vignette to draw more focus to the center."
-        c_edit = "Add a subtle post-crop vignette (-5 to -10)."
-
-    # 3. Saturation
-    img_hsv = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2HSV)
-    h_ch, s_ch, v_ch = cv2.split(img_hsv)
-    mean_sat = float(np.mean(s_ch))
-    if mean_sat < 40:
-        sat_score = int(max(0, (mean_sat / 40) * 70))
-        s_works = "A muted, pastel-like, or documentary feel that looks realistic and sophisticated."
-        s_imp = "Colors feel a bit lifeless. A slight boost in saturation or vibrance could make the key colors more engaging."
-        s_edit = "Increase vibrance by +15 and saturation by +5."
-    elif mean_sat > 150:
-        sat_score = int(max(0, ((255 - mean_sat) / 105) * 70))
-        s_works = "Vibrant and eye-catching palette with high visual energy."
-        s_imp = "Colors are oversaturated, which looks artificial and causes color clipping in highly saturated regions."
-        s_edit = "Reduce overall saturation by -12 and use vibrance instead."
-    else:
-        diff = abs(mean_sat - 90)
-        # Stricter baseline of 75 (down from 85)
-        sat_score = int(75 + (25 - (diff / 60) * 25))
-        sat_score = min(100, max(0, sat_score))
-        s_works = "Colors are vivid yet realistic, rendering a pleasing and lifelike representation."
-        s_imp = "Saturation is well balanced. Consider target-adjusting specific hues to create better color harmony."
-        s_edit = "Use HSL adjustments to slightly shift greens toward teal or warm up yellows."
-
-    # 4. Warmth (White Balance heuristic based on R-B difference)
-    r_mean = float(np.mean(img_rgb[:, :, 0]))
-    b_mean = float(np.mean(img_rgb[:, :, 2]))
-    warmth_val = r_mean - b_mean # Positive is warm (reddish), negative is cool (bluish)
-    if warmth_val < -15:
-        # Stricter baseline of 60 (down from 75)
-        warmth_score = int(min(100, max(0, 60 + (30 - abs(warmth_val + 30) / 40 * 30))))
-        w_works = "A cool color temperature that emphasizes a clean, clinical, modern, or wintery atmosphere."
-        w_imp = "The image has a noticeable blue cast, which can make skin tones look pale and landscapes look cold."
-        w_edit = "Increase temperature slider by +8 (warm it up) to restore natural tones."
-    elif warmth_val > 25:
-        # Stricter baseline of 60 (down from 75)
-        warmth_score = int(min(100, max(0, 60 + (30 - abs(warmth_val - 40) / 40 * 30))))
-        w_works = "A warm, golden-hour tone that creates feelings of nostalgia, comfort, and intimacy."
-        w_imp = "The image is overly warm or has a heavy yellow cast. Neutral white surfaces appear yellow."
-        w_edit = "Decrease temperature slider by -5 to -10, or adjust the tint slightly toward green/magenta."
-    else:
-        # Stricter baseline of 80 (down from 90)
-        warmth_score = int(min(100, max(0, 80 + (20 - abs(warmth_val) / 20 * 20))))
-        w_works = "Color temperature is technically correct and whites appear clean."
-        w_imp = "White balance looks highly accurate. You could creatively shift it warmer/cooler for stylistic effect."
-        w_edit = "Add a warm gradient map or golden filter in post-processing for creative effect."
-
-    # 5. Details (Structure & Sharpening based on Laplacian variance)
-    laplacian = cv2.Laplacian(img_gray, cv2.CV_64F)
-    variance_sharp = float(np.var(laplacian))
-    if variance_sharp < 80:
-        # Stricter baseline of 60 (down from 75)
-        details_score = int(min(60, max(0, (variance_sharp / 80) * 60)))
-        d_works = "A soft focus that works well for dreamy portraiture or creative motion blur."
-        d_imp = "The image lacks critical sharpness, possibly due to motion blur, missed focus, or lens diffraction. Add structural clarity or sharpening."
-        d_edit = "Increase sharpening by +20 and add +10 structure/clarity."
-    elif variance_sharp > 500:
-        # Stricter cap of 88 (down from 95)
-        details_score = 88
-        d_works = "Incredibly crisp details, showing fine textures and sharp edges."
-        d_imp = "Detail retention is excellent. Ensure sharpening artifacts (halo effects around edges) are not visible."
-        d_edit = "Apply a masking slider to sharpening so it only affects high-contrast edges, leaving flat areas smooth."
-    else:
-        # Stricter range of 70 to 95 (down from 80 to 100)
-        details_score = int(min(95, max(0, 70 + (25 * (variance_sharp - 80) / 420))))
-        d_works = "Natural and clean detail rendering without harsh artificial sharpening outlines."
-        d_imp = "Good sharpness. You could enhance local contrast (micro-contrast) in key areas to draw focus."
-        d_edit = "Use a local brush to add +15 clarity to the main subject."
-
-    # 6. Highlights
-    high_pixels = float(np.sum(img_gray > 230)) / img_gray.size
-    if high_pixels > 0.10:
-        # Stricter highlights score calculation
-        high_score = int(50 + (35 * (1 - min(1.0, high_pixels * 2))))
-        h_works = "Bright highlights create a high-contrast, glowing feel."
-        h_imp = "Large areas of highlights are clipped (blown out), losing detail in skies or bright surfaces."
-        h_edit = "Pull down highlights slider by -30 to -50."
-    else:
-        # Stricter default score of 85 (down from 92)
-        high_score = 85
-        h_works = "Highlights are well controlled, retaining full texture in bright areas (like clouds or snow)."
-        h_imp = "Highlights are well within bounds. You could boost them slightly to create specular highlights for metallic or wet surfaces."
-        h_edit = "Boost whites by +5 for extra sparkle."
-
-    # 7. Shadows
-    shadow_pixels = float(np.sum(img_gray < 25)) / img_gray.size
-    if shadow_pixels > 0.15:
-        # Stricter shadows score calculation
-        shadow_score = int(55 + (30 * (1 - min(1.0, shadow_pixels * 2))))
-        sh_works = "Rich, deep blacks create a sense of mystery, weight, and silhouette."
-        sh_imp = "Shadow details are crushed, hiding texture in dark clothing, foliage, or nighttime scenes."
-        sh_edit = "Lift shadows slider by +20 to +40."
-    else:
-        # Stricter default score of 86 (down from 94)
-        shadow_score = 86
-        sh_works = "Excellent shadow detail recovery. Textures are clearly visible in the dark portions of the frame."
-        sh_imp = "Shadow depth is good. You can slightly drop the black point to give a cleaner black level if needed."
-        sh_edit = "Slightly drop black levels by -3 to add a solid anchor."
-
-    # 8. Ambiance
-    # Estimated by standard deviation of midtones (50 to 200)
-    midtones = img_gray[(img_gray > 50) & (img_gray < 200)]
-    mid_std = float(np.std(midtones)) if midtones.size > 0 else 30
-    if mid_std < 30:
-        # Stricter low-ambiance score of 60 (down from 70)
-        amb_score = 60
-        amb_works = "Even, diffuse lighting that creates a flat, predictable atmosphere."
-        amb_imp = "Lacks dimensional lighting or ambient glow. Adding localized exposure adjustments can simulate ambient lighting."
-        amb_edit = "Use radial filters to simulate light direction or add a soft glow."
-    else:
-        # Stricter default score of 80 (down from 88)
-        amb_score = 80
-        amb_works = "Rich light interactions with strong presence of ambient light, giving depth."
-        amb_imp = "The ambiance is strong. Watch out for distracting highlights in the background."
-        amb_edit = "Keep ambient details high while vignetting slightly."
-
-    # 9. Colour harmony / palette
-    # Standard deviation across RGB channels
-    r_std = float(np.std(img_rgb[:, :, 0]))
-    g_std = float(np.std(img_rgb[:, :, 1]))
-    b_std = float(np.std(img_rgb[:, :, 2]))
-    channel_diff = abs(r_std - g_std) + abs(g_std - b_std) + abs(b_std - r_std)
-    if channel_diff > 40:
-        # Stricter palette score of 68 (down from 78)
-        col_score = 68
-        col_works = "A diverse range of hues that makes the image energetic."
-        col_imp = "The color palette is somewhat chaotic. Restricting the color palette to a complementary or triadic harmony will make it more professional."
-        col_edit = "Use color grading (split toning) to add teal in shadows and orange in highlights."
-    else:
-        # Stricter default score of 82 (down from 90)
-        col_score = 82
-        col_works = "Pleasing and unified color palette that is easy on the eyes."
-        col_imp = "Good color harmony. You can shift individual colors to enhance the mood."
-        col_edit = "Slightly desaturate non-essential colors to make the main color pop."
-
-    # 10. Crop & Composition
-    # Aspect ratios
-    ratio = w / h
-    aspect_str = f"{w}x{h}"
-    if abs(ratio - 1.0) < 0.05:
-        crop_score = 78
-        crop_works = "Square aspect ratio (1:1) centers focus and works great for symmetrical subjects."
-        crop_imp = "Make sure the subject is exactly centered, or use off-center placement with high negative space."
-        crop_edit = "Crop slightly to ensure absolute symmetry if centering, or apply rule of thirds."
-    elif abs(ratio - 1.5) < 0.05 or abs(ratio - 0.66) < 0.05:
-        crop_score = 82
-        crop_works = "Classic 3:2 ratio provides a natural canvas common in DSLR photography."
-        crop_imp = "The subject is placed near the center, which can feel static. Try shifting the subject to one of the third intersections."
-        crop_edit = "Crop 5-10% from the side to position the subject along the vertical third gridline."
-    else:
-        crop_score = 72
-        crop_works = "Wide aspect ratio works well for landscapes, giving a cinematic scope."
-        crop_imp = "The horizon is positioned near the center. Placing the horizon on the upper or lower third line makes the landscape more dramatic."
-        crop_edit = "Adjust crop to position the horizon line on the lower third grid."
-    
-    # Calculate overall rating
-    scores = [brightness_score, contrast_score, sat_score, warmth_score, details_score, 
-              high_score, shadow_score, amb_score, col_score, crop_score]
-    overall_rating = round(sum(scores) / len(scores) / 10.0, 1)
-
-    # Compile the final suggestions
-    suggested_edits = list(set([b_edit, c_edit, s_edit, w_edit, d_edit, h_edit, sh_edit, amb_edit, col_edit]))[:5]
-
-    return {
-        "overall_rating": overall_rating,
-        "aspects": {
-            "colour": {
-                "rating": col_score,
-                "what_works": col_works,
-                "what_could_be_improved": col_imp
-            },
-            "details": {
-                "rating": details_score,
-                "what_works": d_works,
-                "what_could_be_improved": d_imp
-            },
-            "brightness": {
-                "rating": brightness_score,
-                "what_works": b_works,
-                "what_could_be_improved": b_imp
-            },
-            "contrast": {
-                "rating": contrast_score,
-                "what_works": c_works,
-                "what_could_be_improved": c_imp
-            },
-            "saturation": {
-                "rating": sat_score,
-                "what_works": s_works,
-                "what_could_be_improved": s_imp
-            },
-            "ambiance": {
-                "rating": amb_score,
-                "what_works": amb_works,
-                "what_could_be_improved": amb_imp
-            },
-            "highlights": {
-                "rating": high_score,
-                "what_works": h_works,
-                "what_could_be_improved": h_imp
-            },
-            "shadows": {
-                "rating": shadow_score,
-                "what_works": sh_works,
-                "what_could_be_improved": sh_imp
-            },
-            "warmth": {
-                "rating": warmth_score,
-                "what_works": w_works,
-                "what_could_be_improved": w_imp
-            },
-            "crop": {
-                "rating": crop_score,
-                "what_works": crop_works,
-                "what_could_be_improved": crop_imp
-            }
-        },
-        "suggested_edits": suggested_edits,
-        "mode": "computer_vision"
-    }
-
-async def analyze_gemini(image_bytes: bytes, api_key: str) -> dict:
-    """
-    Call Gemini API to perform multi-modal analysis on the image.
-    """
-    # Encode image in base64
-    base64_image = base64.b64encode(image_bytes).decode("utf-8")
-    
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key={api_key}"
-    
-    headers = {
-        "Content-Type": "application/json"
-    }
-    
-    prompt = """
-    You are a professional photography critic and editor. You must evaluate the photo critically and strictly.
-    Please note that most photos are submitted by amateur or semi-professional photographers, so do not hesitate to give low ratings. Be extremely honest and do not inflate scores.
-    Use the following scale for individual aspect ratings (0 to 100):
-    - 90 to 100: Exceptional, professional gallery-grade, virtually flawless. Use this very sparingly.
-    - 80 to 89: Very good, above average, minimal flaws.
-    - 70 to 79: Good/average consumer photo, has clear areas for improvement.
-    - 50 to 69: Mediocre with noticeable issues (e.g. slight blur, poor white balance, minor highlights clipping).
-    - Below 50: Poor/unusable, severe technical or composition flaws.
-
-    You must evaluate all 10 aspects: colour, details, brightness, contrast, saturation, ambiance, highlights, shadows, warmth, crop.
-    
-    CRITICAL: The "overall_rating" (scale of 1.0 to 10.0) MUST be calculated mathematically as:
-    overall_rating = (sum of all 10 aspect ratings / 10.0) / 10.0, rounded to 1 decimal place (which is the sum of aspect ratings divided by 100.0). E.g., if the average of aspect scores is 72.4, the overall_rating must be exactly 7.2.
-
-    Return a JSON object with the following structure:
-    {
-      "overall_rating": 7.2,
-      "aspects": {
-        "colour": {
-          "rating": 75,  // scale 0 to 100
-          "what_works": "The warm tones harmonise decently...",
-          "what_could_be_improved": "The blues in the background are slightly oversaturated..."
-        },
-        "details": {
-          "rating": 70,
-          "what_works": "Decent sharpness on the eyes of the subject...",
-          "what_could_be_improved": "Some noise is visible in the dark background..."
-        },
-        "brightness": {
-          "rating": 72,
-          "what_works": "...",
-          "what_could_be_improved": "..."
-        },
-        "contrast": {
-          "rating": 70,
-          "what_works": "...",
-          "what_could_be_improved": "..."
-        },
-        "saturation": {
-          "rating": 78,
-          "what_works": "...",
-          "what_could_be_improved": "..."
-        },
-        "ambiance": {
-          "rating": 68,
-          "what_works": "...",
-          "what_could_be_improved": "..."
-        },
-        "highlights": {
-          "rating": 72,
-          "what_works": "...",
-          "what_could_be_improved": "..."
-        },
-        "shadows": {
-          "rating": 70,
-          "what_works": "...",
-          "what_could_be_improved": "..."
-        },
-        "warmth": {
-          "rating": 75,
-          "what_works": "...",
-          "what_could_be_improved": "..."
-        },
-        "crop": {
-          "rating": 71,
-          "what_works": "The rule of thirds is applied decently...",
-          "what_could_be_improved": "The subject is cropped a bit too tightly..."
-        }
-      },
-      "suggested_edits": [
-        "Increase exposure by +0.3 EV",
-        "Crop 5% from the right to balance the negative space",
-        "Shift temperature toward cooler tones (-200K) to fix the yellow cast"
-      ]
-    }
-
-    Please evaluate all these aspects. Ensure the response is valid JSON and strictly adheres to this structure. Do not output anything else than the JSON.
-    """
-    
-    payload = {
-        "contents": [
-            {
-                "parts": [
-                    {"text": prompt},
-                    {
-                        "inlineData": {
-                            "mimeType": "image/jpeg",
-                            "data": base64_image
-                        }
-                    }
-                ]
-            }
-        ],
-        "generationConfig": {
-            "responseMimeType": "application/json"
-        }
-    }
-    
-    async with httpx.AsyncClient() as client:
-        response = await client.post(url, json=payload, headers=headers, timeout=30.0)
-        
-        if response.status_code != 200:
-            raise HTTPException(
-                status_code=response.status_code, 
-                detail=f"Gemini API error: {response.text}"
-            )
-            
-        result = response.json()
-        
-        try:
-            # Extract text candidate
-            text_response = result["candidates"][0]["content"]["parts"][0]["text"]
-            
-            # Clean text if it has markdown formatting
-            text_response = text_response.strip()
-            if text_response.startswith("```"):
-                # strip out ```json and ```
-                text_response = re.sub(r"^```(?:json)?\n", "", text_response)
-                text_response = re.sub(r"\n```$", "", text_response)
-                text_response = text_response.strip()
-                
-            analysis_data = json.loads(text_response)
-            analysis_data["mode"] = "gemini_ai"
-            return analysis_data
-        except (KeyError, IndexError, json.JSONDecodeError) as e:
-            raise ValueError(f"Failed to parse Gemini response: {str(e)}. Raw response: {response.text}")
 
 def generate_email_content(email_to: str, analysis_results: dict, image_bytes: bytes = None, is_simulation: bool = False) -> tuple[str, str]:
     """
@@ -463,6 +48,7 @@ def generate_email_content(email_to: str, analysis_results: dict, image_bytes: b
     mode_str = "Gemini AI Engine" if mode == "gemini_ai" else "Computer Vision"
     suggested_edits = analysis_results.get("suggested_edits", [])
     aspects = analysis_results.get("aspects", {})
+    exif_analysis = analysis_results.get("exif_analysis")
 
     # Create plain-text version
     text_lines = [
@@ -473,21 +59,177 @@ def generate_email_content(email_to: str, analysis_results: dict, image_bytes: b
         f"Engine: {mode_str}",
         f"Target Workspace: {email_to}",
         "",
+        "First Impression:",
+        "-----------------",
+        analysis_results.get("first_impression", "N/A"),
+        "",
         "Suggested Edits:",
         "----------------"
     ]
     for edit in suggested_edits:
         text_lines.append(f"- {edit}")
-    
-    text_lines.extend(["", "Aspect Breakdowns:", "------------------"])
-    for key, data in aspects.items():
+
+    if exif_analysis:
+        settings = exif_analysis.get("camera_settings", {})
+        diag = exif_analysis.get("diagnostics", {})
         text_lines.extend([
-            f"Aspect: {key.capitalize()}",
-            f"  Score: {data.get('rating')}/100",
-            f"  What Works: {data.get('what_works')}",
-            f"  What Could Be Improved: {data.get('what_could_be_improved')}",
-            ""
+            "",
+            "Camera Settings (EXIF):",
+            "-----------------------",
+            f"  Shutter Speed: {settings.get('shutter_speed') or 'N/A'}",
+            f"  Aperture: {settings.get('aperture') or 'N/A'}",
+            f"  ISO: {settings.get('iso') or 'N/A'}",
+            f"  Focal Length: {settings.get('focal_length') or 'N/A'}",
+            f"  Camera Model: {settings.get('camera') or 'N/A'}",
+            f"  Lens Model: {settings.get('lens') or 'N/A'}",
+            "",
+            "Settings Audit Diagnostics:",
+            f"  Status: {diag.get('status', 'N/A').upper()}",
+            f"  Issue: {diag.get('issue') or 'N/A'}",
+            f"  Suggestion: {diag.get('suggestion') or 'N/A'}"
         ])
+    
+    # Map the raw aspects to the 6 major parameters
+    advanced_cv = analysis_results.get("advanced_cv")
+
+    def get_aspect_data(key):
+        if "." in key:
+            parts = key.split(".")
+            if parts[0] in aspects and parts[1] in aspects[parts[0]]:
+                return aspects[parts[0]][parts[1]]
+        elif key in aspects:
+            return aspects[key]
+        return None
+
+    # 1. Composition
+    comp_sub = []
+    data_comp = get_aspect_data("composition")
+    if data_comp: comp_sub.append({"key": "composition", "label": "Composition Rules", **data_comp})
+    data_crop = get_aspect_data("crop")
+    if data_crop: comp_sub.append({"key": "crop", "label": "Grid & Crop", **data_crop})
+    data_angle = get_aspect_data("feel.angle_and_viewpoint")
+    if data_angle: comp_sub.append({"key": "angle_and_viewpoint", "label": "Angle & Viewpoint", **data_angle})
+    if advanced_cv and advanced_cv.get("horizon"):
+        cv_h = advanced_cv.get("horizon")
+        comp_sub.append({
+            "key": "horizon", "label": "Horizon Alignment",
+            "rating": 95 if cv_h.get("is_level") else max(40, round(90 - abs(cv_h.get("angle") or 0.0) * 5)),
+            "what_works": "Horizon is perfectly level." if cv_h.get("is_level") else f"Horizon is aligned at {cv_h.get('angle') or 0.0} degrees.",
+            "what_could_be_improved": "No alignment adjustment needed." if cv_h.get("is_level") else "Rotate the image slightly to level the horizon line."
+        })
+    if advanced_cv and advanced_cv.get("subject_centering"):
+        cv_c = advanced_cv.get("subject_centering")
+        dist = cv_c.get("thirds_distance", 0.5)
+        comp_sub.append({
+            "key": "thirds", "label": "Rule of Thirds Alignment",
+            "rating": max(50, min(100, round(100 - dist * 100))),
+            "what_works": "Subject aligns with the Rule of Thirds." if dist < 0.15 else "Centering creates a stable focal point.",
+            "what_could_be_improved": "Keep this off-center composition." if dist < 0.15 else "Consider cropping to place the subject on a third-line intersection."
+        })
+
+    # 2. Lighting & Exposure
+    light_sub = []
+    for k in ["brightness", "contrast", "highlights", "shadows", "ambiance"]:
+        lbl = "Exposure / Brightness" if k == "brightness" else "Tonal Contrast" if k == "contrast" else "Highlights & Whites" if k == "highlights" else "Shadows & Blacks" if k == "shadows" else "Ambiance / Tone Map"
+        data = get_aspect_data(k)
+        if data: light_sub.append({"key": k, "label": lbl, **data})
+
+    # 3. Focus & Sharpness
+    focus_sub = []
+    data_det = get_aspect_data("details")
+    if data_det: focus_sub.append({"key": "details", "label": "Details & Micro-sharpness", **data_det})
+    if advanced_cv and advanced_cv.get("sharpness"):
+        cv_s = advanced_cv.get("sharpness", {})
+        focus_sub.append({
+            "key": "sharpness", "label": "Edge Definition",
+            "rating": round(cv_s.get("score", 75)),
+            "what_works": "Edges are crisp and clear." if cv_s.get("score", 75) >= 70 else "Soft details create a gentle transition.",
+            "what_could_be_improved": "Focus looks solid." if cv_s.get("score", 75) >= 70 else "Increase detail sharpness."
+        })
+
+    # 4. Color & Tones
+    color_sub = []
+    for k in ["colour", "saturation", "warmth"]:
+        lbl = "Colour Palette Harmony" if k == "colour" else "Color Saturation" if k == "saturation" else "Warmth / White Balance"
+        data = get_aspect_data(k)
+        if data: color_sub.append({"key": k, "label": lbl, **data})
+
+    # 5. Subject & Story
+    subject_sub = []
+    data_wow = get_aspect_data("feel.wow_factor")
+    if data_wow: subject_sub.append({"key": "wow_factor", "label": "Wow Factor & Engagement", **data_wow})
+    data_emo = get_aspect_data("feel.emotional_impact")
+    if data_emo: subject_sub.append({"key": "emotional_impact", "label": "Emotional Impact", **data_emo})
+    if exif_analysis and exif_analysis.get("photographer_intention"):
+        subject_sub.append({
+            "key": "intention", "label": "Photographic Intent",
+            "rating": 85,
+            "what_works": f"Conveys intent: \"{exif_analysis.get('photographer_intention')}\"",
+            "what_could_be_improved": "Ensure all lighting and composition elements support this core intent."
+        })
+
+    # 6. Post-Processing
+    post_sub = []
+    post_score = 100 - len(suggested_edits) * 6
+    if exif_analysis and exif_analysis.get("diagnostics"):
+        st = exif_analysis.get("diagnostics", {}).get("status", "ok")
+        if st == "warning": post_score -= 15
+        elif st == "critical": post_score -= 30
+    post_score = max(30, min(100, post_score))
+    post_sub.append({
+        "key": "edits_needed", "label": "Slider Adjustments Needed",
+        "rating": post_score,
+        "what_works": "Minimal editing required." if len(suggested_edits) == 0 else f"Only {len(suggested_edits)} tweaks suggested.",
+        "what_could_be_improved": f"Apply tweaks: {', '.join(suggested_edits)}" if len(suggested_edits) > 0 else "No urgent edits."
+    })
+    if exif_analysis and exif_analysis.get("diagnostics"):
+        diag = exif_analysis.get("diagnostics", {})
+        post_sub.append({
+            "key": "exif_settings", "label": "Camera Settings Audit",
+            "rating": 95 if diag.get("status") == "ok" else 70 if diag.get("status") == "warning" else 45,
+            "what_works": "Optimal camera settings selected." if diag.get("status") == "ok" else "Exposure is acceptable.",
+            "what_could_be_improved": diag.get("issue") or "Verify camera settings."
+        })
+
+    # Group into the 6 major parameters
+    categories = [
+        {"id": "composition", "label": "Composition", "sub": comp_sub},
+        {"id": "lighting", "label": "Lighting & Exposure", "sub": light_sub},
+        {"id": "focus", "label": "Focus & Sharpness", "sub": focus_sub},
+        {"id": "color", "label": "Color & Tones", "sub": color_sub},
+        {"id": "subject", "label": "Subject & Story", "sub": subject_sub},
+        {"id": "post-processing", "label": "Post-Processing", "sub": post_sub}
+    ]
+
+    # Calculate overall rating and reviews for each category
+    for cat in categories:
+        valid_ratings = [s["rating"] for s in cat["sub"] if "rating" in s]
+        avg = round(sum(valid_ratings) / len(valid_ratings)) if valid_ratings else 70
+        cat["rating"] = avg
+        
+        works_list = [s["what_works"] for s in cat["sub"] if s.get("what_works") and len(s["what_works"]) > 3]
+        cat["what_works"] = " ".join(works_list) if works_list else "Technical elements are stable."
+        
+        imp_list = [s["what_could_be_improved"] for s in cat["sub"] if s.get("what_could_be_improved") and len(s["what_could_be_improved"]) > 3 and "No alignment adjustment" not in s["what_could_be_improved"] and "No urgent edits" not in s["what_could_be_improved"]]
+        cat["what_could_be_improved"] = " ".join(imp_list) if imp_list else "No major improvements needed."
+
+    # Build plain text lines
+    text_lines.extend(["", "Evaluation Categories Breakdown:", "---------------------------------"])
+    for cat in categories:
+        text_lines.extend([
+            f"Category: {cat['label']}",
+            f"  Overall Score: {cat['rating']}/100",
+            f"  What Works: {cat['what_works']}",
+            f"  What Could Be Improved: {cat['what_could_be_improved']}",
+            "  Sub-aspects:"
+        ])
+        for sub in cat["sub"]:
+            text_lines.extend([
+                f"    - {sub['label']}: {sub['rating']}/100",
+                f"      Works: {sub.get('what_works')}",
+                f"      Improve: {sub.get('what_could_be_improved')}"
+            ])
+        text_lines.append("")
     
     text_content = "\n".join(text_lines)
 
@@ -511,9 +253,8 @@ def generate_email_content(email_to: str, analysis_results: dict, image_bytes: b
 
     # Create HTML version with clean modern design
     aspects_html = ""
-    for key, data in aspects.items():
-        rating = data.get("rating", 0)
-        # Determine score colors
+    for cat in categories:
+        rating = cat["rating"]
         if rating >= 80:
             color = "#10B981"  # Emerald
         elif rating >= 70:
@@ -523,20 +264,46 @@ def generate_email_content(email_to: str, analysis_results: dict, image_bytes: b
         else:
             color = "#EF4444"  # Red
 
+        sub_html = ""
+        for sub in cat["sub"]:
+            sub_rating = sub["rating"]
+            if sub_rating >= 80:
+                sub_color = "#10B981"
+            elif sub_rating >= 70:
+                sub_color = "#6366F1"
+            elif sub_rating >= 50:
+                sub_color = "#F59E0B"
+            else:
+                sub_color = "#EF4444"
+            
+            sub_html += f"""
+            <div style="margin-top: 12px; padding: 12px; background-color: rgba(255,255,255,0.01); border-left: 3px solid {sub_color}; border-radius: 4px;">
+                <div style="font-weight: bold; font-size: 13px; color: #FFFFFF; text-align: left;">
+                    {sub['label']} <span style="float: right; color: {sub_color}; font-weight: bold;">{sub_rating}/100</span>
+                </div>
+                {f'<p style="margin: 4px 0 0 0; color: #BAC4D1; font-size: 12px; line-height: 1.4; text-align: left;"><strong>Works:</strong> {sub["what_works"]}</p>' if sub.get("what_works") else ''}
+                {f'<p style="margin: 4px 0 0 0; color: #BAC4D1; font-size: 12px; line-height: 1.4; text-align: left;"><strong>Improve:</strong> {sub["what_could_be_improved"]}</p>' if sub.get("what_could_be_improved") else ''}
+            </div>
+            """
+
         aspects_html += f"""
-        <div style="margin-bottom: 20px; padding: 18px; background-color: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255,255,255,0.05); border-left: 4px solid {color}; border-radius: 8px;">
-            <div style="margin-bottom: 10px; font-weight: bold; font-size: 16px; color: #FFFFFF;">
-                <span style="text-transform: capitalize; float: left;">{key}</span>
-                <span style="float: right; color: {color}; font-weight: 800; font-size: 16px;">{rating}<span style="font-size: 12px; color: #8F9CAE; font-weight: normal;"> / 100</span></span>
+        <div style="margin-bottom: 25px; padding: 20px; background-color: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255,255,255,0.05); border-left: 5px solid {color}; border-radius: 8px;">
+            <div style="margin-bottom: 12px; font-weight: bold; font-size: 17px; color: #FFFFFF; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 8px;">
+                <span style="float: left;">{cat['label']}</span>
+                <span style="float: right; color: {color}; font-weight: 800;">{rating}<span style="font-size: 12px; color: #8F9CAE; font-weight: normal;"> / 100</span></span>
                 <div style="clear: both;"></div>
             </div>
             <div style="margin-bottom: 8px; text-align: left;">
-                <strong style="color: #10B981; font-size: 13px; display: block; margin-bottom: 2px;">What Works</strong>
-                <p style="margin: 0; color: #BAC4D1; font-size: 13px; line-height: 1.4;">{data.get('what_works', '')}</p>
+                <strong style="color: #10B981; font-size: 13px; display: block; margin-bottom: 2px;">Overall What Works</strong>
+                <p style="margin: 0; color: #BAC4D1; font-size: 13px; line-height: 1.4;">{cat['what_works']}</p>
             </div>
-            <div style="text-align: left;">
-                <strong style="color: #F59E0B; font-size: 13px; display: block; margin-bottom: 2px;">What Could Be Done Better</strong>
-                <p style="margin: 0; color: #BAC4D1; font-size: 13px; line-height: 1.4;">{data.get('what_could_be_improved', '')}</p>
+            <div style="margin-bottom: 12px; text-align: left;">
+                <strong style="color: #F59E0B; font-size: 13px; display: block; margin-bottom: 2px;">Overall Areas for Improvement</strong>
+                <p style="margin: 0; color: #BAC4D1; font-size: 13px; line-height: 1.4;">{cat['what_could_be_improved']}</p>
+            </div>
+            <div style="margin-top: 15px;">
+                <strong style="color: #6366F1; font-size: 12px; display: block; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; text-align: left;">Sub-aspect breakdown</strong>
+                {sub_html}
             </div>
         </div>
         """
@@ -550,6 +317,160 @@ def generate_email_content(email_to: str, analysis_results: dict, image_bytes: b
         """
     if not edits_html:
         edits_html = "<p style='color: #8F9CAE; font-size: 14px;'>No specific edits suggested.</p>"
+
+    exif_html = ""
+    if exif_analysis:
+        settings = exif_analysis.get("camera_settings", {})
+        diag = exif_analysis.get("diagnostics", {})
+        diag_status = diag.get("status", "ok")
+        
+        # Color matching status
+        if diag_status == "critical":
+            status_color = "#EF4444"
+            bg_color = "rgba(239, 68, 68, 0.05)"
+            border_color = "rgba(239, 68, 68, 0.2)"
+        elif diag_status == "warning":
+            status_color = "#F59E0B"
+            bg_color = "rgba(245, 158, 11, 0.05)"
+            border_color = "rgba(245, 158, 11, 0.2)"
+        else:
+            status_color = "#10B981"
+            bg_color = "rgba(16, 185, 129, 0.05)"
+            border_color = "rgba(16, 185, 129, 0.2)"
+            
+        exif_html = f"""
+        <!-- EXIF metadata section -->
+        <tr>
+            <td style="padding: 20px 40px 10px 40px; border-top: 1px solid #1E293B;">
+                <h3 style="color: #FFFFFF; font-size: 18px; margin-top: 0; margin-bottom: 15px; text-align: left;">
+                    <span style="color: #10B981; margin-right: 10px; font-size: 20px;">📷</span> Camera Settings (EXIF)
+                </h3>
+                
+                <!-- LCD Screen style settings grid -->
+                <div style="background-color: #080A10; border: 1px solid #1E293B; border-radius: 8px; padding: 15px; margin-bottom: 15px;">
+                    <table width="100%" cellpadding="5" cellspacing="0" style="font-size: 13px; color: #BAC4D1;">
+                        <tr>
+                            <td width="33%"><strong>Shutter Speed</strong><br/><span style="font-size: 16px; color: #FFF; font-weight: bold;">{settings.get('shutter_speed') or 'N/A'}</span></td>
+                            <td width="33%"><strong>Aperture</strong><br/><span style="font-size: 16px; color: #FFF; font-weight: bold;">{settings.get('aperture') or 'N/A'}</span></td>
+                            <td width="34%"><strong>ISO</strong><br/><span style="font-size: 16px; color: #FFF; font-weight: bold;">{settings.get('iso') or 'N/A'}</span></td>
+                        </tr>
+                        <tr>
+                            <td style="padding-top: 10px;"><strong>Focal Length</strong><br/><span style="color: #FFF;">{settings.get('focal_length') or 'N/A'}</span></td>
+                            <td style="padding-top: 10px;" colspan="2"><strong>Camera & Lens</strong><br/><span style="color: #FFF;">{settings.get('camera') or 'Generic Camera'} {f'({settings.get("lens")})' if settings.get('lens') else ''}</span></td>
+                        </tr>
+                    </table>
+                </div>
+                
+                <!-- Diagnostic Card -->
+                <div style="padding: 15px; background-color: {bg_color}; border: 1px solid {border_color}; border-left: 4px solid {status_color}; border-radius: 6px; text-align: left;">
+                    <strong style="color: {status_color}; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px;">Settings Audit: {diag_status.upper()}</strong>
+                    <p style="margin: 5px 0; color: #FFF; font-size: 13px; font-weight: bold;">{diag.get('issue')}</p>
+                    <p style="margin: 0; color: #BAC4D1; font-size: 12px; line-height: 1.4;"><strong>Recommendation:</strong> {diag.get('suggestion')}</p>
+                </div>
+            </td>
+        </tr>
+        """
+
+    advanced_cv = analysis_results.get("advanced_cv")
+    cv_html = ""
+    if advanced_cv:
+        # Build color palette swatches HTML
+        palette_html = ""
+        for col in advanced_cv.get("color_palette", []):
+            palette_html += f"""
+            <div style="display: inline-block; margin-right: 12px; text-align: center;">
+                <div style="width: 32px; height: 32px; border-radius: 50%; background-color: {col['hex']}; border: 1px solid rgba(255,255,255,0.15); margin: 0 auto 4px auto;"></div>
+                <div style="font-size: 10px; color: #BAC4D1;">{col['percentage']}%</div>
+                <div style="font-size: 9px; color: #64748B; font-family: monospace;">{col['hex'].upper()}</div>
+            </div>
+            """
+            
+        # Build composition rules list
+        rules_html = ""
+        comp_rules = [
+            ("Rule of Thirds", advanced_cv.get("composition", {}).get("rule_of_thirds", {})),
+            ("Golden Ratio", advanced_cv.get("composition", {}).get("golden_ratio", {})),
+            ("Symmetry & Patterns", advanced_cv.get("composition", {}).get("symmetry_patterns", {})),
+            ("Framing", advanced_cv.get("composition", {}).get("framing", {})),
+            ("Negative Space", advanced_cv.get("composition", {}).get("negative_space", {})),
+            ("Leading Lines", advanced_cv.get("composition", {}).get("leading_lines", {}))
+        ]
+        for name, rule in comp_rules:
+            if rule:
+                score = rule.get("score", 0)
+                score_color = "#EF4444"
+                if score >= 75:
+                    score_color = "#10B981"
+                elif score >= 45:
+                    score_color = "#F59E0B"
+                rules_html += f"""
+                <tr style="border-bottom: 1px solid rgba(255,255,255,0.03);">
+                    <td style="padding: 8px 0; font-size: 13px; color: #FFFFFF; text-align: left;"><strong>{name}</strong></td>
+                    <td style="padding: 8px 0; font-size: 13px; color: {score_color}; text-align: right; font-weight: bold;">{score} / 100</td>
+                </tr>
+                <tr>
+                    <td colspan="2" style="padding-bottom: 8px; font-size: 12px; color: #BAC4D1; text-align: left; line-height: 1.4;">{rule.get('description', '')}</td>
+                </tr>
+                """
+
+        # Face/Horizon stats
+        centering = advanced_cv.get("subject_centering", {})
+        horizon = advanced_cv.get("horizon", {})
+        faces = advanced_cv.get("faces", [])
+        blur = advanced_cv.get("blur", {})
+        
+        cv_html = f"""
+        <!-- Advanced CV metrics section -->
+        <tr>
+            <td style="padding: 20px 40px 10px 40px; border-top: 1px solid #1E293B;">
+                <h3 style="color: #FFFFFF; font-size: 18px; margin-top: 0; margin-bottom: 15px; text-align: left;">
+                    <span style="color: #8B5CF6; margin-right: 10px; font-size: 20px;">⚙</span> Advanced Computer Vision Analytics
+                </h3>
+                
+                <!-- Color Palette swatches -->
+                <div style="background-color: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255,255,255,0.05); border-radius: 8px; padding: 15px; margin-bottom: 15px; text-align: left;">
+                    <strong style="color: #FFFFFF; font-size: 13px; display: block; margin-bottom: 10px;">Dominant Color Palette</strong>
+                    {palette_html}
+                </div>
+                
+                <!-- Heuristics grid -->
+                <div style="background-color: #080A10; border: 1px solid #1E293B; border-radius: 8px; padding: 15px; margin-bottom: 15px;">
+                    <table width="100%" cellpadding="5" cellspacing="0" style="font-size: 12px; color: #BAC4D1; text-align: left;">
+                        <tr>
+                            <td width="50%"><strong>Subject Centering</strong><br/>
+                                <span style="font-size: 14px; color: {'#10B981' if centering.get('is_centered') else '#F59E0B'}; font-weight: bold;">
+                                    { 'Centered' if centering.get('is_centered') else 'Off-Center' }
+                                </span>
+                            </td>
+                            <td width="50%"><strong>Horizon Level</strong><br/>
+                                <span style="font-size: 14px; color: { '#10B981' if not horizon.get('detected') or horizon.get('is_level') else '#EF4444' }; font-weight: bold;">
+                                    { 'Not Detected' if not horizon.get('detected') else ('Level' if horizon.get('is_level') else 'Tilted') }
+                                </span>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td style="padding-top: 10px;"><strong>Faces Detected</strong><br/>
+                                <span style="font-size: 14px; color: #FFF; font-weight: bold;">{len(faces)}</span>
+                            </td>
+                            <td style="padding-top: 10px;"><strong>Sky Coverage</strong><br/>
+                                <span style="font-size: 14px; color: #FFF; font-weight: bold;">{advanced_cv.get('sky_segmentation', {}).get('percentage', 0.0)}%</span>
+                            </td>
+                        </tr>
+                    </table>
+                </div>
+                
+                <!-- Sharpness detail -->
+                <div style="margin-bottom: 15px; text-align: left; font-size: 12px; color: #BAC4D1; line-height: 1.4;">
+                    <strong>Sharpness Audit:</strong> {blur.get('description', '')}
+                </div>
+                
+                <!-- Composition table -->
+                <table width="100%" cellpadding="0" cellspacing="0" style="margin-top: 15px;">
+                    {rules_html}
+                </table>
+            </td>
+        </tr>
+        """
 
     # Determine overall color
     overall_score = overall_rating * 10
@@ -589,6 +510,17 @@ def generate_email_content(email_to: str, analysis_results: dict, image_bytes: b
                 {image_html}
             </td>
         </tr>
+        <!-- First Impression -->
+        <tr>
+            <td style="padding: 20px 40px 20px 40px; border-top: 1px solid #1E293B; text-align: left;">
+                <h3 style="color: #FFFFFF; font-size: 18px; margin-top: 0; margin-bottom: 12px;">
+                    <span style="color: #6366F1; margin-right: 10px; font-size: 20px;">✨</span> First Impression
+                </h3>
+                <div style="margin: 0; color: #BAC4D1; font-size: 13px; line-height: 1.5; font-style: italic; background-color: rgba(255,255,255,0.01); padding: 15px; border-left: 4px solid #6366F1; border-radius: 6px;">
+                    "{analysis_results.get('first_impression', 'N/A')}"
+                </div>
+            </td>
+        </tr>
         <!-- Suggested Edits -->
         <tr>
             <td style="padding: 20px 40px 10px 40px; border-top: 1px solid #1E293B;">
@@ -600,6 +532,8 @@ def generate_email_content(email_to: str, analysis_results: dict, image_bytes: b
                 </ul>
             </td>
         </tr>
+        {exif_html}
+        {cv_html}
         <!-- Aspect Breakdowns -->
         <tr>
             <td style="padding: 20px 40px 40px 40px;">
@@ -737,6 +671,111 @@ def send_report_email_async(
             print(f"Failed to write simulation email: {err}")
 
 
+def extract_exif_data(image) -> dict:
+    """
+    Extracts primary, sub-IFD, and GPS EXIF metadata from PIL Image.
+    Returns a dictionary of tag name -> value.
+    """
+    exif_data = {}
+    try:
+        img_exif = image.getexif()
+        if img_exif is not None:
+            # 1. Primary tags
+            for key, val in img_exif.items():
+                tag_name = TAGS.get(key, str(key))
+                if tag_name != 'exif': # avoid raw offset dict
+                    exif_data[tag_name] = val
+            
+            # 2. Exif sub-IFD (detailed camera settings)
+            # 0x8769 is the offset for Exif sub-IFD
+            try:
+                exif_ifd = img_exif.get_ifd(0x8769)
+                if exif_ifd:
+                    for key, val in exif_ifd.items():
+                        tag_name = TAGS.get(key, str(key))
+                        exif_data[tag_name] = val
+            except Exception as e:
+                print(f"Error parsing sub-IFD EXIF: {e}")
+                
+            # 3. GPS Info (0x8825)
+            try:
+                gps_ifd = img_exif.get_ifd(0x8825)
+                if gps_ifd:
+                    for key, val in gps_ifd.items():
+                        tag_name = GPSTAGS.get(key, str(key))
+                        exif_data[tag_name] = val
+            except Exception as e:
+                print(f"Error parsing GPS EXIF: {e}")
+    except Exception as e:
+        print(f"Failed to extract EXIF: {e}")
+    return exif_data
+
+def format_shutter_speed(exposure_time) -> str:
+    if not exposure_time:
+        return None
+    try:
+        val = float(exposure_time)
+        if val <= 0:
+            return f"{val}s"
+        if val >= 1.0:
+            return f"{round(val, 1)}s"
+        # Convert to fraction (e.g. 1/250)
+        denom = round(1.0 / val)
+        return f"1/{denom}s"
+    except Exception:
+        return str(exposure_time)
+
+def get_exif_summary(exif_data: dict) -> dict:
+    # Helper to resolve IFDRational/bytes
+    def clean_val(val):
+        if isinstance(val, IFDRational):
+            return float(val) if val.denominator != 0 else 0.0
+        if isinstance(val, bytes):
+            return val.decode('utf-8', errors='ignore')
+        return val
+
+    exposure_time = clean_val(exif_data.get('ExposureTime'))
+    f_number = clean_val(exif_data.get('FNumber'))
+    iso = clean_val(exif_data.get('ISOSpeedRatings'))
+    focal_length = clean_val(exif_data.get('FocalLength'))
+    camera = clean_val(exif_data.get('Model') or exif_data.get('Make'))
+    lens = clean_val(exif_data.get('LensModel'))
+
+    if isinstance(iso, (list, tuple)) and len(iso) > 0:
+        iso = iso[0]
+
+    shutter_speed_str = format_shutter_speed(exposure_time)
+    aperture_str = f"f/{f_number}" if f_number else None
+    iso_str = f"ISO {iso}" if iso else None
+    focal_length_str = f"{round(focal_length)}mm" if focal_length else None
+
+    # Construct human readable text for Gemini
+    lines = []
+    for k, v in exif_data.items():
+        cleaned = clean_val(v)
+        if cleaned is not None:
+            lines.append(f"{k}: {cleaned}")
+    exif_text = "\n".join(lines)
+
+    return {
+        "raw": {
+            "exposure_time": exposure_time,
+            "f_number": f_number,
+            "iso": iso,
+            "focal_length": focal_length,
+            "camera": camera,
+            "lens": lens
+        },
+        "formatted": {
+            "shutter_speed": shutter_speed_str,
+            "aperture": aperture_str,
+            "iso": iso_str,
+            "focal_length": focal_length_str,
+            "camera": str(camera) if camera else None,
+            "lens": str(lens) if lens else None
+        },
+        "text": exif_text
+    }
 
 @app.get("/")
 def read_root():
@@ -752,24 +791,39 @@ async def analyze_image(
         # Validate file is an image
         if not file.content_type.startswith("image/"):
             raise HTTPException(status_code=400, detail="Uploaded file is not an image")
-            
+
         image_bytes = await file.read()
-        
+        image_stream = io.BytesIO(image_bytes)
+
+        with Image.open(image_stream) as image:
+            exif_data = extract_exif_data(image)
+
+        exif_summary = get_exif_summary(exif_data)
         # Check if Gemini API key is available
         api_key = os.environ.get("GEMINI_API_KEY")
         
         if api_key:
             try:
                 # Try real AI analysis
-                analysis_results = await analyze_gemini(image_bytes, api_key)
+                analysis_results = await analyze_gemini(image_bytes=image_bytes, exif=exif_summary["text"], api_key=api_key)
+                # Compute local advanced CV overlays for Gemini path
+                try:
+                    nparr = np.frombuffer(image_bytes, np.uint8)
+                    img_bgr = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+                    if img_bgr is not None:
+                        img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
+                        img_gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
+                        analysis_results["advanced_cv"] = analyze_advanced_cv(image_bytes, img_bgr, img_gray, img_rgb)
+                except Exception as cv_err:
+                    print(f"Failed to merge advanced CV into Gemini results: {cv_err}")
             except Exception as e:
                 # Log error and fallback
                 print(f"Gemini API failed: {e}. Falling back to computer vision...")
-                analysis_results = analyze_cv_heuristics(image_bytes)
+                analysis_results = analyze_cv_heuristics(image_bytes, exif_summary=exif_summary)
                 analysis_results["fallback_reason"] = str(e)
         else:
             # Fallback directly
-            analysis_results = analyze_cv_heuristics(image_bytes)
+            analysis_results = analyze_cv_heuristics(image_bytes, exif_summary=exif_summary)
             
         # Determine email sending status
         smtp_host = os.environ.get("SMTP_HOST")
