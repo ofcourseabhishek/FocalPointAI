@@ -63,7 +63,7 @@ out/
 .env.development.local
 .env.test.local
 .env.production.local
-backend/.env
+
 frontend/.env
 frontend/.env.local
 

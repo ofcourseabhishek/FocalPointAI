@@ -1,10 +1,7 @@
 import io
-import os
-import uvicorn
-import cv2
-import numpy as np
 
-import base64
+import uvicorn
+
 from PIL import Image
 from PIL.ExifTags import TAGS, GPSTAGS
 from PIL.TiffImagePlugin import IFDRational

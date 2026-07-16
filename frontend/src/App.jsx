@@ -6,13 +6,17 @@ import {
 } from 'lucide-react';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL?.replace(/\/$/, '') || 'http://127.0.0.1:8000';
+const SHOW_LEGACY_SCANNER = Boolean(import.meta.env.VITE_SHOW_LEGACY_SCANNER);
 
 const LOADING_STEPS = [
-  "Connecting to analysis server...",
-  "Analyzing Light & Exposure...",
-  "Analyzing Details & Composition...",
-  "Analyzing Colour & Hue...",
-  "Finalizing photography critique..."
+  "Reading image metadata",
+  "Detecting subject",
+  "Evaluating composition",
+  "Measuring exposure",
+  "Checking focus",
+  "Detecting lighting direction",
+  "Measuring color harmony",
+  "Generating professional critique"
 ];
 
 const DEMO_PRESETS = [
@@ -66,10 +70,15 @@ export default function App() {
   const [previewUrl, setPreviewUrl] = useState('');
   const [email, setEmail] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [loadingStep, setLoadingStep] = useState(0);
+  const [loadingStep, setLoadingStep] = useState(-1);
+  const [analysisProgress, setAnalysisProgress] = useState(0);
   const [analysisResult, setAnalysisResult] = useState(null);
   const [error, setError] = useState('');
   const [dragOver, setDragOver] = useState(false);
+  const [uploadState, setUploadState] = useState('idle');
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadError, setUploadError] = useState(null);
+  const [fileMetadata, setFileMetadata] = useState(null);
   const [activeTab, setActiveTab] = useState('composition');
   
   // Redesign custom features state
@@ -107,6 +116,10 @@ export default function App() {
     return () => window.removeEventListener('resize', updateImgDimensions);
   }, []);
 
+  useEffect(() => () => {
+    if (uploadIntervalRef.current) clearInterval(uploadIntervalRef.current);
+  }, []);
+
   // Quotes states
   const [quotesList, setQuotesList] = useState([
     { quote: "What i like about photographs is that they capture a moment that’s gone forever, impossible to reproduce.", author: "Karl Lagerfeld" },
@@ -124,6 +137,7 @@ export default function App() {
 
   const fileInputRef = useRef(null);
   const loadingIntervalRef = useRef(null);
+  const uploadIntervalRef = useRef(null);
 
   // Load quotes CSV on mount
   useEffect(() => {
@@ -176,10 +190,15 @@ export default function App() {
   // Cycle loading steps
   useEffect(() => {
     if (isLoading) {
-      setLoadingStep(0);
+      setLoadingStep(-1);
+      setAnalysisProgress(4);
       loadingIntervalRef.current = setInterval(() => {
-        setLoadingStep((prev) => (prev < LOADING_STEPS.length - 1 ? prev + 1 : prev));
-      }, 1800);
+        setLoadingStep((prev) => {
+          const next = Math.min(prev + 1, LOADING_STEPS.length - 1);
+          setAnalysisProgress(Math.min(92, 8 + ((next + 1) / LOADING_STEPS.length) * 84));
+          return next;
+        });
+      }, 500);
     } else {
       if (loadingIntervalRef.current) {
         clearInterval(loadingIntervalRef.current);
@@ -195,10 +214,74 @@ export default function App() {
   const handleDragOver = (e) => {
     e.preventDefault();
     setDragOver(true);
+    if (uploadState === 'idle' || uploadState === 'ready' || uploadState === 'error') setUploadState('dragging');
   };
 
-  const handleDragLeave = () => {
+  const handleDragLeave = (e) => {
+    if (e.currentTarget.contains(e.relatedTarget)) return;
     setDragOver(false);
+    if (uploadState === 'dragging') setUploadState(file ? 'ready' : 'idle');
+  };
+
+  const formatFileSize = (bytes) => `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+
+  const readImageDimensions = (url) => new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve({ width: image.naturalWidth, height: image.naturalHeight });
+    image.onerror = () => reject(new Error('The image could not be read.'));
+    image.src = url;
+  });
+
+  const processUploadFile = async (nextFile, demoId = null) => {
+    setSelectedDemoId(demoId);
+    setUploadError(null);
+    setUploadProgress(0);
+    setUploadState('validating');
+    await new Promise((resolve) => setTimeout(resolve, 300));
+
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+    if (!allowedTypes.includes(nextFile.type)) {
+      setFile(null);
+      setPreviewUrl('');
+      setUploadError({ type: 'unsupported', title: 'Unsupported file', message: 'Please upload JPG, PNG or WEBP.' });
+      setUploadState('error');
+      return;
+    }
+    if (nextFile.size > 15 * 1024 * 1024) {
+      setFile(null);
+      setPreviewUrl('');
+      setUploadError({ type: 'large', title: 'File exceeds 15 MB', current: formatFileSize(nextFile.size) });
+      setUploadState('error');
+      return;
+    }
+
+    const objectUrl = URL.createObjectURL(nextFile);
+    try {
+      const dimensions = await readImageDimensions(objectUrl);
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+      setFile(nextFile);
+      setPreviewUrl(objectUrl);
+      setFileMetadata({ ...dimensions, camera: 'Not available', size: formatFileSize(nextFile.size) });
+      setUploadState('uploading');
+      await new Promise((resolve) => {
+        let progress = 0;
+        uploadIntervalRef.current = setInterval(() => {
+          progress = Math.min(progress + 8, 100);
+          setUploadProgress(progress);
+          if (progress === 100) {
+            clearInterval(uploadIntervalRef.current);
+            resolve();
+          }
+        }, 70);
+      });
+      setUploadState('ready');
+    } catch {
+      URL.revokeObjectURL(objectUrl);
+      setFile(null);
+      setPreviewUrl('');
+      setUploadError({ type: 'unreadable', title: 'Unreadable image', message: 'The file appears damaged or incomplete. Please try another image.' });
+      setUploadState('error');
+    }
   };
 
   const handleDrop = (e) => {
@@ -206,24 +289,15 @@ export default function App() {
     setDragOver(false);
     setSelectedDemoId(null);
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      const droppedFile = e.dataTransfer.files[0];
-      if (droppedFile.type.startsWith('image/')) {
-        setFile(droppedFile);
-        setPreviewUrl(URL.createObjectURL(droppedFile));
-        setError('');
-      } else {
-        setError('Please drop an image file (PNG, JPG, WEBP).');
-      }
+      processUploadFile(e.dataTransfer.files[0]);
     }
   };
 
   const handleFileChange = (e) => {
     if (e.target.files && e.target.files[0]) {
-      const selectedFile = e.target.files[0];
-      setFile(selectedFile);
-      setPreviewUrl(URL.createObjectURL(selectedFile));
       setError('');
-      setSelectedDemoId(null);
+      processUploadFile(e.target.files[0]);
+      e.target.value = '';
     }
   };
 
@@ -239,12 +313,11 @@ export default function App() {
       const response = await fetch(preset.url);
       if (!response.ok) throw new Error("Could not retrieve preset photo");
       const blob = await response.blob();
-      const ext = preset.url.split('.').pop().split('?')[0] || 'jpg';
+      const ext = blob.type === 'image/png' ? 'png' : blob.type === 'image/webp' ? 'webp' : 'jpg';
       const demoFile = new File([blob], `demo_${preset.id}.${ext}`, { type: blob.type });
       
-      setFile(demoFile);
-      setPreviewUrl(URL.createObjectURL(demoFile));
       setEmail(preset.email);
+      await processUploadFile(demoFile, preset.id);
     } catch (err) {
       console.error(err);
       setError(`Failed to load preset photo: ${err.message}. Please upload your own instead.`);
@@ -270,6 +343,7 @@ export default function App() {
     setCurrentQuote(quotesList[randomIdx]);
 
     setIsLoading(true);
+    setUploadState('analyzing');
     setAnalysisResult(null);
     setError('');
 
@@ -278,6 +352,7 @@ export default function App() {
     formData.append('email', email);
 
     try {
+      const analysisStartedAt = Date.now();
       const response = await fetch(`${BACKEND_URL}/analyze`, {
         method: 'POST',
         body: formData,
@@ -289,10 +364,16 @@ export default function App() {
       }
 
       const result = await response.json();
+      const remainingAnimationTime = Math.max(0, 4500 - (Date.now() - analysisStartedAt));
+      if (remainingAnimationTime) await new Promise((resolve) => setTimeout(resolve, remainingAnimationTime));
+      setLoadingStep(LOADING_STEPS.length - 1);
+      setAnalysisProgress(100);
+      await new Promise((resolve) => setTimeout(resolve, 350));
       setAnalysisResult(result);
 
     } catch (err) {
       setError(err.message || 'Something went wrong. Please check that the backend is running.');
+      setUploadState('ready');
     } finally {
       setIsLoading(false);
     }
@@ -305,6 +386,10 @@ export default function App() {
     setError('');
     setActiveTab('composition');
     setSelectedDemoId(null);
+    setUploadState('idle');
+    setUploadProgress(0);
+    setUploadError(null);
+    setFileMetadata(null);
   };
 
   // Sub-aspect naming, icons, and sweet spots
@@ -548,19 +633,19 @@ export default function App() {
 
 
   return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: '100vh', width: '100%', maxWidth: '1280px', margin: '0 auto', padding: '24px', position: 'relative' }}>
+    <div className={`app-shell ${dragOver ? 'is-dragging' : ''}`} style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: '100vh', width: '100%', maxWidth: '1180px', margin: '0 auto', padding: '24px', position: 'relative' }}>
       
       {/* Header */}
-      <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: '20px', borderBottom: '1px solid var(--border-color)', marginBottom: '32px', zIndex: 10 }}>
+      <header className="site-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '48px', zIndex: 10 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <div style={{ width: '42px', height: '42px', borderRadius: '12px', background: 'linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 15px rgba(99,102,241,0.4)' }}>
             <Camera size={22} color="#fff" />
           </div>
           <div>
-            <h1 style={{ fontSize: '1.4rem', fontWeight: '900', letterSpacing: '-0.03em', margin: 0 }}>
+            <h1 style={{ fontSize: '1.4rem', fontWeight: '700', letterSpacing: '-0.03em', margin: 0 }}>
               Focalpoint<span className="gradient-text">.AI</span>
             </h1>
-            <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', fontWeight: '500', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Photography Critique & Mentor</p>
+            <p style={{ fontSize: '0.78rem', color: 'var(--text)', opacity: 0.6, fontWeight: '400', margin: 0, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Photography Critique & Mentor</p>
           </div>
         </div>
       </header>
@@ -578,18 +663,19 @@ export default function App() {
 
         {/* 1. Upload View */}
         {!isLoading && !analysisResult && (
-          <div style={{ maxWidth: '780px', margin: '0 auto', width: '100%', display: 'flex', flexDirection: 'column', gap: '32px' }} className="fade-in">
-            <div style={{ textAlign: 'center' }}>
-              <h2 style={{ fontSize: '2.8rem', fontWeight: '900', marginBottom: '12px', letterSpacing: '-0.04em', lineHeight: '1.2' }}>
-                Perfect Your Technique with <span className="gradient-text">Instant Critique</span>
+          <div style={{ maxWidth: '960px', margin: '0 auto', width: '100%', display: 'flex', flexDirection: 'column' }} className="fade-in upload-view">
+            <div className="hero-copy" style={{ textAlign: 'center' }}>
+              <h2 className="hero-title">
+                Perfect Your<br />
+                <span className="gradient-text">Photography</span>
               </h2>
-              <p style={{ color: 'var(--text-secondary)', fontSize: '1.1rem', lineHeight: '1.6', maxWidth: '640px', margin: '0 auto' }}>
-                Upload your photograph to get a complete technical audit on light, color balance, sharp details, and composition.
+              <p style={{ color: 'var(--text-muted)', fontSize: '1.25rem', lineHeight: '1.6', maxWidth: '600px', margin: '24px auto 0' }}>
+                Instant AI critique that helps you improve your light, color balance, sharpness, and composition.
               </p>
             </div>
 
             {/* Demo Presets Sandbox */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <div className="demo-section" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               <p style={{ fontSize: '0.88rem', fontWeight: '700', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '6px', margin: 0 }}>
                 <Sparkles size={16} className="text-secondary" />
                 No photo ready? Test with a Demo Image Sandbox:
@@ -600,9 +686,9 @@ export default function App() {
                     key={preset.id}
                     onClick={() => loadDemoPreset(preset)}
                     className={`demo-preset-card ${selectedDemoId === preset.id ? 'active' : ''}`}
-                    style={{ position: 'relative', height: '90px', display: 'flex', alignItems: 'center', padding: '8px' }}
+                    style={{ position: 'relative', height: '100px', display: 'flex', alignItems: 'center', padding: '16px' }}
                   >
-                    <img src={preset.url} alt={preset.name} style={{ width: '74px', height: '74px', borderRadius: '8px', objectFit: 'cover', border: '1px solid rgba(255,255,255,0.05)', marginRight: '12px' }} />
+                    <img src={preset.url} alt={preset.name} style={{ width: '64px', height: '64px', borderRadius: '8px', objectFit: 'cover', border: '1px solid rgba(255,255,255,0.05)', marginRight: '16px', flexShrink: 0 }} />
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <p style={{ fontWeight: '700', fontSize: '0.9rem', margin: 0, color: '#fff' }}>{preset.name}</p>
                       <p style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', margin: '2px 0 0 0', lineHeight: '1.3' }}>{preset.description}</p>
@@ -617,100 +703,165 @@ export default function App() {
               </div>
             </div>
 
-            <form onSubmit={handleAnalyze} className="glass-panel" style={{ padding: '36px', display: 'flex', flexDirection: 'column', gap: '28px' }}>
-              
-              {/* Drag and Drop Zone */}
-              <div 
+            <form
+              onSubmit={handleAnalyze}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+              className={`glass-panel upload-card upload-state-${uploadState}`}
+            >
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleFileChange}
+                accept="image/jpeg,image/png,image/webp"
+                style={{ display: 'none' }}
+              />
+
+              {uploadState === 'idle' && (
+                <div className="upload-state-view upload-idle" onClick={handleBrowseClick}>
+                  <div className="upload-icon"><UploadCloud size={48} /></div>
+                  <div className="upload-copy">
+                    <h3>Drag &amp; Drop Your Photograph</h3>
+                    <p>Supports JPG, PNG, WEBP</p>
+                    <p>Maximum file size: 15 MB</p>
+                  </div>
+                  <div className="upload-or"><span>OR</span></div>
+                  <button type="button" className="btn-secondary browse-button" onClick={(e) => { e.stopPropagation(); handleBrowseClick(); }}>
+                    Browse Files
+                  </button>
+                </div>
+              )}
+
+              {uploadState === 'dragging' && (
+                <div className="upload-state-view upload-dragging">
+                  <div className="drop-arrow">↓</div>
+                  <h3>Drop your image here</h3>
+                  <p>Release to upload</p>
+                </div>
+              )}
+
+              {uploadState === 'validating' && (
+                <div className="upload-state-view upload-validating">
+                  <h3>Checking image...</h3>
+                  <div className="validation-blocks" aria-label="Validating image">
+                    {Array.from({ length: 10 }).map((_, index) => <span key={index} />)}
+                  </div>
+                  <div className="validation-list">
+                    <span>Extension</span><span>File size</span><span>Readable image</span><span>Metadata</span>
+                  </div>
+                </div>
+              )}
+
+              {uploadState === 'uploading' && (
+                <div className="upload-state-view upload-progress-view">
+                  <h3>Uploading</h3>
+                  <div className="upload-progress-track"><span style={{ width: `${uploadProgress}%` }} /></div>
+                  <strong className="upload-percentage">{uploadProgress}%</strong>
+                  <p className="upload-file-name">{file?.name}</p>
+                  <p>{file ? formatFileSize(file.size) : ''}</p>
+                </div>
+              )}
+
+              {uploadState === 'ready' && previewUrl && (
+                <div className="upload-state-view upload-ready">
+                  <div className="ready-preview"><img src={previewUrl} alt="Upload preview" /></div>
+                  <div className="ready-details">
+                    <div><span>File</span><strong>{file?.name}</strong></div>
+                    <div><span>Dimensions</span><strong>{fileMetadata?.width}×{fileMetadata?.height}</strong></div>
+                    <div><span>Camera</span><strong>{fileMetadata?.camera}</strong></div>
+                    <div><span>Size</span><strong>{fileMetadata?.size}</strong></div>
+                  </div>
+                  <div className="ready-status"><CheckCircle size={20} /> Ready for Analysis</div>
+
+                  <div className="ready-email">
+                    <label htmlFor="email"><Mail size={16} /> Your Email Address</label>
+                    <input id="email" type="email" placeholder="photographer@focalpoint.ai" value={email} onChange={(e) => setEmail(e.target.value)} className="form-input" required />
+                  </div>
+
+                  <div className="ready-actions">
+                    <button type="button" className="btn-secondary" onClick={handleBrowseClick}>Change Photo</button>
+                    <button type="submit" className="btn-primary analyze-button"><Sparkles size={20} />Analyze Photograph</button>
+                  </div>
+                </div>
+              )}
+
+              {uploadState === 'error' && (
+                <div className="upload-state-view upload-error-view">
+                  <AlertTriangle size={40} />
+                  <h3>{uploadError?.title}</h3>
+                  {uploadError?.type === 'large' ? (
+                    <div className="size-error-details">
+                      <div><span>Maximum supported</span><strong>15 MB</strong></div>
+                      <div><span>Current</span><strong>{uploadError.current}</strong></div>
+                    </div>
+                  ) : <p>{uploadError?.message}</p>}
+                  <button type="button" className="btn-secondary" onClick={handleBrowseClick}>Try Again</button>
+                </div>
+              )}
+
+              {/* Retain native drag events across every visual state. */}
+              <div
                 onDragOver={handleDragOver}
                 onDragLeave={handleDragLeave}
                 onDrop={handleDrop}
-                onClick={handleBrowseClick}
-                style={{
-                  height: '260px',
-                  borderRadius: '16px',
-                  border: `2px dashed ${dragOver ? 'var(--primary)' : 'var(--border-color)'}`,
-                  background: dragOver ? 'rgba(99, 102, 241, 0.04)' : 'rgba(255, 255, 255, 0.01)',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  cursor: 'pointer',
-                  transition: 'var(--transition-smooth)',
-                  position: 'relative',
-                  overflow: 'hidden'
-                }}
-              >
-                <input 
-                  type="file" 
-                  ref={fileInputRef} 
-                  onChange={handleFileChange} 
-                  accept="image/*" 
-                  style={{ display: 'none' }} 
-                />
-
-                {previewUrl ? (
-                  <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
-                    <img 
-                      src={previewUrl} 
-                      alt="Upload Preview" 
-                      style={{ maxWidth: '100%', maxHeight: '100%', borderRadius: '12px', objectFit: 'contain', boxShadow: '0 10px 30px rgba(0,0,0,0.6)' }} 
-                    />
-                    <div style={{ position: 'absolute', bottom: '16px', right: '16px', backgroundColor: 'rgba(15, 23, 42, 0.85)', backdropFilter: 'blur(10px)', padding: '8px 16px', borderRadius: '20px', fontSize: '0.8rem', border: '1px solid var(--border-color)', fontWeight: '600', color: '#fff' }}>
-                      Click to Change
-                    </div>
-                  </div>
-                ) : (
-                  <div style={{ textAlign: 'center', padding: '24px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '14px' }}>
-                    <div style={{ width: '64px', height: '64px', borderRadius: '50%', backgroundColor: 'rgba(99, 102, 241, 0.06)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)', marginBottom: '4px' }}>
-                      <UploadCloud size={32} />
-                    </div>
-                    <div>
-                      <p style={{ fontWeight: '700', fontSize: '1.1rem', color: '#fff', marginBottom: '4px' }}>Drag & drop your photograph here</p>
-                      <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>Supports PNG, JPG, WEBP formats (max 15MB)</p>
-                    </div>
-                    <button type="button" className="btn-secondary" style={{ padding: '10px 22px', fontSize: '0.88rem', marginTop: '6px' }}>
-                      Browse Files
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              {/* Email Input */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                <label style={{ fontSize: '0.9rem', fontWeight: '700', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '6px' }} htmlFor="email">
-                  <Mail size={16} className="text-secondary" />
-                  Your Email Address
-                </label>
-                <div style={{ position: 'relative' }}>
-                  <input 
-                    id="email"
-                    type="email" 
-                    placeholder="photographer@focalpoint.ai" 
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="form-input"
-                    required
-                  />
-                </div>
-                <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>We use your email to tie your analysis critiques together.</span>
-              </div>
-
-              {/* Submit Button */}
-              <button 
-                type="submit" 
-                className="btn-primary" 
-                style={{ width: '100%', justifyContent: 'center', padding: '16px', fontSize: '1.05rem', marginTop: '4px' }}
-                disabled={!file}
-              >
-                <Sparkles size={20} />
-                Analyze Photograph
-              </button>
+                className="upload-drop-capture"
+                aria-hidden="true"
+              />
             </form>
           </div>
         )}
 
-        {/* 2. Loading Scan View */}
+        {/* 2. Analysis Thinking Experience */}
         {isLoading && (
+          <div className="analysis-loading fade-in">
+            <div className="analysis-photo">
+              {previewUrl && <img src={previewUrl} alt="Photograph being analyzed" />}
+              <div className="analysis-scan-line" />
+              <span>AI VISUAL INSPECTION</span>
+            </div>
+
+            <section className="analysis-thinking-card" aria-live="polite">
+              <div className="analysis-loading-heading">
+                <div>
+                  <span className="analysis-eyebrow">FocalPoint AI</span>
+                  <h2>Analyzing {file?.name || 'your photograph'}</h2>
+                </div>
+                <strong>{Math.round(analysisProgress)}%</strong>
+              </div>
+
+              <div className="analysis-progress-track">
+                <span style={{ width: `${analysisProgress}%` }} />
+              </div>
+
+              <div className="analysis-step-list">
+                {LOADING_STEPS.map((step, index) => {
+                  const complete = index <= loadingStep;
+                  const active = index === loadingStep + 1 || (index === loadingStep && index === LOADING_STEPS.length - 1 && analysisProgress < 100);
+                  return (
+                    <div key={step} className={`analysis-step ${complete ? 'complete' : ''} ${active ? 'active' : ''}`}>
+                      <span className="analysis-step-icon">{complete ? <Check size={15} /> : <i />}</span>
+                      <span>{step}{active ? '…' : ''}</span>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <p className="analysis-status">
+                {analysisProgress === 100 ? 'Critique complete. Preparing your dashboard…' : 'Generating a professional, actionable critique…'}
+              </p>
+            </section>
+
+            {currentQuote && (
+              <blockquote className="analysis-quote">
+                “{currentQuote.quote}” <span>— {currentQuote.author}</span>
+              </blockquote>
+            )}
+          </div>
+        )}
+
+        {/* Previous scanner retained temporarily for reference, but no longer rendered. */}
+        {SHOW_LEGACY_SCANNER && isLoading && (
           <div style={{ maxWidth: '520px', margin: '0 auto', width: '100%', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '36px', padding: '40px 0' }} className="fade-in">
             
             {/* Visual Pulse / Scanner Frame */}
