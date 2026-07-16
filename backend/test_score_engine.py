@@ -70,16 +70,10 @@ class ScoreEngineTests(unittest.TestCase):
         result = enforce_authoritative_scores(gemini, self.local, engine)
 
         self.assertEqual(result["aspects"]["brightness"]["rating"], 72)
-        self.assertEqual(
-            result["aspects"]["composition"]["rating"],
-            engine["categories"]["composition"],
-        )
+        self.assertEqual(result["aspects"]["composition"]["rating"], engine["categories"]["composition"])
         self.assertEqual(result["overall_rating"], round(engine["overall"] / 10, 1))
         self.assertEqual(result["exif_analysis"], self.local["exif_analysis"])
-        self.assertEqual(
-            result["aspects"]["brightness"]["what_works"],
-            "Gemini explanation.",
-        )
+        self.assertEqual(result["aspects"]["brightness"]["what_works"], "Gemini explanation.")
 
     def test_context_is_compact_and_contains_authoritative_evidence(self):
         engine = build_score_engine(self.local, self.exif)

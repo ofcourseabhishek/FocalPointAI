@@ -21,14 +21,8 @@ class GeminiErrorClassificationTests(unittest.TestCase):
             classify_gemini_error(HTTPException(status_code=403, detail="Forbidden")),
             "authentication_error",
         )
-        self.assertEqual(
-            classify_gemini_error(TimeoutError("Request timed out")),
-            "timeout",
-        )
-        self.assertEqual(
-            classify_gemini_error(RuntimeError("Bad response")),
-            "failed",
-        )
+        self.assertEqual(classify_gemini_error(TimeoutError("Request timed out")), "timeout")
+        self.assertEqual(classify_gemini_error(RuntimeError("Bad response")), "failed")
 
 
 if __name__ == "__main__":
