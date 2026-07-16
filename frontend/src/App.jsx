@@ -492,12 +492,14 @@ export default function App() {
           what_could_be_improved: cv.horizon.is_level ? "No alignment adjustment needed." : "Rotate the image slightly to level the horizon line."
         }));
       }
-      if (cv.subject_centering) {
-        const isThirds = cv.subject_centering.thirds_distance < 0.15;
+      const thirdsScore = Number(cv.composition?.rule_of_thirds?.score);
+      if (Number.isFinite(thirdsScore)) {
+        const normalizedThirdsScore = Math.max(0, Math.min(100, Math.round(thirdsScore)));
+        const isThirds = normalizedThirdsScore >= 70;
         compSub.push(withEdit({
           key: 'thirds',
           label: 'Rule of Thirds Alignment',
-          rating: Math.max(50, Math.min(100, Math.round(100 - cv.subject_centering.thirds_distance * 100))),
+          rating: normalizedThirdsScore,
           what_works: isThirds ? "Subject placement aligns beautifully with the Rule of Thirds intersections." : "Centering creates a stable and classic focal point.",
           what_could_be_improved: isThirds ? "Keep this off-center composition." : "Consider cropping slightly to place the main subject elements on a vertical third line."
         }));
