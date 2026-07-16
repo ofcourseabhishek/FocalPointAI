@@ -3,9 +3,31 @@ import re
 import httpx
 from fastapi import HTTPException
 import json
+import os
 
 
-async def analyze_gemini(image_bytes: bytes, exif: str, api_key: str) -> dict:
+def classify_gemini_error(error: Exception) -> str:
+    """Map Gemini failures to a stable, client-facing status value."""
+    status_code = getattr(error, "status_code", None)
+    detail = str(getattr(error, "detail", error)).lower()
+
+    if status_code == 429 or "resource_exhausted" in detail or "quota" in detail:
+        return "rate_limited"
+    if status_code in (401, 403):
+        return "authentication_error"
+    if "timeout" in detail or "timed out" in detail:
+        return "timeout"
+    if isinstance(status_code, int) and status_code >= 500:
+        return "service_unavailable"
+    return "failed"
+
+
+async def analyze_gemini(
+    image_bytes: bytes,
+    analysis_context: dict,
+    api_key: str,
+    mime_type: str = "image/jpeg",
+) -> dict:
     """
     Call Gemini API to perform multi-modal analysis on the image.
     """
@@ -18,17 +40,26 @@ async def analyze_gemini(image_bytes: bytes, exif: str, api_key: str) -> dict:
         "Content-Type": "application/json"
     }
 
-    with open("prompt.txt", "r") as f:
+    prompt_path = os.path.join(os.path.dirname(__file__), "prompt.txt")
+    with open(prompt_path, "r", encoding="utf-8") as f:
         prompt = f.read()
+
+    context_json = json.dumps(analysis_context, ensure_ascii=False, indent=2)
 
     payload = {
         "contents": [
             {
                 "parts": [
-                    {"text": f"{prompt}\n\nImage EXIF Metadata:\n{exif}"},
+                    {
+                        "text": (
+                            f"{prompt}\n\n"
+                            "APPLICATION-COMPUTED EVIDENCE AND SCORES:\n"
+                            f"{context_json}"
+                        )
+                    },
                     {
                         "inlineData": {
-                            "mimeType": "image/jpeg",
+                            "mimeType": mime_type,
                             "data": base64_image,
 
                         }

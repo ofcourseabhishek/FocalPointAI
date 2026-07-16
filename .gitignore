@@ -71,6 +71,3 @@ frontend/.env.local
 backend/email_simulation.html
 backend/email_simulation_*.html
 *.html_sim
-backend/test_api.py
-backend/test_cv_local.py
-backend/test_simulation.html
