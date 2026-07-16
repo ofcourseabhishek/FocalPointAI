@@ -1,4 +1,7 @@
+import base64
+import html
 import io
+import os
 
 import uvicorn
 
@@ -47,6 +50,20 @@ def generate_email_content(email_to: str, analysis_results: dict, image_bytes: b
     suggested_edits = analysis_results.get("suggested_edits", [])
     # Helper: extract plain text regardless of whether edits are flat strings or {key, text} dicts
     def edit_text(e): return e["text"] if isinstance(e, dict) else e
+
+    def html_text(value, fallback="N/A"):
+        """Escape dynamic report content before inserting it into email HTML."""
+        if value is None or value == "":
+            value = fallback
+        return html.escape(str(value), quote=True)
+
+    def score_color(score):
+        """Match the dashboard's success/warning/danger score bands."""
+        if score >= 80:
+            return "#1B6A55"
+        if score >= 60:
+            return "#F59E0B"
+        return "#EF4444"
     aspects = analysis_results.get("aspects", {})
     exif_analysis = analysis_results.get("exif_analysis")
 
@@ -234,7 +251,7 @@ def generate_email_content(email_to: str, analysis_results: dict, image_bytes: b
     
     text_content = "\n".join(text_lines)
 
-    # Construct embedded image HTML showcase
+    # Construct the same dark photograph stage used by the dashboard.
     image_html = ""
     if image_bytes:
         if is_simulation:
@@ -246,64 +263,55 @@ def generate_email_content(email_to: str, analysis_results: dict, image_bytes: b
             image_src = "cid:analyzed_image"
             
         image_html = f"""
-        <!-- Embedded Image showcase -->
-        <div style="margin: 15px auto 0 auto; max-width: 400px; border-radius: 8px; overflow: hidden; border: 1px solid #1E293B; background-color: #000; padding: 4px; text-align: center;">
-            <img src="{image_src}" alt="Analyzed Photograph" style="max-width: 100%; max-height: 300px; height: auto; object-fit: contain; display: block; margin: 0 auto; border-radius: 6px;" />
+        <div style="background-color:#020306;border:1px solid #23343C;border-radius:12px;padding:8px;text-align:center;">
+            <img src="{image_src}" alt="Analyzed photograph" width="480" style="display:block;width:100%;max-width:480px;max-height:430px;height:auto;margin:0 auto;border:0;border-radius:8px;object-fit:contain;" />
         </div>
+        <p style="margin:10px 2px 0;color:#94A3B8;font-size:11px;line-height:16px;text-align:left;overflow-wrap:anywhere;">{html_text(filename)}</p>
         """
 
-    # Create HTML version with clean modern design
+    # Build email-safe dashboard cards. Inline styles and table layout keep the
+    # report consistent across Gmail, Outlook, and the simulation preview.
     aspects_html = ""
     for cat in categories:
         rating = cat["rating"]
-        if rating >= 80:
-            color = "#10B981"  # Emerald
-        elif rating >= 70:
-            color = "#6366F1"  # Indigo
-        elif rating >= 50:
-            color = "#F59E0B"  # Amber
-        else:
-            color = "#EF4444"  # Red
+        color = score_color(rating)
 
         sub_html = ""
         for sub in cat["sub"]:
             sub_rating = sub["rating"]
-            if sub_rating >= 80:
-                sub_color = "#10B981"
-            elif sub_rating >= 70:
-                sub_color = "#6366F1"
-            elif sub_rating >= 50:
-                sub_color = "#F59E0B"
-            else:
-                sub_color = "#EF4444"
+            sub_color = score_color(sub_rating)
+            suggested_hint = sub.get("suggested_edit_hint")
             
             sub_html += f"""
-            <div style="margin-top: 12px; padding: 12px; background-color: rgba(255,255,255,0.01); border-left: 3px solid {sub_color}; border-radius: 4px;">
-                <div style="font-weight: bold; font-size: 13px; color: #FFFFFF; text-align: left;">
-                    {sub['label']} <span style="float: right; color: {sub_color}; font-weight: bold;">{sub_rating}/100</span>
+            <div style="margin-top:12px;padding:14px;background-color:#122129;border:1px solid #23343C;border-left:4px solid {sub_color};border-radius:10px;">
+                <div style="font-weight:800;font-size:14px;line-height:20px;color:#F8FAFC;text-align:left;">
+                    {html_text(sub['label'])} <span style="float:right;color:{sub_color};font-weight:800;font-size:15px;">{sub_rating}<span style="color:#94A3B8;font-size:11px;font-weight:600;"> / 100</span></span>
                 </div>
-                {f'<p style="margin: 4px 0 0 0; color: #BAC4D1; font-size: 12px; line-height: 1.4; text-align: left;"><strong>Works:</strong> {sub["what_works"]}</p>' if sub.get("what_works") else ''}
-                {f'<p style="margin: 4px 0 0 0; color: #BAC4D1; font-size: 12px; line-height: 1.4; text-align: left;"><strong>Improve:</strong> {sub["what_could_be_improved"]}</p>' if sub.get("what_could_be_improved") else ''}
+                <div style="clear:both;"></div>
+                <div style="height:6px;background-color:#26353D;border-radius:999px;margin:10px 0 12px;overflow:hidden;"><div style="height:6px;width:{max(0, min(100, sub_rating))}%;background-color:{sub_color};border-radius:999px;"></div></div>
+                {f'<p style="margin:0 0 7px;color:#94A3B8;font-size:12px;line-height:18px;text-align:left;"><strong style="color:#4EAA8C;text-transform:uppercase;letter-spacing:.04em;font-size:10px;">What works</strong><br>{html_text(sub["what_works"])}</p>' if sub.get("what_works") else ''}
+                {f'<p style="margin:0;color:#94A3B8;font-size:12px;line-height:18px;text-align:left;"><strong style="color:#F59E0B;text-transform:uppercase;letter-spacing:.04em;font-size:10px;">Area to improve</strong><br>{html_text(sub["what_could_be_improved"])}</p>' if sub.get("what_could_be_improved") else ''}
+                {f'<p style="margin:10px 0 0;padding:9px 11px;background-color:#17243D;border-left:3px solid #5E69D8;border-radius:7px;color:#B8C0EE;font-size:12px;line-height:18px;text-align:left;"><strong style="color:#8D96EC;">Suggested edit</strong><br>{html_text(suggested_hint)}</p>' if suggested_hint else ''}
             </div>
             """
 
         aspects_html += f"""
-        <div style="margin-bottom: 25px; padding: 20px; background-color: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255,255,255,0.05); border-left: 5px solid {color}; border-radius: 8px;">
-            <div style="margin-bottom: 12px; font-weight: bold; font-size: 17px; color: #FFFFFF; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 8px;">
-                <span style="float: left;">{cat['label']}</span>
-                <span style="float: right; color: {color}; font-weight: 800;">{rating}<span style="font-size: 12px; color: #8F9CAE; font-weight: normal;"> / 100</span></span>
-                <div style="clear: both;"></div>
+        <div style="margin-bottom:18px;padding:20px;background-color:#0E1D24;border:1px solid #23343C;border-left:6px solid {color};border-radius:14px;">
+            <div style="margin-bottom:14px;font-weight:800;font-size:17px;line-height:24px;color:#F8FAFC;border-bottom:1px solid #23343C;padding-bottom:12px;">
+                <span style="float:left;">{html_text(cat['label'])}</span>
+                <span style="float:right;color:{color};font-weight:900;">{rating}<span style="font-size:11px;color:#94A3B8;font-weight:600;"> / 100</span></span>
+                <div style="clear:both;"></div>
             </div>
-            <div style="margin-bottom: 8px; text-align: left;">
-                <strong style="color: #10B981; font-size: 13px; display: block; margin-bottom: 2px;">Overall What Works</strong>
-                <p style="margin: 0; color: #BAC4D1; font-size: 13px; line-height: 1.4;">{cat['what_works']}</p>
+            <div style="margin-bottom:10px;text-align:left;">
+                <strong style="color:#4EAA8C;font-size:10px;display:block;margin-bottom:3px;text-transform:uppercase;letter-spacing:.05em;">What works</strong>
+                <p style="margin:0;color:#CBD5E1;font-size:13px;line-height:19px;">{html_text(cat['what_works'])}</p>
             </div>
-            <div style="margin-bottom: 12px; text-align: left;">
-                <strong style="color: #F59E0B; font-size: 13px; display: block; margin-bottom: 2px;">Overall Areas for Improvement</strong>
-                <p style="margin: 0; color: #BAC4D1; font-size: 13px; line-height: 1.4;">{cat['what_could_be_improved']}</p>
+            <div style="margin-bottom:14px;text-align:left;">
+                <strong style="color:#F59E0B;font-size:10px;display:block;margin-bottom:3px;text-transform:uppercase;letter-spacing:.05em;">Areas for improvement</strong>
+                <p style="margin:0;color:#CBD5E1;font-size:13px;line-height:19px;">{html_text(cat['what_could_be_improved'])}</p>
             </div>
-            <div style="margin-top: 15px;">
-                <strong style="color: #6366F1; font-size: 12px; display: block; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; text-align: left;">Sub-aspect breakdown</strong>
+            <div style="margin-top:16px;">
+                <strong style="color:#8D96EC;font-size:10px;display:block;margin-bottom:7px;text-transform:uppercase;letter-spacing:.08em;text-align:left;">Sub-aspect breakdown</strong>
                 {sub_html}
             </div>
         </div>
@@ -312,12 +320,12 @@ def generate_email_content(email_to: str, analysis_results: dict, image_bytes: b
     edits_html = ""
     for edit in suggested_edits:
         edits_html += f"""
-        <li style="margin-bottom: 8px; color: #BAC4D1; font-size: 14px; line-height: 1.4; text-align: left;">
-            <span style="color: #8B5CF6; margin-right: 8px;">✔</span> {edit_text(edit)}
-        </li>
+        <div style="margin-bottom:10px;padding:12px 14px;background-color:#122129;border:1px solid #23343C;border-left:4px solid #5E69D8;border-radius:9px;color:#CBD5E1;font-size:13px;line-height:19px;text-align:left;">
+            <span style="display:block;color:#8D96EC;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px;">Suggested adjustment</span>{html_text(edit_text(edit))}
+        </div>
         """
     if not edits_html:
-        edits_html = "<p style='color: #8F9CAE; font-size: 14px;'>No specific edits suggested.</p>"
+        edits_html = "<p style='margin:0;color:#94A3B8;font-size:13px;'>No specific edits suggested.</p>"
 
     exif_html = ""
     if exif_analysis:
@@ -328,45 +336,38 @@ def generate_email_content(email_to: str, analysis_results: dict, image_bytes: b
         # Color matching status
         if diag_status == "critical":
             status_color = "#EF4444"
-            bg_color = "rgba(239, 68, 68, 0.05)"
-            border_color = "rgba(239, 68, 68, 0.2)"
+            bg_color = "#29191C"
+            border_color = "#643039"
         elif diag_status == "warning":
             status_color = "#F59E0B"
-            bg_color = "rgba(245, 158, 11, 0.05)"
-            border_color = "rgba(245, 158, 11, 0.2)"
+            bg_color = "#292317"
+            border_color = "#654B17"
         else:
-            status_color = "#10B981"
-            bg_color = "rgba(16, 185, 129, 0.05)"
-            border_color = "rgba(16, 185, 129, 0.2)"
+            status_color = "#4EAA8C"
+            bg_color = "#142A27"
+            border_color = "#275C50"
             
         exif_html = f"""
-        <!-- EXIF metadata section -->
         <tr>
-            <td style="padding: 20px 40px 10px 40px; border-top: 1px solid #1E293B;">
-                <h3 style="color: #FFFFFF; font-size: 18px; margin-top: 0; margin-bottom: 15px; text-align: left;">
-                    <span style="color: #10B981; margin-right: 10px; font-size: 20px;">📷</span> Camera Settings (EXIF)
-                </h3>
-                
-                <!-- LCD Screen style settings grid -->
-                <div style="background-color: #080A10; border: 1px solid #1E293B; border-radius: 8px; padding: 15px; margin-bottom: 15px;">
-                    <table width="100%" cellpadding="5" cellspacing="0" style="font-size: 13px; color: #BAC4D1;">
+            <td class="section-pad" style="padding:24px 32px 8px;">
+                <p style="margin:0 0 12px;color:#F8FAFC;font-size:15px;line-height:22px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;">Camera settings <span style="color:#5E69D8;">(EXIF)</span></p>
+                <div style="background-color:#0A1419;border:1px solid #23343C;border-radius:12px;padding:14px;margin-bottom:12px;">
+                    <table role="presentation" width="100%" cellpadding="6" cellspacing="0" style="font-size:12px;color:#94A3B8;text-align:center;">
                         <tr>
-                            <td width="33%"><strong>Shutter Speed</strong><br/><span style="font-size: 16px; color: #FFF; font-weight: bold;">{settings.get('shutter_speed') or 'N/A'}</span></td>
-                            <td width="33%"><strong>Aperture</strong><br/><span style="font-size: 16px; color: #FFF; font-weight: bold;">{settings.get('aperture') or 'N/A'}</span></td>
-                            <td width="34%"><strong>ISO</strong><br/><span style="font-size: 16px; color: #FFF; font-weight: bold;">{settings.get('iso') or 'N/A'}</span></td>
+                            <td width="33%" style="text-transform:uppercase;font-size:9px;letter-spacing:.05em;">Shutter<br><span style="font-size:17px;line-height:26px;color:#38BDF8;font-weight:900;text-transform:none;">{html_text(settings.get('shutter_speed'))}</span></td>
+                            <td width="33%" style="text-transform:uppercase;font-size:9px;letter-spacing:.05em;">Aperture<br><span style="font-size:17px;line-height:26px;color:#4EAA8C;font-weight:900;text-transform:none;">{html_text(settings.get('aperture'))}</span></td>
+                            <td width="34%" style="text-transform:uppercase;font-size:9px;letter-spacing:.05em;">ISO<br><span style="font-size:17px;line-height:26px;color:#F59E0B;font-weight:900;text-transform:none;">{html_text(settings.get('iso'))}</span></td>
                         </tr>
                         <tr>
-                            <td style="padding-top: 10px;"><strong>Focal Length</strong><br/><span style="color: #FFF;">{settings.get('focal_length') or 'N/A'}</span></td>
-                            <td style="padding-top: 10px;" colspan="2"><strong>Camera & Lens</strong><br/><span style="color: #FFF;">{settings.get('camera') or 'Generic Camera'} {f'({settings.get("lens")})' if settings.get('lens') else ''}</span></td>
+                            <td style="padding-top:10px;border-top:1px solid #23343C;">Focal length<br><span style="color:#F8FAFC;font-weight:700;">{html_text(settings.get('focal_length'))}</span></td>
+                            <td style="padding-top:10px;border-top:1px solid #23343C;" colspan="2">Camera &amp; lens<br><span style="color:#F8FAFC;font-weight:700;">{html_text(settings.get('camera'), 'Generic Camera')}{f' · {html_text(settings.get("lens"))}' if settings.get('lens') else ''}</span></td>
                         </tr>
                     </table>
                 </div>
-                
-                <!-- Diagnostic Card -->
-                <div style="padding: 15px; background-color: {bg_color}; border: 1px solid {border_color}; border-left: 4px solid {status_color}; border-radius: 6px; text-align: left;">
-                    <strong style="color: {status_color}; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px;">Settings Audit: {diag_status.upper()}</strong>
-                    <p style="margin: 5px 0; color: #FFF; font-size: 13px; font-weight: bold;">{diag.get('issue')}</p>
-                    <p style="margin: 0; color: #BAC4D1; font-size: 12px; line-height: 1.4;"><strong>Recommendation:</strong> {diag.get('suggestion')}</p>
+                <div style="padding:13px 15px;background-color:{bg_color};border:1px solid {border_color};border-left:4px solid {status_color};border-radius:9px;text-align:left;">
+                    <strong style="color:{status_color};font-size:10px;text-transform:uppercase;letter-spacing:.06em;">Settings audit · {html_text(diag_status.upper())}</strong>
+                    <p style="margin:5px 0;color:#F8FAFC;font-size:13px;line-height:19px;font-weight:700;">{html_text(diag.get('issue'))}</p>
+                    <p style="margin:0;color:#CBD5E1;font-size:12px;line-height:18px;"><strong>Recommendation:</strong> {html_text(diag.get('suggestion'))}</p>
                 </div>
             </td>
         </tr>
@@ -379,10 +380,10 @@ def generate_email_content(email_to: str, analysis_results: dict, image_bytes: b
         palette_html = ""
         for col in advanced_cv.get("color_palette", []):
             palette_html += f"""
-            <div style="display: inline-block; margin-right: 12px; text-align: center;">
-                <div style="width: 32px; height: 32px; border-radius: 50%; background-color: {col['hex']}; border: 1px solid rgba(255,255,255,0.15); margin: 0 auto 4px auto;"></div>
-                <div style="font-size: 10px; color: #BAC4D1;">{col['percentage']}%</div>
-                <div style="font-size: 9px; color: #64748B; font-family: monospace;">{col['hex'].upper()}</div>
+            <div style="display:inline-block;margin:0 12px 8px 0;text-align:center;">
+                <div style="width:34px;height:34px;border-radius:50%;background-color:{html_text(col.get('hex'), '#000000')};border:2px solid #33434B;margin:0 auto 4px;"></div>
+                <div style="font-size:10px;color:#CBD5E1;">{html_text(col.get('percentage'), '0')}%</div>
+                <div style="font-size:8px;color:#64748B;font-family:monospace;">{html_text(str(col.get('hex', '')).upper(), '')}</div>
             </div>
             """
             
@@ -399,18 +400,14 @@ def generate_email_content(email_to: str, analysis_results: dict, image_bytes: b
         for name, rule in comp_rules:
             if rule:
                 score = rule.get("score", 0)
-                score_color = "#EF4444"
-                if score >= 75:
-                    score_color = "#10B981"
-                elif score >= 45:
-                    score_color = "#F59E0B"
+                rule_color = score_color(score)
                 rules_html += f"""
-                <tr style="border-bottom: 1px solid rgba(255,255,255,0.03);">
-                    <td style="padding: 8px 0; font-size: 13px; color: #FFFFFF; text-align: left;"><strong>{name}</strong></td>
-                    <td style="padding: 8px 0; font-size: 13px; color: {score_color}; text-align: right; font-weight: bold;">{score} / 100</td>
+                <tr>
+                    <td style="padding:9px 0 4px;border-top:1px solid #23343C;font-size:12px;color:#F8FAFC;text-align:left;"><strong>{html_text(name)}</strong></td>
+                    <td style="padding:9px 0 4px;border-top:1px solid #23343C;font-size:12px;color:{rule_color};text-align:right;font-weight:800;">{score} / 100</td>
                 </tr>
                 <tr>
-                    <td colspan="2" style="padding-bottom: 8px; font-size: 12px; color: #BAC4D1; text-align: left; line-height: 1.4;">{rule.get('description', '')}</td>
+                    <td colspan="2" style="padding-bottom:9px;font-size:11px;color:#94A3B8;text-align:left;line-height:17px;">{html_text(rule.get('description'), '')}</td>
                 </tr>
                 """
 
@@ -421,139 +418,136 @@ def generate_email_content(email_to: str, analysis_results: dict, image_bytes: b
         blur = advanced_cv.get("blur", {})
         
         cv_html = f"""
-        <!-- Advanced CV metrics section -->
         <tr>
-            <td style="padding: 20px 40px 10px 40px; border-top: 1px solid #1E293B;">
-                <h3 style="color: #FFFFFF; font-size: 18px; margin-top: 0; margin-bottom: 15px; text-align: left;">
-                    <span style="color: #8B5CF6; margin-right: 10px; font-size: 20px;">⚙</span> Advanced Computer Vision Analytics
-                </h3>
-                
-                <!-- Color Palette swatches -->
-                <div style="background-color: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255,255,255,0.05); border-radius: 8px; padding: 15px; margin-bottom: 15px; text-align: left;">
-                    <strong style="color: #FFFFFF; font-size: 13px; display: block; margin-bottom: 10px;">Dominant Color Palette</strong>
+            <td class="section-pad" style="padding:24px 32px 8px;">
+                <p style="margin:0 0 12px;color:#F8FAFC;font-size:15px;line-height:22px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;">Computer vision analytics</p>
+                <div style="background-color:#0E1D24;border:1px solid #23343C;border-radius:12px;padding:15px;margin-bottom:12px;text-align:left;">
+                    <strong style="color:#F8FAFC;font-size:11px;display:block;margin-bottom:10px;text-transform:uppercase;letter-spacing:.05em;">Dominant color palette</strong>
                     {palette_html}
                 </div>
-                
-                <!-- Heuristics grid -->
-                <div style="background-color: #080A10; border: 1px solid #1E293B; border-radius: 8px; padding: 15px; margin-bottom: 15px;">
-                    <table width="100%" cellpadding="5" cellspacing="0" style="font-size: 12px; color: #BAC4D1; text-align: left;">
+                <div style="background-color:#0A1419;border:1px solid #23343C;border-radius:12px;padding:14px;margin-bottom:12px;">
+                    <table role="presentation" width="100%" cellpadding="6" cellspacing="0" style="font-size:10px;color:#94A3B8;text-align:left;text-transform:uppercase;letter-spacing:.04em;">
                         <tr>
-                            <td width="50%"><strong>Subject Centering</strong><br/>
-                                <span style="font-size: 14px; color: {'#10B981' if centering.get('is_centered') else '#F59E0B'}; font-weight: bold;">
+                            <td width="50%">Subject centering<br>
+                                <span style="font-size:14px;line-height:23px;color:{'#4EAA8C' if centering.get('is_centered') else '#F59E0B'};font-weight:800;text-transform:none;letter-spacing:0;">
                                     { 'Centered' if centering.get('is_centered') else 'Off-Center' }
                                 </span>
                             </td>
-                            <td width="50%"><strong>Horizon Level</strong><br/>
-                                <span style="font-size: 14px; color: { '#10B981' if not horizon.get('detected') or horizon.get('is_level') else '#EF4444' }; font-weight: bold;">
+                            <td width="50%">Horizon level<br>
+                                <span style="font-size:14px;line-height:23px;color:{'#4EAA8C' if not horizon.get('detected') or horizon.get('is_level') else '#EF4444'};font-weight:800;text-transform:none;letter-spacing:0;">
                                     { 'Not Detected' if not horizon.get('detected') else ('Level' if horizon.get('is_level') else 'Tilted') }
                                 </span>
                             </td>
                         </tr>
                         <tr>
-                            <td style="padding-top: 10px;"><strong>Faces Detected</strong><br/>
-                                <span style="font-size: 14px; color: #FFF; font-weight: bold;">{len(faces)}</span>
+                            <td style="padding-top:10px;border-top:1px solid #23343C;">Faces detected<br>
+                                <span style="font-size:14px;line-height:23px;color:#F8FAFC;font-weight:800;">{len(faces)}</span>
                             </td>
-                            <td style="padding-top: 10px;"><strong>Sky Coverage</strong><br/>
-                                <span style="font-size: 14px; color: #FFF; font-weight: bold;">{advanced_cv.get('sky_segmentation', {}).get('percentage', 0.0)}%</span>
+                            <td style="padding-top:10px;border-top:1px solid #23343C;">Sky coverage<br>
+                                <span style="font-size:14px;line-height:23px;color:#F8FAFC;font-weight:800;">{html_text(advanced_cv.get('sky_segmentation', {}).get('percentage', 0.0))}%</span>
                             </td>
                         </tr>
                     </table>
                 </div>
-                
-                <!-- Sharpness detail -->
-                <div style="margin-bottom: 15px; text-align: left; font-size: 12px; color: #BAC4D1; line-height: 1.4;">
-                    <strong>Sharpness Audit:</strong> {blur.get('description', '')}
+                <div style="margin-bottom:12px;padding:12px 14px;background-color:#0E1D24;border:1px solid #23343C;border-left:4px solid #145895;border-radius:9px;text-align:left;font-size:12px;color:#CBD5E1;line-height:18px;">
+                    <strong style="color:#F8FAFC;">Sharpness audit:</strong> {html_text(blur.get('description'), 'No sharpness notes were generated.')}
                 </div>
-                
-                <!-- Composition table -->
-                <table width="100%" cellpadding="0" cellspacing="0" style="margin-top: 15px;">
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:12px;background-color:#0E1D24;border:1px solid #23343C;border-radius:12px;padding:5px 14px;">
                     {rules_html}
                 </table>
             </td>
         </tr>
         """
 
-    # Determine overall color
+    # Match the score bands and muted palette used by the result dashboard.
     overall_score = overall_rating * 10
-    if overall_score >= 80:
-        overall_color = "#10B981"
-    elif overall_score >= 70:
-        overall_color = "#6366F1"
-    elif overall_score >= 50:
-        overall_color = "#F59E0B"
-    else:
-        overall_color = "#EF4444"
+    overall_color = score_color(overall_score)
 
     html_content = f"""<!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
     <meta charset="utf-8">
-    <title>FocalPointAI - Photo Critique</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="dark">
+    <meta name="supported-color-schemes" content="dark">
+    <title>FocalPointAI photography critique</title>
+    <style>
+        @media only screen and (max-width: 640px) {{
+            .email-shell {{ width:100% !important; border-radius:0 !important; }}
+            .outer-pad {{ padding:0 !important; }}
+            .section-pad {{ padding-left:18px !important; padding-right:18px !important; }}
+            .summary-copy, .score-cell {{ display:block !important; width:100% !important; text-align:left !important; }}
+            .score-wrap {{ margin:20px 0 0 !important; }}
+        }}
+    </style>
 </head>
-<body style="margin: 0; padding: 0; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background-color: #0A0E1A; color: #BAC4D1;">
-    <table align="center" border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 600px; margin: 20px auto; background-color: #0E1326; border: 1px solid #1E293B; border-radius: 12px; overflow: hidden; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);">
-        <!-- Header Banner -->
+<body style="margin:0;padding:0;background-color:#020F15;color:#CBD5E1;font-family:Inter,'Segoe UI',Arial,sans-serif;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;background-color:#020F15;">
+<tr><td class="outer-pad" style="padding:24px 12px;">
+    <table role="presentation" class="email-shell" align="center" border="0" cellpadding="0" cellspacing="0" width="680" style="width:100%;max-width:680px;margin:0 auto;background-color:#07161D;border:1px solid #23343C;border-radius:20px;overflow:hidden;box-shadow:0 18px 50px #000000;">
         <tr>
-            <td style="padding: 30px 40px; background: linear-gradient(135deg, #1E1B4B 0%, #0F172A 100%); border-bottom: 1px solid #1E293B; text-align: center;">
-                <h1 style="margin: 0; color: #FFFFFF; font-size: 24px; font-weight: 800; letter-spacing: 1px;">FocalPoint<span style="color: #6366F1;">AI</span></h1>
-                <p style="margin: 5px 0 0 0; color: #8F9CAE; font-size: 14px;">Constructive Photography Critique Engine</p>
+            <td class="section-pad" style="padding:22px 32px;background-color:#091A22;border-bottom:1px solid #23343C;text-align:left;">
+                <table role="presentation" cellpadding="0" cellspacing="0"><tr>
+                    <td style="width:42px;height:42px;border-radius:12px;background-color:#145895;text-align:center;color:#F8FAFC;font-size:18px;font-weight:900;">FP</td>
+                    <td style="padding-left:12px;">
+                        <p style="margin:0;color:#F8FAFC;font-size:20px;line-height:23px;font-weight:800;letter-spacing:-.03em;">Focalpoint<span style="color:#7E88E5;">.AI</span></p>
+                        <p style="margin:3px 0 0;color:#94A3B8;font-size:10px;line-height:14px;text-transform:uppercase;letter-spacing:.09em;">Photography critique &amp; mentor</p>
+                    </td>
+                </tr></table>
             </td>
         </tr>
-        <!-- Overall Score Section -->
         <tr>
-            <td style="padding: 30px 40px; text-align: center; background-color: rgba(99, 102, 241, 0.02);">
-                <p style="color: #8F9CAE; font-size: 12px; text-transform: uppercase; font-weight: bold; letter-spacing: 1.5px; margin: 0 0 10px 0;">Critique Summary</p>
-                <div style="margin: 0 auto 15px auto; border: 4px solid {overall_color}; border-radius: 50%; width: 100px; height: 100px; text-align: center;">
-                    <div style="font-size: 32px; font-weight: 900; color: {overall_color}; line-height: 100px;">{overall_rating}</div>
+            <td class="section-pad" style="padding:26px 32px 8px;">
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#0E1D24;border:1px solid #23343C;border-radius:16px;">
+                    <tr>
+                        <td class="summary-copy" style="padding:24px;width:72%;vertical-align:middle;text-align:left;">
+                            <span style="display:inline-block;padding:4px 8px;background-color:#102D41;border:1px solid #214E6D;border-radius:6px;color:#6EABD9;font-size:9px;line-height:12px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;">Analysis complete</span>
+                            <h1 style="margin:9px 0 7px;color:#F8FAFC;font-size:25px;line-height:31px;font-weight:900;letter-spacing:-.03em;">Constructive Critique Dashboard</h1>
+                            <p style="margin:0;color:#94A3B8;font-size:12px;line-height:19px;overflow-wrap:anywhere;">Workspace: <strong style="color:#F8FAFC;">{html_text(email_to)}</strong><br>Engine: <strong style="color:#8D96EC;">{html_text(mode_str)}</strong></p>
+                        </td>
+                        <td class="score-cell" style="padding:20px 24px 20px 0;width:28%;vertical-align:middle;text-align:center;">
+                            <div class="score-wrap" style="margin:0 auto;width:104px;height:104px;border:5px solid {overall_color};border-radius:50%;text-align:center;">
+                                <div style="color:#F8FAFC;font-size:31px;line-height:78px;font-weight:900;letter-spacing:-.04em;">{overall_rating}</div>
+                                <div style="margin-top:-23px;color:#94A3B8;font-size:9px;line-height:14px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;">Rating</div>
+                            </div>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+        <tr>
+            <td class="section-pad" style="padding:20px 32px 8px;">{image_html}</td>
+        </tr>
+        <tr>
+            <td class="section-pad" style="padding:16px 32px 8px;text-align:left;">
+                <div style="padding:17px 18px;background-color:#0E1D24;border:1px solid #23343C;border-left:4px solid #145895;border-radius:12px;">
+                    <p style="margin:0 0 7px;color:#F8FAFC;font-size:11px;line-height:16px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;">First impression</p>
+                    <p style="margin:0;color:#CBD5E1;font-size:13px;line-height:20px;">{html_text(analysis_results.get('first_impression'), 'No initial impression data was computed for this photograph.')}</p>
                 </div>
-                <p style="margin: 15px 0 5px 0; font-size: 16px; font-weight: bold; color: #FFFFFF;">File: {filename}</p>
-                <p style="margin: 0 0 15px 0; font-size: 13px; color: #8F9CAE;">Analyzed via {mode_str}</p>
-                {image_html}
             </td>
         </tr>
-        <!-- First Impression -->
         <tr>
-            <td style="padding: 20px 40px 20px 40px; border-top: 1px solid #1E293B; text-align: left;">
-                <h3 style="color: #FFFFFF; font-size: 18px; margin-top: 0; margin-bottom: 12px;">
-                    <span style="color: #6366F1; margin-right: 10px; font-size: 20px;">✨</span> First Impression
-                </h3>
-                <div style="margin: 0; color: #BAC4D1; font-size: 13px; line-height: 1.5; font-style: italic; background-color: rgba(255,255,255,0.01); padding: 15px; border-left: 4px solid #6366F1; border-radius: 6px;">
-                    "{analysis_results.get('first_impression', 'N/A')}"
-                </div>
-            </td>
-        </tr>
-        <!-- Suggested Edits -->
-        <tr>
-            <td style="padding: 20px 40px 10px 40px; border-top: 1px solid #1E293B;">
-                <h3 style="color: #FFFFFF; font-size: 18px; margin-top: 0; margin-bottom: 15px; text-align: left;">
-                    <span style="color: #8B5CF6; margin-right: 10px; font-size: 20px;">⚙</span> Suggested Edits
-                </h3>
-                <ul style="margin: 0; padding-left: 0; list-style-type: none;">
-                    {edits_html}
-                </ul>
+            <td class="section-pad" style="padding:24px 32px 8px;">
+                <p style="margin:0 0 12px;color:#F8FAFC;font-size:15px;line-height:22px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;">Suggested edits</p>
+                {edits_html}
             </td>
         </tr>
         {exif_html}
         {cv_html}
-        <!-- Aspect Breakdowns -->
         <tr>
-            <td style="padding: 20px 40px 40px 40px;">
-                <h3 style="color: #FFFFFF; font-size: 18px; margin-top: 0; margin-bottom: 20px; text-align: left;">
-                    <span style="color: #6366F1; margin-right: 10px; font-size: 20px;">📊</span> Aspect Quality Metrics
-                </h3>
-                <div>
-                    {aspects_html}
-                </div>
+            <td class="section-pad" style="padding:26px 32px 30px;">
+                <p style="margin:0 0 14px;color:#F8FAFC;font-size:15px;line-height:22px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;">Aspect quality metrics</p>
+                {aspects_html}
             </td>
         </tr>
-        <!-- Footer -->
         <tr>
-            <td style="padding: 20px 40px; background-color: #0B0F19; border-top: 1px solid #1E293B; text-align: center; font-size: 11px; color: #64748B;">
-                <p style="margin: 0 0 5px 0;">This email was sent to associate your photography workspace at {email_to}.</p>
-                <p style="margin: 0;">© 2026 FocalPointAI. All rights reserved.</p>
+            <td class="section-pad" style="padding:20px 32px;background-color:#061219;border-top:1px solid #23343C;text-align:center;font-size:10px;line-height:16px;color:#64748B;">
+                <p style="margin:0 0 4px;">Prepared for {html_text(email_to)} by the FocalPointAI critique workspace.</p>
+                <p style="margin:0;">© 2026 FocalPointAI. All rights reserved.</p>
             </td>
         </tr>
     </table>
+</td></tr></table>
 </body>
 </html>
 """
@@ -600,7 +594,9 @@ def send_report_email_async(
 
     # Generate standard email content with CID image reference
     subject = f"[FocalPointAI] Photo Critique & Quality Report - {filename}"
-    text_content, html_content =    generate_email_content(email_to, analysis_results, image_bytes, is_simulation=False)
+    text_content, html_content = generate_email_content(
+        email_to, analysis_results, image_bytes, is_simulation=False
+    )
 
     try:
         port = int(smtp_port) if smtp_port else 587
@@ -644,13 +640,11 @@ def send_report_email_async(
             img_file.add_header('Content-Disposition', 'attachment', filename=filename)
             msg_root.attach(img_file)
 
-        server = smtplib.SMTP(smtp_host, port, timeout=15)
-        server.ehlo()
-        
         if port == 465:
-            server.close()
             server = smtplib.SMTP_SSL(smtp_host, port, timeout=15)
         else:
+            server = smtplib.SMTP(smtp_host, port, timeout=15)
+            server.ehlo()
             if server.has_extn('STARTTLS'):
                 server.starttls()
                 server.ehlo()
@@ -854,7 +848,9 @@ async def analyze_image(
             smtp_host = "smtp.gmail.com"
             
         if smtp_host and smtp_username and smtp_password:
-            email_status = "sent"
+            # The response returns before the background SMTP task runs, so
+            # "queued" is accurate here; success/failure is recorded in logs.
+            email_status = "queued"
         else:
             email_status = "simulated"
             

@@ -999,7 +999,7 @@ export default function App() {
             {/* Email Config Alert Banner */}
             <div 
               className={`alert-banner ${
-                analysisResult.email_status === 'sent' ? 'alert-banner-success' : 'alert-banner-warning'
+                ['queued', 'sent'].includes(analysisResult.email_status) ? 'alert-banner-info' : 'alert-banner-warning'
               }`}
             >
               <div style={{ 
@@ -1009,18 +1009,18 @@ export default function App() {
                 width: '42px', 
                 height: '42px', 
                 borderRadius: '10px', 
-                backgroundColor: analysisResult.email_status === 'sent' ? 'rgba(16, 185, 129, 0.12)' : 'rgba(245, 158, 11, 0.12)',
-                color: analysisResult.email_status === 'sent' ? 'var(--success)' : 'var(--warning)',
+                backgroundColor: ['queued', 'sent'].includes(analysisResult.email_status) ? 'rgba(20, 88, 149, 0.16)' : 'rgba(245, 158, 11, 0.12)',
+                color: ['queued', 'sent'].includes(analysisResult.email_status) ? 'var(--primary-hover)' : 'var(--warning)',
                 flexShrink: 0
               }}>
                 <Mail size={22} />
               </div>
               <div style={{ flex: 1, fontSize: '0.9rem', lineHeight: '1.5' }}>
-                {analysisResult.email_status === 'sent' ? (
+                {['queued', 'sent'].includes(analysisResult.email_status) ? (
                   <>
-                    <strong style={{ color: '#FFFFFF', display: 'block', fontSize: '0.98rem', marginBottom: '2px' }}>Live SMTP Report Dispatched</strong>
+                    <strong style={{ color: '#FFFFFF', display: 'block', fontSize: '0.98rem', marginBottom: '2px' }}>SMTP Report Queued</strong>
                     <span style={{ color: 'var(--text-secondary)' }}>
-                      A premium, styled HTML analysis report has been sent to your active inbox at <span style={{ color: '#fff', fontWeight: '600' }}>{analysisResult.email}</span>. Please check your spam folder if it doesn't arrive within 1 minute.
+                      Your styled dashboard report is being delivered to <span style={{ color: '#fff', fontWeight: '600' }}>{analysisResult.email}</span>. Please check your spam folder if it doesn't arrive within 1 minute.
                     </span>
                   </>
                 ) : (
