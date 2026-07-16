@@ -18,6 +18,7 @@ from email.mime.image import MIMEImage
 
 from cv_fallback import *
 from gemini_request import *
+from score_engine import build_gemini_context, build_score_engine, enforce_authoritative_scores
 
 # Load environment variables
 load_dotenv()
@@ -799,31 +800,49 @@ async def analyze_image(
             exif_data = extract_exif_data(image)
 
         exif_summary = get_exif_summary(exif_data)
+        # CV and EXIF own the evidence and every numeric score. Gemini only
+        # explains those application-computed results in professional language.
+        raw_local_analysis = analyze_cv_heuristics(image_bytes, exif_summary=exif_summary)
+        score_engine = build_score_engine(raw_local_analysis, exif_summary)
+        local_analysis = enforce_authoritative_scores(
+            raw_local_analysis,
+            raw_local_analysis,
+            score_engine,
+        )
+        local_analysis["mode"] = "computer_vision"
+        gemini_context = build_gemini_context(local_analysis, exif_summary, score_engine)
         # Check if Gemini API key is available
         api_key = os.environ.get("GEMINI_API_KEY")
         
         if api_key:
             try:
                 # Try real AI analysis
-                analysis_results = await analyze_gemini(image_bytes=image_bytes, exif=exif_summary["text"], api_key=api_key)
-                # Compute local advanced CV overlays for Gemini path
-                try:
-                    nparr = np.frombuffer(image_bytes, np.uint8)
-                    img_bgr = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-                    if img_bgr is not None:
-                        img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
-                        img_gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
-                        analysis_results["advanced_cv"] = analyze_advanced_cv(image_bytes, img_bgr, img_gray, img_rgb)
-                except Exception as cv_err:
-                    print(f"Failed to merge advanced CV into Gemini results: {cv_err}")
+                gemini_analysis = await analyze_gemini(
+                    image_bytes=image_bytes,
+                    analysis_context=gemini_context,
+                    api_key=api_key,
+                    mime_type=file.content_type,
+                )
+                analysis_results = enforce_authoritative_scores(
+                    gemini_analysis,
+                    local_analysis,
+                    score_engine,
+                )
+                analysis_results["ai_status"] = "success"
             except Exception as e:
                 # Log error and fallback
-                print(f"Gemini API failed: {e}. Falling back to computer vision...")
-                analysis_results = analyze_cv_heuristics(image_bytes, exif_summary=exif_summary)
+                ai_status = classify_gemini_error(e)
+                print(
+                    f"Gemini API failed ({ai_status}): {e}. "
+                    "Falling back to computer vision..."
+                )
+                analysis_results = local_analysis
+                analysis_results["ai_status"] = ai_status
                 analysis_results["fallback_reason"] = str(e)
         else:
             # Fallback directly
-            analysis_results = analyze_cv_heuristics(image_bytes, exif_summary=exif_summary)
+            analysis_results = local_analysis
+            analysis_results["ai_status"] = "not_configured"
             
         # Determine email sending status
         smtp_host = os.environ.get("SMTP_HOST")
