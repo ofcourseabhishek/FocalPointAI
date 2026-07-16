@@ -7,6 +7,7 @@ import {
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL?.replace(/\/$/, '') || 'http://127.0.0.1:8000';
 const SHOW_LEGACY_SCANNER = Boolean(import.meta.env.VITE_SHOW_LEGACY_SCANNER);
+const SHOW_LEGACY_RESULTS = false;
 
 const LOADING_STEPS = [
   "Reading image metadata",
@@ -43,28 +44,6 @@ const DEMO_PRESETS = [
   }
 ];
 
-const drawGoldenSpiralSVG = (cx, cy) => {
-  let points = [];
-  const a = 0.003;
-  const b = 0.3063489; // ln(golden_ratio)/(pi/2)
-  for (let theta = 0; theta < 40; theta += 0.08) {
-    const r = a * Math.exp(b * theta);
-    if (r > 1.8) break;
-    const x = cx + r * Math.cos(theta);
-    const y = cy + r * Math.sin(theta);
-    points.push(`${x.toFixed(3)},${y.toFixed(3)}`);
-  }
-  return (
-    <polyline
-      points={points.join(' ')}
-      fill="none"
-      stroke="#fbbf24"
-      strokeWidth="0.005"
-      strokeDasharray="0.008 0.005"
-    />
-  );
-};
-
 export default function App() {
   const [file, setFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState('');
@@ -79,7 +58,10 @@ export default function App() {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadError, setUploadError] = useState(null);
   const [fileMetadata, setFileMetadata] = useState(null);
-  const [activeTab, setActiveTab] = useState('composition');
+  const [activeTab, setActiveTab] = useState('overview');
+  const [expandedAspect, setExpandedAspect] = useState(null);
+  const [showGuides, setShowGuides] = useState(true);
+  const [activeHotspot, setActiveHotspot] = useState(null);
   
   // Redesign custom features state
   const [loadingDemo, setLoadingDemo] = useState(false);
@@ -87,34 +69,12 @@ export default function App() {
   const [copiedColor, setCopiedColor] = useState('');
   
   const imgRef = useRef(null);
-  const [imgDimensions, setImgDimensions] = useState({ width: 0, height: 0 });
-
-  const updateImgDimensions = () => {
-    if (imgRef.current) {
-      setImgDimensions({
-        width: imgRef.current.clientWidth,
-        height: imgRef.current.clientHeight
-      });
-    }
-  };
 
   const copyColorToClipboard = (hex) => {
     navigator.clipboard.writeText(hex);
     setCopiedColor(hex);
     setTimeout(() => setCopiedColor(''), 1500);
   };
-
-  useEffect(() => {
-    if (analysisResult) {
-      const timer = setTimeout(updateImgDimensions, 200);
-      return () => clearTimeout(timer);
-    }
-  }, [analysisResult, activeTab]);
-
-  useEffect(() => {
-    window.addEventListener('resize', updateImgDimensions);
-    return () => window.removeEventListener('resize', updateImgDimensions);
-  }, []);
 
   useEffect(() => () => {
     if (uploadIntervalRef.current) clearInterval(uploadIntervalRef.current);
@@ -384,7 +344,9 @@ export default function App() {
     setPreviewUrl('');
     setAnalysisResult(null);
     setError('');
-    setActiveTab('composition');
+    setActiveTab('overview');
+    setExpandedAspect(null);
+    setActiveHotspot(null);
     setSelectedDemoId(null);
     setUploadState('idle');
     setUploadProgress(0);
@@ -560,7 +522,6 @@ export default function App() {
     const editTextList = edits.map(editText).filter(Boolean);
 
     // Build narrative prose for the post-processing overall review card
-    const keyedEdits = edits.filter(e => e && typeof e === 'object' && e.key);
     const noEditsNeeded = editTextList.length === 0;
 
     const postWhatWorks = noEditsNeeded
@@ -632,10 +593,44 @@ export default function App() {
     return 'var(--danger)';
   };
 
+  const getScoreLabel = (score) => {
+    if (score >= 88) return 'Excellent';
+    if (score >= 75) return 'Strong';
+    if (score >= 60) return 'Developing';
+    return 'Needs work';
+  };
+
+  const learningByTab = {
+    composition: [
+      { title: 'Stronger framing in 5 minutes', meta: '5 min · Composition' },
+      { title: 'Using negative space with intent', meta: '7 min · Visual balance' },
+    ],
+    lighting: [
+      { title: 'Reading highlights and shadows', meta: '6 min · Exposure' },
+      { title: 'Shape a subject with natural light', meta: '8 min · Lighting' },
+    ],
+    focus: [
+      { title: 'Choose the right focus point', meta: '4 min · Sharpness' },
+      { title: 'Control depth of field', meta: '7 min · Technique' },
+    ],
+    color: [
+      { title: 'Build a coherent color palette', meta: '6 min · Color' },
+      { title: 'Correct white balance by eye', meta: '5 min · Editing' },
+    ],
+    subject: [
+      { title: 'Create clearer visual stories', meta: '8 min · Storytelling' },
+      { title: 'Direct attention inside the frame', meta: '5 min · Subject' },
+    ],
+    'post-processing': [
+      { title: 'A clean five-step edit', meta: '9 min · Workflow' },
+      { title: 'Edit without over-processing', meta: '6 min · Restraint' },
+    ],
+  };
+
 
 
   return (
-    <div className={`app-shell ${dragOver ? 'is-dragging' : ''}`} style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: '100vh', width: '100%', maxWidth: '1180px', margin: '0 auto', padding: '24px', position: 'relative' }}>
+    <div className={`app-shell ${dragOver ? 'is-dragging' : ''} ${analysisResult ? 'results-active' : ''}`} style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: '100vh', width: '100%', maxWidth: '1480px', margin: '0 auto', padding: '24px', position: 'relative' }}>
       
       {/* Header */}
       <header className="site-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '48px', zIndex: 10 }}>
@@ -928,8 +923,312 @@ export default function App() {
           </div>
         )}
 
-        {/* 3. Results View */}
-        {!isLoading && analysisResult && (
+        {/* 3. Results Workspace */}
+        {!isLoading && analysisResult && (() => {
+          const majorParams = getMajorParams(analysisResult);
+          const overallScore = Math.max(0, Math.min(100, Math.round((Number(analysisResult.overall_rating) || 0) * 10)));
+          const selectedParam = majorParams.find((param) => param.id === activeTab);
+          const allAspects = majorParams.flatMap((param) =>
+            param.subAspects.map((aspect) => ({ ...aspect, parentId: param.id, parentLabel: param.label }))
+          );
+          const quickWins = allAspects
+            .filter((aspect) => Number.isFinite(aspect.rating) && aspect.rating < 86)
+            .sort((a, b) => a.rating - b.rating)
+            .slice(0, 3);
+          const strengths = allAspects
+            .filter((aspect) => aspect.what_works)
+            .sort((a, b) => b.rating - a.rating)
+            .slice(0, 3);
+          const improvementItems = quickWins.length > 0
+            ? quickWins
+            : allAspects.slice(0, 3);
+          const cameraSettings = analysisResult.exif_analysis?.camera_settings;
+          const engineLabel = analysisResult.mode === 'gemini_ai'
+            ? 'Gemini AI'
+            : analysisResult.ai_status === 'rate_limited'
+              ? 'Local CV · API limited'
+              : 'Local CV';
+          const hotspots = [
+            { id: 'composition', label: 'Framing', hint: 'Review subject placement', x: '28%', y: '38%' },
+            { id: 'lighting', label: 'Highlight', hint: 'Inspect tonal balance', x: '72%', y: '27%' },
+            { id: 'subject', label: 'Subject', hint: 'Review visual attention', x: '57%', y: '61%' },
+          ];
+
+          const openWorkspaceTab = (tabId) => {
+            setActiveTab(tabId);
+            setExpandedAspect(null);
+          };
+
+          return (
+            <div className="critique-workspace fade-in">
+              <div className="workspace-commandbar">
+                <div>
+                  <span className="workspace-kicker"><span className="live-dot" /> Analysis complete</span>
+                  <h2>{file?.name || 'Photography critique'}</h2>
+                </div>
+                <div className="workspace-actions">
+                  <span className="engine-pill"><Cpu size={14} /> {engineLabel}</span>
+                  <button type="button" className="quiet-button" onClick={handleReset}>
+                    <RefreshCw size={15} /> New analysis
+                  </button>
+                </div>
+              </div>
+
+              <div className="workspace-body">
+                <aside className="photo-workbench">
+                  <div className="photo-toolbar">
+                    <div>
+                      <span>IMAGE INSPECTOR</span>
+                      <strong>{fileMetadata?.width || '—'} × {fileMetadata?.height || '—'}</strong>
+                    </div>
+                    <button
+                      type="button"
+                      className={`tool-toggle ${showGuides ? 'is-on' : ''}`}
+                      onClick={() => setShowGuides((value) => !value)}
+                      aria-pressed={showGuides}
+                    >
+                      <Target size={15} /> Guides
+                    </button>
+                  </div>
+
+                  <div className="inspected-photo">
+                    <img ref={imgRef} src={previewUrl} alt="Analyzed photograph" />
+                    {showGuides && (
+                      <div className="photo-guides" aria-label="Interactive image insights">
+                        <i className="third-line third-line-v-one" />
+                        <i className="third-line third-line-v-two" />
+                        <i className="third-line third-line-h-one" />
+                        <i className="third-line third-line-h-two" />
+                        {hotspots.map((hotspot, index) => (
+                          <button
+                            key={hotspot.id}
+                            type="button"
+                            className={`photo-hotspot ${activeHotspot === hotspot.id ? 'is-active' : ''}`}
+                            style={{ left: hotspot.x, top: hotspot.y }}
+                            onMouseEnter={() => setActiveHotspot(hotspot.id)}
+                            onMouseLeave={() => setActiveHotspot(null)}
+                            onFocus={() => setActiveHotspot(hotspot.id)}
+                            onBlur={() => setActiveHotspot(null)}
+                            onClick={() => openWorkspaceTab(hotspot.id)}
+                            aria-label={`${hotspot.label}: ${hotspot.hint}`}
+                          >
+                            <span>{index + 1}</span>
+                            <em><strong>{hotspot.label}</strong>{hotspot.hint}</em>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="image-caption">
+                    <div><span>File</span><strong>{file?.name || 'critique-image.jpg'}</strong></div>
+                    <div><span>Size</span><strong>{fileMetadata?.size || '—'}</strong></div>
+                  </div>
+
+                  {cameraSettings && (
+                    <div className="exif-strip">
+                      <div><span>Shutter</span><strong>{cameraSettings.shutter_speed || '—'}</strong></div>
+                      <div><span>Aperture</span><strong>{cameraSettings.aperture || '—'}</strong></div>
+                      <div><span>ISO</span><strong>{cameraSettings.iso || '—'}</strong></div>
+                      <div><span>Focal</span><strong>{cameraSettings.focal_length || '—'}</strong></div>
+                    </div>
+                  )}
+                </aside>
+
+                <section className="critique-panel">
+                  <div className="score-summary">
+                    <div className="score-block">
+                      <span>OVERALL SCORE</span>
+                      <div><strong>{overallScore}</strong><small>/100</small></div>
+                      <em className={`score-label score-${getScoreLabel(overallScore).toLowerCase().replace(' ', '-')}`}>
+                        {getScoreLabel(overallScore)}
+                      </em>
+                    </div>
+                    <div className="assessment-lede">
+                      <span>PROFESSIONAL ASSESSMENT</span>
+                      <h3>{analysisResult.first_impression || 'A technically capable image with a clear opportunity for focused refinement.'}</h3>
+                      <p>Start with the quick wins, then use the workspace navigation for the full technical critique.</p>
+                    </div>
+                  </div>
+
+                  <nav className="workspace-tabs" aria-label="Critique sections">
+                    <button
+                      type="button"
+                      className={activeTab === 'overview' ? 'active' : ''}
+                      onClick={() => openWorkspaceTab('overview')}
+                    >
+                      Overview
+                    </button>
+                    {majorParams.map((param) => (
+                      <button
+                        type="button"
+                        key={param.id}
+                        className={activeTab === param.id ? 'active' : ''}
+                        onClick={() => openWorkspaceTab(param.id)}
+                      >
+                        {param.label.replace(' & Exposure', '').replace(' & Sharpness', '').replace(' & Tones', '').replace(' & Story', '')}
+                        <span>{param.rating}</span>
+                      </button>
+                    ))}
+                  </nav>
+
+                  <div className="workspace-content">
+                    {activeTab === 'overview' ? (
+                      <div className="overview-layout">
+                        <section className="quick-wins-section">
+                          <div className="section-heading">
+                            <div>
+                              <span>NEXT BEST ACTIONS</span>
+                              <h3>Improve this photo</h3>
+                            </div>
+                            <Sparkles size={18} />
+                          </div>
+                          <div className="quick-win-list">
+                            {improvementItems.map((item, index) => {
+                              const gain = Math.max(2, Math.min(8, Math.round((88 - item.rating) / 5)));
+                              return (
+                                <button type="button" key={`${item.parentId}-${item.key}`} onClick={() => openWorkspaceTab(item.parentId)}>
+                                  <span className="win-index">0{index + 1}</span>
+                                  <div>
+                                    <strong>{item.label}</strong>
+                                    <p>{item.what_could_be_improved || 'Make a small targeted adjustment for a more polished result.'}</p>
+                                  </div>
+                                  <em>+{gain}</em>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </section>
+
+                        <div className="overview-columns">
+                          <section className="scan-list strengths-list">
+                            <div className="mini-heading"><CheckCircle size={16} /><span>What is working</span></div>
+                            {strengths.map((item) => (
+                              <div key={`${item.parentId}-${item.key}`}>
+                                <Check size={14} />
+                                <p><strong>{item.label}</strong>{item.what_works}</p>
+                              </div>
+                            ))}
+                          </section>
+                          <section className="scan-list improvements-list">
+                            <div className="mini-heading"><Target size={16} /><span>Focus next</span></div>
+                            {improvementItems.map((item) => (
+                              <div key={`${item.parentId}-${item.key}`}>
+                                <span className="status-marker" />
+                                <p><strong>{getScoreLabel(item.rating)}</strong>{item.label}</p>
+                              </div>
+                            ))}
+                          </section>
+                        </div>
+
+                        <section className="category-overview">
+                          <div className="section-heading compact">
+                            <div><span>PERFORMANCE MAP</span><h3>Category scores</h3></div>
+                          </div>
+                          <div className="category-grid">
+                            {majorParams.map((param) => (
+                              <button type="button" key={param.id} onClick={() => openWorkspaceTab(param.id)}>
+                                <div><span>{param.label}</span><strong>{param.rating}</strong></div>
+                                <div className="score-track"><i style={{ width: `${param.rating}%`, background: getScoreColor(param.rating) }} /></div>
+                                <small>{getScoreLabel(param.rating)} <span>View critique →</span></small>
+                              </button>
+                            ))}
+                          </div>
+                        </section>
+
+                        {(analysisResult.ai_status === 'rate_limited' || !['queued', 'sent'].includes(analysisResult.email_status)) && (
+                          <div className="system-note">
+                            <Info size={16} />
+                            <p>
+                              {analysisResult.ai_status === 'rate_limited'
+                                ? 'The AI quota was unavailable, so this report uses the local computer-vision engine.'
+                                : 'Email delivery is in simulation mode; the critique is still complete in this workspace.'}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    ) : selectedParam ? (
+                      <div className="detail-layout">
+                        <div className="detail-header">
+                          <div>
+                            <span>SELECTED ANALYSIS</span>
+                            <h3>{selectedParam.label}</h3>
+                            <p>{selectedParam.what_could_be_improved}</p>
+                          </div>
+                          <div className="category-score">
+                            <strong>{selectedParam.rating}</strong>
+                            <span>{getScoreLabel(selectedParam.rating)}</span>
+                          </div>
+                        </div>
+
+                        <div className="detail-meter">
+                          <span style={{ width: `${selectedParam.rating}%`, background: getScoreColor(selectedParam.rating) }} />
+                        </div>
+
+                        <div className="aspect-accordion">
+                          {selectedParam.subAspects.map((aspect, index) => {
+                            const aspectId = `${selectedParam.id}-${aspect.key || index}`;
+                            const isOpen = expandedAspect === aspectId;
+                            const target = Math.max(88, aspect.rating);
+                            return (
+                              <article key={aspectId} className={isOpen ? 'is-open' : ''}>
+                                <button
+                                  type="button"
+                                  className="aspect-trigger"
+                                  onClick={() => setExpandedAspect(isOpen ? null : aspectId)}
+                                  aria-expanded={isOpen}
+                                >
+                                  <div>
+                                    <span className="aspect-status" style={{ background: getScoreColor(aspect.rating) }} />
+                                    <div><strong>{aspect.label}</strong><small>{getScoreLabel(aspect.rating)}</small></div>
+                                  </div>
+                                  <span className="aspect-score">{Math.round(aspect.rating)}</span>
+                                  <i>{isOpen ? '−' : '+'}</i>
+                                </button>
+                                {isOpen && (
+                                  <div className="aspect-body">
+                                    <div className="before-target">
+                                      <div><span>Current</span><div><i style={{ width: `${aspect.rating}%` }} /></div><strong>{Math.round(aspect.rating)}</strong></div>
+                                      <div><span>Target</span><div><i style={{ width: `${target}%` }} /></div><strong>{target}</strong></div>
+                                    </div>
+                                    <div className="insight-pair">
+                                      <div><span><Check size={13} /> What works</span><p>{aspect.what_works}</p></div>
+                                      <div><span><Target size={13} /> Refine</span><p>{aspect.what_could_be_improved}</p></div>
+                                    </div>
+                                    {aspect.suggested_edit_hint && (
+                                      <p className="edit-recipe"><Sliders size={14} /><strong>Suggested adjustment</strong>{aspect.suggested_edit_hint}</p>
+                                    )}
+                                  </div>
+                                )}
+                              </article>
+                            );
+                          })}
+                        </div>
+
+                        <section className="learning-strip">
+                          <div>
+                            <span>LEARN IN CONTEXT</span>
+                            <h4>Build this skill</h4>
+                          </div>
+                          {(learningByTab[selectedParam.id] || []).map((resource) => (
+                            <button type="button" key={resource.title}>
+                              <span>{resource.meta}</span>
+                              <strong>{resource.title}</strong>
+                              <em>Open lesson →</em>
+                            </button>
+                          ))}
+                        </section>
+                      </div>
+                    ) : null}
+                  </div>
+                </section>
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* Legacy result renderer retained as a reference while the workspace ships. */}
+        {SHOW_LEGACY_RESULTS && !isLoading && analysisResult && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }} className="fade-in">
             
             {/* Redesigned Upper Summary Panel with SVG radial gauge */}
