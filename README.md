@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="frontend/public/focalpoint-logo-transparent.png" alt="FocalPointAI logo" width="180">
+  <img src="frontend/public/focalpoint-logo-round.png" alt="FocalPointAI circular logo" width="180">
 </p>
 
 <h1 align="center">FocalPointAI</h1>
