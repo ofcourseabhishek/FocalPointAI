@@ -634,11 +634,11 @@ export default function App() {
       
       {/* Header */}
       <header className="site-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '48px', zIndex: 10 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div style={{ width: '42px', height: '42px', borderRadius: '12px', background: 'linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 15px rgba(99,102,241,0.4)' }}>
+        <div className="site-brand" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div className="brand-mark" style={{ width: '42px', height: '42px', borderRadius: '12px', background: 'linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 15px rgba(99,102,241,0.4)' }}>
             <Camera size={22} color="#fff" />
           </div>
-          <div>
+          <div className="brand-copy">
             <h1 style={{ fontSize: '1.4rem', fontWeight: '700', letterSpacing: '-0.03em', margin: 0 }}>
               Focalpoint<span className="gradient-text">.AI</span>
             </h1>
@@ -666,7 +666,7 @@ export default function App() {
                 Perfect Your<br />
                 <span className="gradient-text">Photography</span>
               </h2>
-              <p style={{ color: 'var(--text-muted)', fontSize: '1.25rem', lineHeight: '1.6', maxWidth: '600px', margin: '24px auto 0' }}>
+              <p className="hero-subtitle" style={{ color: 'var(--text-muted)', fontSize: '1.25rem', lineHeight: '1.6', maxWidth: '600px', margin: '24px auto 0' }}>
                 Instant AI critique that helps you improve your light, color balance, sharpness, and composition.
               </p>
             </div>
@@ -677,7 +677,7 @@ export default function App() {
                 <Sparkles size={16} className="text-secondary" />
                 No photo ready? Test with a Demo Image Sandbox:
               </p>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>
+              <div className="demo-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>
                 {DEMO_PRESETS.map((preset) => (
                   <div 
                     key={preset.id}
@@ -712,6 +712,7 @@ export default function App() {
                 ref={fileInputRef}
                 onChange={handleFileChange}
                 accept="image/jpeg,image/png,image/webp"
+                aria-label="Choose a photograph to analyze"
                 style={{ display: 'none' }}
               />
 
@@ -942,6 +943,7 @@ export default function App() {
           const improvementItems = quickWins.length > 0
             ? quickWins
             : allAspects.slice(0, 3);
+          const recommendedLearning = learningByTab[improvementItems[0]?.parentId] || [];
           const cameraSettings = analysisResult.exif_analysis?.camera_settings;
           const engineLabel = analysisResult.mode === 'gemini_ai'
             ? 'Gemini AI'
@@ -1120,6 +1122,26 @@ export default function App() {
                             ))}
                           </section>
                         </div>
+
+                        {recommendedLearning.length > 0 && (
+                          <section className="learning-strip overview-learning-strip">
+                            <div>
+                              <span>LEARNING HUB</span>
+                              <h4>Recommended next</h4>
+                            </div>
+                            {recommendedLearning.map((resource) => (
+                              <button
+                                type="button"
+                                key={resource.title}
+                                onClick={() => openWorkspaceTab(improvementItems[0].parentId)}
+                              >
+                                <span>{resource.meta}</span>
+                                <strong>{resource.title}</strong>
+                                <em>View learning hub →</em>
+                              </button>
+                            ))}
+                          </section>
+                        )}
 
                         <section className="category-overview">
                           <div className="section-heading compact">

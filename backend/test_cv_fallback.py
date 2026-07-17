@@ -3,9 +3,9 @@ import unittest
 import numpy as np
 
 try:
-    from .cv_fallback import resize_for_analysis
+    from .local_cv_engine import resize_for_analysis
 except ImportError:
-    from cv_fallback import resize_for_analysis
+    from local_cv_engine import resize_for_analysis
 
 
 class ResizeForAnalysisTests(unittest.TestCase):
