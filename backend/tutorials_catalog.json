@@ -1,0 +1,641 @@
+{
+  "metadata_note": {
+    "verification_source": "Creator names and exact runtimes verified from public YouTube watch-page metadata.",
+    "verified_on": "2026-07-17",
+    "runtime_format": "M:SS or H:MM:SS",
+    "level_scale": {
+      "beginner": "No previous photography knowledge required.",
+      "novice": "Understands basic camera controls and terminology.",
+      "experienced": "Comfortable shooting manually or editing photographs.",
+      "professional": "Advanced technical, creative or conceptual instruction."
+    }
+  },
+  "exposure_and_camera_control": {
+    "exposure_triangle": {
+      "tutorial_title": "ISO, Shutter Speed and Aperture Explained | Exposure Basics for Beginners",
+      "creator": "B&H Photo Video Pro Audio",
+      "youtube_link": "https://www.youtube.com/watch?v=Edvpu_939l4",
+      "runtime": "3:31",
+      "level": "beginner",
+      "skills_taught": [
+        "Exposure triangle",
+        "ISO",
+        "Aperture",
+        "Shutter speed",
+        "Balancing exposure settings",
+        "Creative effects of camera settings"
+      ]
+    },
+    "reading_the_histogram": {
+      "tutorial_title": "How to Use Histograms for Better Photography",
+      "creator": "Mark Dumbleton",
+      "youtube_link": "https://www.youtube.com/watch?v=D0DxtixmFRY",
+      "runtime": "4:49",
+      "level": "beginner",
+      "skills_taught": [
+        "Reading a histogram",
+        "Identifying clipped highlights",
+        "Identifying crushed shadows",
+        "Judging exposure accurately",
+        "Understanding tonal distribution"
+      ]
+    },
+    "camera_metering_modes": {
+      "tutorial_title": "What Metering Modes ACTUALLY Do and When to Use Each One",
+      "creator": "PhotographyExplained",
+      "youtube_link": "https://www.youtube.com/watch?v=0waR8f5CBiM",
+      "runtime": "10:25",
+      "level": "novice",
+      "skills_taught": [
+        "Matrix or evaluative metering",
+        "Centre-weighted metering",
+        "Spot metering",
+        "Exposure compensation",
+        "Handling difficult lighting"
+      ]
+    },
+    "autofocus_modes": {
+      "tutorial_title": "Camera Focus Modes: Which One Should You Use?",
+      "creator": "Nate Torres",
+      "youtube_link": "https://www.youtube.com/watch?v=gBKkCtl-W3M",
+      "runtime": "15:12",
+      "level": "beginner",
+      "skills_taught": [
+        "Single autofocus",
+        "Continuous autofocus",
+        "Automatic autofocus",
+        "Focus-area selection",
+        "Focusing on moving subjects",
+        "Focusing on stationary subjects"
+      ]
+    },
+    "white_balance": {
+      "tutorial_title": "A Beginner's Guide to White Balance | Adobe Photography",
+      "creator": "Adobe Asia Pacific",
+      "youtube_link": "https://www.youtube.com/watch?v=6NAYm-VegZ0",
+      "runtime": "8:01",
+      "level": "beginner",
+      "skills_taught": [
+        "White balance",
+        "Colour temperature",
+        "Tint",
+        "Kelvin values",
+        "Correcting colour casts",
+        "Warm and cool lighting"
+      ]
+    },
+    "focal_length_and_perspective": {
+      "tutorial_title": "The Truth About Focal Length: Almost Everyone Gets This Wrong",
+      "creator": "The Bergreens",
+      "youtube_link": "https://www.youtube.com/watch?v=g8WbvNhF8dw",
+      "runtime": "11:35",
+      "level": "novice",
+      "skills_taught": [
+        "Focal length",
+        "Camera-to-subject distance",
+        "Perspective",
+        "Lens compression",
+        "Wide-angle distortion",
+        "Choosing lenses intentionally"
+      ]
+    },
+    "natural_light_and_contrast": {
+      "tutorial_title": "Why Most Natural Light Photography Is Flat and How to Fix It",
+      "creator": "The Bergreens",
+      "youtube_link": "https://www.youtube.com/watch?v=VgT4O6CclfA",
+      "runtime": "14:47",
+      "level": "novice",
+      "skills_taught": [
+        "Direction of light",
+        "Quality of light",
+        "Natural-light contrast",
+        "Shadow placement",
+        "Subject positioning",
+        "Avoiding flat illumination"
+      ]
+    },
+    "complete_camera_foundation": {
+      "tutorial_title": "Learn Photography in 4 Hours: The Ultimate Beginner's Guide",
+      "creator": "Benjamin Jaworskyj - Simply Learn Photography",
+      "youtube_link": "https://www.youtube.com/watch?v=4IuB6UlzQng",
+      "runtime": "4:02:16",
+      "level": "beginner",
+      "skills_taught": [
+        "Camera operation",
+        "Exposure triangle",
+        "Focus",
+        "Lenses",
+        "Composition",
+        "Lighting",
+        "Practical shooting workflow"
+      ]
+    }
+  },
+  "composition_and_framing": {
+    "essential_composition_principles": {
+      "tutorial_title": "9 Photo Composition Tips Featuring Steve McCurry",
+      "creator": "COOPH",
+      "youtube_link": "https://www.youtube.com/watch?v=7ZVyNjKSr0M",
+      "runtime": "3:09",
+      "level": "beginner",
+      "skills_taught": [
+        "Rule of thirds",
+        "Leading lines",
+        "Diagonals",
+        "Natural framing",
+        "Patterns",
+        "Symmetry",
+        "Figure-to-ground separation"
+      ]
+    },
+    "composition_rules_for_beginners": {
+      "tutorial_title": "11 Best Photo Composition Rules for Beginners",
+      "creator": "Josh Katz",
+      "youtube_link": "https://www.youtube.com/watch?v=D3PFI6mgHlY",
+      "runtime": "14:34",
+      "level": "beginner",
+      "skills_taught": [
+        "Rule of thirds",
+        "Centred composition",
+        "Balance",
+        "Negative space",
+        "Patterns",
+        "Visual weight",
+        "Subject placement"
+      ]
+    },
+    "framing_techniques": {
+      "tutorial_title": "4 Framing and Composition Techniques for Beginners",
+      "creator": "Learn Online Video",
+      "youtube_link": "https://www.youtube.com/watch?v=nKM3jkEOpuE",
+      "runtime": "5:32",
+      "level": "beginner",
+      "skills_taught": [
+        "Frames within frames",
+        "Subject placement",
+        "Background control",
+        "Depth",
+        "Visual boundaries",
+        "Cleaner framing"
+      ]
+    },
+    "leading_lines": {
+      "tutorial_title": "Leading Lines Photography: Must-Know Tips",
+      "creator": "Viewfinder Mastery",
+      "youtube_link": "https://www.youtube.com/watch?v=AHiZvTxvHiA",
+      "runtime": "8:45",
+      "level": "novice",
+      "skills_taught": [
+        "Leading lines",
+        "Eye movement",
+        "Creating visual depth",
+        "Connecting foreground and subject",
+        "Using roads and architecture",
+        "Directional composition"
+      ]
+    },
+    "simplification_and_visual_hierarchy": {
+      "tutorial_title": "One Step to Simplify Photo Composition",
+      "creator": "Outdoor Photography Guide",
+      "youtube_link": "https://www.youtube.com/watch?v=oUGberH6d48",
+      "runtime": "3:44",
+      "level": "novice",
+      "skills_taught": [
+        "Identifying the main subject",
+        "Removing distractions",
+        "Visual hierarchy",
+        "Background simplification",
+        "Minimal composition",
+        "Clearer image intent"
+      ]
+    },
+    "layering_and_depth": {
+      "tutorial_title": "Photography Composition Tips: How to Use Layering",
+      "creator": "Sean Gallagher - Pro Photographer",
+      "youtube_link": "https://www.youtube.com/watch?v=JqPQPxCoFng",
+      "runtime": "16:12",
+      "level": "novice",
+      "skills_taught": [
+        "Foreground placement",
+        "Middle-ground placement",
+        "Background placement",
+        "Creating depth",
+        "Environmental context",
+        "Building complex compositions"
+      ]
+    },
+    "juxtaposition": {
+      "tutorial_title": "A Guide to Juxtaposition in Street Photography",
+      "creator": "Skillshare",
+      "youtube_link": "https://www.youtube.com/watch?v=HGrXPRh2q0o",
+      "runtime": "10:05",
+      "level": "experienced",
+      "skills_taught": [
+        "Juxtaposition",
+        "Visual irony",
+        "Matching subjects with backgrounds",
+        "Signs and human interaction",
+        "Anticipating moments",
+        "Street-photography observation"
+      ]
+    }
+  },
+  "photographic_storytelling": {
+    "storytelling_foundations": {
+      "tutorial_title": "Storytelling with Photography",
+      "creator": "Josh Katz",
+      "youtube_link": "https://www.youtube.com/watch?v=15jewaxIFM4",
+      "runtime": "15:44",
+      "level": "beginner",
+      "skills_taught": [
+        "Visual narrative",
+        "Subject selection",
+        "Context",
+        "Emotion",
+        "Storytelling through one image",
+        "Storytelling through multiple images"
+      ]
+    },
+    "connecting_composition_light_and_story": {
+      "tutorial_title": "Composition, Light and Storytelling: Photography 101",
+      "creator": "Sean Rayford",
+      "youtube_link": "https://www.youtube.com/watch?v=z7dCPLb9BsU",
+      "runtime": "8:14",
+      "level": "novice",
+      "skills_taught": [
+        "Using composition to communicate",
+        "Using light to create mood",
+        "Directing viewer attention",
+        "Narrative image construction",
+        "Combining technical and creative choices"
+      ]
+    },
+    "photo_sequences_and_photo_essays": {
+      "tutorial_title": "Visual Storytelling: Creating Stories with a Set of Photos",
+      "creator": "Patrick Stapleton",
+      "youtube_link": "https://www.youtube.com/watch?v=Wuov_YQfnW4",
+      "runtime": "7:50",
+      "level": "novice",
+      "skills_taught": [
+        "Photo sequencing",
+        "Photo essays",
+        "Opening images",
+        "Transition images",
+        "Detail photographs",
+        "Closing images",
+        "Maintaining visual variety"
+      ]
+    },
+    "narrative_subject_and_meaning": {
+      "tutorial_title": "Visual Storytelling for Photographers",
+      "creator": "JP Stones",
+      "youtube_link": "https://www.youtube.com/watch?v=kp1EtKGUsRc",
+      "runtime": "10:54",
+      "level": "experienced",
+      "skills_taught": [
+        "Choosing a protagonist",
+        "Finding narrative meaning",
+        "Environmental context",
+        "Removing irrelevant elements",
+        "Implying events",
+        "Building emotional connection"
+      ]
+    },
+    "shot_variety_for_storytelling": {
+      "tutorial_title": "How to Improve Your Photography Through Storytelling",
+      "creator": "Adorama",
+      "youtube_link": "https://www.youtube.com/watch?v=6LxO7dYnxMw",
+      "runtime": "16:27",
+      "level": "novice",
+      "skills_taught": [
+        "Establishing shots",
+        "Medium shots",
+        "Close-up details",
+        "Action photographs",
+        "Transition images",
+        "Decisive moments",
+        "Visual continuity"
+      ]
+    },
+    "statement_and_conceptual_photography": {
+      "tutorial_title": "Creating Impactful Statement Photographs",
+      "creator": "The Carty Method",
+      "youtube_link": "https://www.youtube.com/watch?v=v1KCyBfhE-Y",
+      "runtime": "2:00:52",
+      "level": "professional",
+      "skills_taught": [
+        "Conceptual photography",
+        "Communicating an idea",
+        "Creating visual impact",
+        "Symbolism",
+        "Intentional subject selection",
+        "Developing a photographic message"
+      ]
+    }
+  },
+  "lightroom_post_processing": {
+    "complete_lightroom_workflow": {
+      "tutorial_title": "Adobe Lightroom Full Tutorial for Beginners",
+      "creator": "Ayitsphotography",
+      "youtube_link": "https://www.youtube.com/watch?v=VUCPznpejI8",
+      "runtime": "19:14",
+      "level": "beginner",
+      "skills_taught": [
+        "Importing photographs",
+        "File organisation",
+        "Cropping",
+        "Basic tonal correction",
+        "Colour correction",
+        "Masking",
+        "Exporting"
+      ]
+    },
+    "basic_panel_and_histogram": {
+      "tutorial_title": "Using the Basic Panel and Histogram to Adjust Exposure",
+      "creator": "Julieanne Kost",
+      "youtube_link": "https://www.youtube.com/watch?v=5Tc417ue-DQ",
+      "runtime": "7:00",
+      "level": "beginner",
+      "skills_taught": [
+        "Exposure adjustment",
+        "Contrast",
+        "Highlights",
+        "Shadows",
+        "Whites",
+        "Blacks",
+        "Histogram-guided editing"
+      ]
+    },
+    "tone_curve": {
+      "tutorial_title": "Pro Tips: Tone Curves in Adobe Lightroom Classic",
+      "creator": "Adobe Live",
+      "youtube_link": "https://www.youtube.com/watch?v=ZU42HSuSvf0",
+      "runtime": "26:20",
+      "level": "novice",
+      "skills_taught": [
+        "Point curve",
+        "Parametric curve",
+        "Black point",
+        "White point",
+        "Contrast curves",
+        "Faded blacks",
+        "Individual RGB curves"
+      ]
+    },
+    "lightroom_hsl_panel": {
+      "tutorial_title": "Control Image Colour with the Lightroom Classic HSL Panel",
+      "creator": "Robin Whalley",
+      "youtube_link": "https://www.youtube.com/watch?v=tI0WQybPeAY",
+      "runtime": "5:02",
+      "level": "novice",
+      "skills_taught": [
+        "Hue adjustment",
+        "Saturation adjustment",
+        "Luminance adjustment",
+        "Targeted colour correction",
+        "Skin-tone protection",
+        "Colour separation"
+      ]
+    },
+    "lightroom_colour_grading": {
+      "tutorial_title": "Color Grade in Lightroom Like a Pro",
+      "creator": "Anthony Gugliotta",
+      "youtube_link": "https://www.youtube.com/watch?v=FwlSfetKBwk",
+      "runtime": "11:53",
+      "level": "experienced",
+      "skills_taught": [
+        "Colour grading wheels",
+        "Shadow colour",
+        "Midtone colour",
+        "Highlight colour",
+        "Colour balance",
+        "Creating a consistent mood"
+      ]
+    },
+    "lightroom_masking": {
+      "tutorial_title": "Lightroom Classic: The New Masking Tools",
+      "creator": "Julieanne Kost",
+      "youtube_link": "https://www.youtube.com/watch?v=cRGdi85tikU",
+      "runtime": "8:30",
+      "level": "novice",
+      "skills_taught": [
+        "Select subject",
+        "Select sky",
+        "Brush masks",
+        "Linear gradients",
+        "Radial gradients",
+        "Intersecting masks",
+        "Local adjustments"
+      ]
+    },
+    "texture_clarity_and_dehaze": {
+      "tutorial_title": "How Lightroom Pros Use Clarity, Texture and Dehaze",
+      "creator": "Brian Matiash",
+      "youtube_link": "https://www.youtube.com/watch?v=RvDxtKt4Qtg",
+      "runtime": "16:49",
+      "level": "experienced",
+      "skills_taught": [
+        "Texture adjustment",
+        "Clarity adjustment",
+        "Dehaze adjustment",
+        "Microcontrast",
+        "Local contrast",
+        "Avoiding overprocessed photographs"
+      ]
+    },
+    "point_colour": {
+      "tutorial_title": "Lightroom Point Color Tutorial: All You Need to Know",
+      "creator": "Michael Rung Photography",
+      "youtube_link": "https://www.youtube.com/watch?v=1FgwAKS2XZU",
+      "runtime": "33:24",
+      "level": "experienced",
+      "skills_taught": [
+        "Precise colour selection",
+        "Colour-range adjustment",
+        "Hue refinement",
+        "Saturation refinement",
+        "Luminance refinement",
+        "Targeting colours beyond standard HSL"
+      ]
+    }
+  },
+  "colour_theory_and_hsl": {
+    "colour_theory_foundations": {
+      "tutorial_title": "Understanding Colour Theory as a Photographer: Part 1",
+      "creator": "Photo Feaver",
+      "youtube_link": "https://www.youtube.com/watch?v=C23nfbBKzHM",
+      "runtime": "35:04",
+      "level": "beginner",
+      "skills_taught": [
+        "Colour wheel",
+        "Hue",
+        "Saturation",
+        "Luminance",
+        "Warm and cool colours",
+        "Colour harmony",
+        "Colour psychology"
+      ]
+    },
+    "applied_colour_theory": {
+      "tutorial_title": "How to Use Color Theory in Real-World Photos",
+      "creator": "Pat Kay",
+      "youtube_link": "https://www.youtube.com/watch?v=jFvLtkdMq8o",
+      "runtime": "10:35",
+      "level": "novice",
+      "skills_taught": [
+        "Choosing locations by colour",
+        "Selecting clothing colours",
+        "Background colour control",
+        "Colour contrast",
+        "Colour harmony during shooting",
+        "Planning colour before editing"
+      ]
+    },
+    "practical_hsl_editing": {
+      "tutorial_title": "How to Use the HSL Color Panel in Lightroom",
+      "creator": "Run N Gun Photo",
+      "youtube_link": "https://www.youtube.com/watch?v=QoJuIOH6xeo",
+      "runtime": "4:56",
+      "level": "novice",
+      "skills_taught": [
+        "Correcting individual colour families",
+        "Changing colour hue",
+        "Reducing distracting saturation",
+        "Adjusting colour brightness",
+        "Controlling foliage",
+        "Controlling skies and skin tones"
+      ]
+    },
+    "complementary_colours": {
+      "tutorial_title": "Unleashing the Power of Complementary Colors",
+      "creator": "Neil Borg",
+      "youtube_link": "https://www.youtube.com/watch?v=IwJLs-pTL2E",
+      "runtime": "6:41",
+      "level": "experienced",
+      "skills_taught": [
+        "Complementary colour schemes",
+        "Blue and orange",
+        "Red and cyan",
+        "Green and magenta",
+        "Colour separation",
+        "Balancing opposing colours"
+      ]
+    },
+    "advanced_colour_masterclass": {
+      "tutorial_title": "Lightroom Masterclass: Color and Color Theory",
+      "creator": "Kyler Steele",
+      "youtube_link": "https://www.youtube.com/watch?v=6anhdrB13TE",
+      "runtime": "39:43",
+      "level": "professional",
+      "skills_taught": [
+        "Advanced HSL",
+        "Colour grading",
+        "Camera calibration",
+        "Colour relationships",
+        "Creating a colour palette",
+        "Consistent visual style"
+      ]
+    }
+  },
+  "detail_sharpening_noise_and_grain": {
+    "sharpening_and_noise_reduction": {
+      "tutorial_title": "Lightroom Sharpening and Noise Reduction: In-Depth Tutorial",
+      "creator": "Signature Edits",
+      "youtube_link": "https://www.youtube.com/watch?v=mSg_JYuULB8",
+      "runtime": "25:17",
+      "level": "experienced",
+      "skills_taught": [
+        "Sharpening amount",
+        "Sharpening radius",
+        "Detail control",
+        "Masking slider",
+        "Luminance noise reduction",
+        "Colour-noise reduction",
+        "Balancing sharpness and noise"
+      ]
+    },
+    "lens_and_image_corrections": {
+      "tutorial_title": "Image and Lens Corrections Tutorial for Beginners",
+      "creator": "Kasper Garam",
+      "youtube_link": "https://www.youtube.com/watch?v=3dbq_zxFmCs",
+      "runtime": "13:03",
+      "level": "novice",
+      "skills_taught": [
+        "Lens profiles",
+        "Distortion correction",
+        "Vignetting correction",
+        "Chromatic aberration removal",
+        "Perspective correction",
+        "Basic sharpening",
+        "Basic noise reduction"
+      ]
+    },
+    "natural_film_grain": {
+      "tutorial_title": "The Best Way to Add Natural Film Grain in Lightroom",
+      "creator": "Photo Feaver",
+      "youtube_link": "https://www.youtube.com/watch?v=6mjSX57UQLw",
+      "runtime": "3:13",
+      "level": "experienced",
+      "skills_taught": [
+        "Grain amount",
+        "Grain size",
+        "Grain roughness",
+        "Matching grain to resolution",
+        "Combining grain with softness",
+        "Avoiding artificial-looking grain"
+      ]
+    },
+    "dreamy_film_look": {
+      "tutorial_title": "How to Create a Dreamy Film Look: Lightroom Editing Tutorial",
+      "creator": "TKNORTH",
+      "youtube_link": "https://www.youtube.com/watch?v=1mKqt1sld_0",
+      "runtime": "10:42",
+      "level": "experienced",
+      "skills_taught": [
+        "Soft tonal contrast",
+        "Faded black point",
+        "Film-inspired colours",
+        "Highlight glow",
+        "Muted saturation",
+        "Adding grain",
+        "Creating a coherent film aesthetic"
+      ]
+    }
+  },
+  "snapseed_mobile_editing": {
+    "complete_snapseed_workflow": {
+      "tutorial_title": "Snapseed Ultimate Guide: All Tools and Sliders Explained",
+      "creator": "NavEdits",
+      "youtube_link": "https://www.youtube.com/watch?v=UzZ1zEdSSdc",
+      "runtime": "49:14",
+      "level": "beginner",
+      "skills_taught": [
+        "Tune Image",
+        "Curves",
+        "Selective adjustments",
+        "Brush tool",
+        "Healing tool",
+        "Details and sharpening",
+        "Editing stacks",
+        "Masking",
+        "Exporting"
+      ]
+    },
+    "snapseed_film_emulation": {
+      "tutorial_title": "How to Edit Photos on Snapseed to Make Them Look Like Film",
+      "creator": "Henry Media Group",
+      "youtube_link": "https://www.youtube.com/watch?v=xSHyBmqJvmg",
+      "runtime": "18:52",
+      "level": "novice",
+      "skills_taught": [
+        "Mobile colour grading",
+        "Curves",
+        "Faded contrast",
+        "Film-style colour",
+        "Grain",
+        "Vignetting",
+        "Creating a repeatable mobile workflow"
+      ]
+    }
+  }
+}

@@ -1,6 +1,5 @@
-import base64
-import html
 import io
+import json
 import os
 
 import uvicorn
@@ -9,16 +8,19 @@ from PIL import Image
 from PIL.ExifTags import TAGS, GPSTAGS
 from PIL.TiffImagePlugin import IFDRational
 
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, BackgroundTasks
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from dotenv import load_dotenv
 
 
 
 from local_cv_engine import *
 from gemini_analysis import *
-from emailing_engine import *
+from pdf_engine import generate_critique_pdf, pdf_download_filename
 from score_engine import build_gemini_context, build_score_engine, enforce_authoritative_scores
+from tutorial_recommendation_engine import load_tutorial_catalog, recommend_tutorials
+from intent_engine import build_intent_profile
 
 # Load environment variables
 load_dotenv()
@@ -92,21 +94,34 @@ def format_shutter_speed(exposure_time) -> str:
     except Exception:
         return str(exposure_time)
 
-def get_exif_summary(exif_data: dict) -> dict:
-    # Helper to resolve IFDRational/bytes
-    def clean_val(val):
-        if isinstance(val, IFDRational):
-            return float(val) if val.denominator != 0 else 0.0
-        if isinstance(val, bytes):
-            return val.decode('utf-8', errors='ignore')
-        return val
 
-    exposure_time = clean_val(exif_data.get('ExposureTime'))
-    f_number = clean_val(exif_data.get('FNumber'))
-    iso = clean_val(exif_data.get('ISOSpeedRatings'))
-    focal_length = clean_val(exif_data.get('FocalLength'))
-    camera = clean_val(exif_data.get('Model') or exif_data.get('Make'))
-    lens = clean_val(exif_data.get('LensModel'))
+def clean_exif_value(value):
+    if isinstance(value, IFDRational):
+        return float(value) if value.denominator != 0 else 0.0
+    if isinstance(value, bytes):
+        return value.decode("utf-8", errors="ignore").strip("\x00 ")
+    return value
+
+
+def get_camera_device_name(exif_data: dict) -> str | None:
+    """Return a readable EXIF Make + Model without duplicating the brand."""
+    make = str(clean_exif_value(exif_data.get("Make")) or "").strip()
+    model = str(clean_exif_value(exif_data.get("Model")) or "").strip()
+
+    if make and model:
+        if model.casefold().startswith(make.casefold()):
+            return model
+        return f"{make} {model}"
+    return model or make or None
+
+
+def get_exif_summary(exif_data: dict) -> dict:
+    exposure_time = clean_exif_value(exif_data.get('ExposureTime'))
+    f_number = clean_exif_value(exif_data.get('FNumber'))
+    iso = clean_exif_value(exif_data.get('ISOSpeedRatings'))
+    focal_length = clean_exif_value(exif_data.get('FocalLength'))
+    camera = get_camera_device_name(exif_data)
+    lens = clean_exif_value(exif_data.get('LensModel'))
 
     if isinstance(iso, (list, tuple)) and len(iso) > 0:
         iso = iso[0]
@@ -119,7 +134,7 @@ def get_exif_summary(exif_data: dict) -> dict:
     # Construct human readable text for Gemini
     lines = []
     for k, v in exif_data.items():
-        cleaned = clean_val(v)
+        cleaned = clean_exif_value(v)
         if cleaned is not None:
             lines.append(f"{k}: {cleaned}")
     exif_text = "\n".join(lines)
@@ -148,15 +163,38 @@ def get_exif_summary(exif_data: dict) -> dict:
 def read_root():
     return {"status": "ok", "app": "FocalPointAI Backend"}
 
+
+@app.post("/image-metadata")
+async def read_image_metadata(file: UploadFile = File(...)):
+    """Read lightweight device metadata for the pre-analysis upload preview."""
+    if not file.content_type or not file.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="Uploaded file is not an image")
+
+    image_bytes = await file.read()
+    if len(image_bytes) > 15 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="Uploaded image exceeds 15 MB")
+
+    try:
+        with Image.open(io.BytesIO(image_bytes)) as image:
+            exif_data = extract_exif_data(image)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="The image metadata could not be read") from exc
+
+    return {
+        "camera": get_camera_device_name(exif_data),
+        "make": clean_exif_value(exif_data.get("Make")),
+        "model": clean_exif_value(exif_data.get("Model")),
+        "has_exif": bool(exif_data),
+    }
+
+
 @app.post("/analyze")
 async def analyze_image(
-    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
-    email: str = Form(...)
 ):
     try:
         # Validate file is an image
-        if not file.content_type.startswith("image/"):
+        if not file.content_type or not file.content_type.startswith("image/"):
             raise HTTPException(status_code=400, detail="Uploaded file is not an image")
 
         image_bytes = await file.read()
@@ -169,6 +207,7 @@ async def analyze_image(
         # CV and EXIF own the evidence and every numeric score. Gemini only
         # explains those application-computed results in professional language.
         raw_local_analysis = analyze_cv_heuristics(image_bytes, exif_summary=exif_summary)
+        raw_local_analysis["intent_profile"] = build_intent_profile(raw_local_analysis)
         score_engine = build_score_engine(raw_local_analysis, exif_summary)
         local_analysis = enforce_authoritative_scores(
             raw_local_analysis,
@@ -210,43 +249,73 @@ async def analyze_image(
             analysis_results = local_analysis
             analysis_results["ai_status"] = "not_configured"
             
-        # Determine email sending status
-        smtp_host = os.environ.get("SMTP_HOST")
-        smtp_username = os.environ.get("SMTP_USERNAME")
-        smtp_password = os.environ.get("SMTP_PASSWORD")
-        
-        # Auto-detect Gmail settings for status determination
-        if not smtp_host and smtp_username and smtp_username.endswith("@gmail.com"):
-            smtp_host = "smtp.gmail.com"
-            
-        if smtp_host and smtp_username and smtp_password:
-            # The response returns before the background SMTP task runs, so
-            # "queued" is accurate here; success/failure is recorded in logs.
-            email_status = "queued"
-        else:
-            email_status = "simulated"
-            
         # Add basic info
-        analysis_results["email"] = email
         analysis_results["filename"] = file.filename
-        analysis_results["email_status"] = email_status
-        
-        # Trigger background email sending
-        background_tasks.add_task(
-            send_report_email_async,
-            email,
-            analysis_results.copy(),  # Send a copy to avoid mutation issues in threads
-            image_bytes,
-            file.filename
-        )
-        
+        analysis_results["tutorial_recommendations"] = recommend_tutorials(analysis_results, limit=3)
+
         return analysis_results
 
-        
+    except HTTPException:
+        raise
     except ValueError as ve:
         raise HTTPException(status_code=400, detail=str(ve))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}")
+
+
+@app.post("/critique-pdf")
+async def download_critique_pdf(
+    analysis_json: str = Form(...),
+    file: UploadFile | None = File(None),
+):
+    """Generate a downloadable PDF for a critique already shown in the UI."""
+    try:
+        analysis_results = json.loads(analysis_json)
+    except json.JSONDecodeError as exc:
+        raise HTTPException(status_code=400, detail="Analysis data is not valid JSON") from exc
+
+    if not isinstance(analysis_results, dict):
+        raise HTTPException(status_code=400, detail="Analysis data must be an object")
+
+    image_bytes = None
+    if file is not None:
+        if not file.content_type or not file.content_type.startswith("image/"):
+            raise HTTPException(status_code=400, detail="Uploaded file is not an image")
+        image_bytes = await file.read()
+        if len(image_bytes) > 15 * 1024 * 1024:
+            raise HTTPException(status_code=400, detail="Uploaded image exceeds 15 MB")
+
+    try:
+        pdf_bytes = generate_critique_pdf(analysis_results, image_bytes)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail="Could not generate the PDF critique") from exc
+
+    download_name = pdf_download_filename(analysis_results.get("filename"))
+    return StreamingResponse(
+        io.BytesIO(pdf_bytes),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{download_name}"'},
+    )
+
+
+@app.get("/tutorials")
+def list_tutorials():
+    """Return the curated YouTube learning catalog."""
+    tutorials = load_tutorial_catalog()
+    return {"count": len(tutorials), "tutorials": tutorials}
+
+
+@app.post("/tutorial-recommendations")
+def tutorial_recommendations(analysis: dict, limit: int = 3):
+    """Recommend tutorials for an existing photo-analysis payload."""
+    try:
+        return {
+            "learner_path": recommend_tutorials(analysis, limit=limit),
+        }
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)

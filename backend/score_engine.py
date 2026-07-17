@@ -16,6 +16,11 @@ def _rating(aspects, key):
     return _clamp(aspects.get(key, {}).get("rating", 0))
 
 
+def _technique_status(local_analysis, key):
+    profile = local_analysis.get("intent_profile") or {}
+    return ((profile.get("technique_evaluations") or {}).get(key) or {}).get("status")
+
+
 def build_score_engine(local_analysis: dict, exif_summary: dict | None = None) -> dict:
     """Create all public scores from local CV/EXIF evidence, never from Gemini."""
     aspects = local_analysis.get("aspects", {})
@@ -28,6 +33,7 @@ def build_score_engine(local_analysis: dict, exif_summary: dict | None = None) -
         composition_signals.get("leading_lines", {}).get("score", 0),
         composition_signals.get("symmetry_patterns", {}).get("score", 0),
         composition_signals.get("framing", {}).get("score", 0),
+        composition_signals.get("negative_space", {}).get("score", 0),
         _rating(aspects, "crop"),
     ]
     # A photograph does not need to use every composition technique. Reward the
@@ -54,6 +60,9 @@ def build_score_engine(local_analysis: dict, exif_summary: dict | None = None) -
         _rating(aspects, "saturation"),
         _rating(aspects, "warmth"),
     )
+    if _technique_status(local_analysis, "colour") in {"not_applicable", "intentional_absence"}:
+        # Neutral contribution: intentional monochrome is not a color failure.
+        color = 82
     focus = _rating(aspects, "details")
 
     raw_exif = (exif_summary or {}).get("raw", {})
@@ -85,6 +94,10 @@ def build_score_engine(local_analysis: dict, exif_summary: dict | None = None) -
     overall = _average(composition, lighting, exposure, color, focus)
 
     aspect_scores = {key: _rating(aspects, key) for key in aspects if key != "feel"}
+    if _technique_status(local_analysis, "colour") in {"not_applicable", "intentional_absence"}:
+        for key in ("colour", "saturation", "warmth"):
+            if key in aspect_scores:
+                aspect_scores[key] = 82
     aspect_scores["composition"] = composition
     aspect_scores["feel"] = {
         "wow_factor": _average(composition, color, focus),
@@ -117,6 +130,7 @@ def build_gemini_context(local_analysis: dict, exif_summary: dict, score_engine:
         },
         "camera_diagnostics": local_analysis.get("exif_analysis"),
         "authoritative_scores": score_engine,
+        "intent_profile": local_analysis.get("intent_profile", {}),
     }
 
 
@@ -167,6 +181,7 @@ def enforce_authoritative_scores(
     result["score_engine"] = score_engine
     result["image_statistics"] = local_analysis.get("image_statistics", {})
     result["advanced_cv"] = local_analysis.get("advanced_cv", {})
+    result["intent_profile"] = local_analysis.get("intent_profile", {})
     result["exif_analysis"] = local_analysis.get("exif_analysis")
     result["mode"] = "gemini_ai"
     return result
