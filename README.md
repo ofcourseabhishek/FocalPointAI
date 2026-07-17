@@ -1,20 +1,98 @@
-# FocalPointAI
+<p align="center">
+  <img src="frontend/public/focalpoint-logo-transparent.png" alt="FocalPointAI logo" width="180">
+</p>
 
-FocalPointAI is a web-based photography mentor that analyzes a photograph and returns an evidence-based critique. It combines deterministic OpenCV measurements with optional Gemini-generated explanations, then presents scores, improvement advice, camera metadata, learning recommendations, and a downloadable PDF report.
+<h1 align="center">FocalPointAI</h1>
 
-The project is currently a functional MVP intended for local development and evaluation.
+<p align="center">
+  <strong>An AI-assisted photography coach that turns every photograph into a personalized learning experience.</strong>
+</p>
+
+<p align="center">
+  Upload a photo &rarr; measure visual evidence &rarr; understand the critique &rarr; practice the right skills
+</p>
+
+<p align="center">
+  <img alt="Project status: functional MVP" src="https://img.shields.io/badge/status-functional_MVP-7c3aed">
+  <img alt="Python 3.10 or newer" src="https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white">
+  <img alt="FastAPI" src="https://img.shields.io/badge/FastAPI-backend-009688?logo=fastapi&logoColor=white">
+  <img alt="React 19" src="https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=1f2937">
+  <a href="https://focalpointai.vercel.app"><img alt="Live demo" src="https://img.shields.io/badge/demo-live-brightgreen"></a>
+  <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/license-MIT-green"></a>
+</p>
+
+<p align="center">
+  <a href="#live-demo">Live demo</a> &middot;
+  <a href="#quick-start">Quick start</a> &middot;
+  <a href="#how-it-works">How it works</a> &middot;
+  <a href="#api-reference">API</a> &middot;
+  <a href="#roadmap">Roadmap</a>
+</p>
+
+<p align="center">
+  <a href="https://focalpointai.vercel.app">
+    <img src="docs/assets/readme-hero.png" alt="FocalPointAI photography analysis concept showing a camera aperture, composition grid, focus points, histogram, and tonal curve" width="100%">
+  </a>
+</p>
+
+FocalPointAI analyzes a photograph with deterministic computer-vision measurements, explains the findings in practical photography language, recommends focused learning material, and produces a downloadable critique report. Gemini can improve the narrative, but the application-owned evidence and scores remain authoritative.
+
+> [!NOTE]
+> This repository is a functional MVP. The public deployment may take a moment to respond when the Render backend is waking from an idle state.
+
+## Live Demo
+
+| Service | URL |
+| --- | --- |
+| Web application | [focalpointai.vercel.app](https://focalpointai.vercel.app) |
+| Backend API | [focalpointai.onrender.com](https://focalpointai.onrender.com) |
+| Interactive API documentation | [focalpointai.onrender.com/docs](https://focalpointai.onrender.com/docs) |
+
+## Why FocalPointAI?
+
+Photography feedback is often subjective: a comment may say that an image feels weak without explaining why or how to improve it.
+
+FocalPointAI combines measurable image evidence, established photography principles, and optional AI-written explanations to answer three useful questions:
+
+- Why does this image work, or fail to work?
+- What is the most valuable improvement to make next?
+- Which technique should the photographer practice?
+
+Unlike a generic AI image critic, FocalPointAI continues to provide structured feedback without a cloud model and prevents provider-generated text from replacing its locally computed scores.
 
 ## Features
 
-- Drag-and-drop upload for JPEG, PNG, and WebP images up to 15 MB in the web interface
-- Local analysis of exposure, contrast, color, sharpness, subject placement, faces, horizon, clutter, saliency, and composition signals
-- EXIF extraction for camera, lens, shutter speed, aperture, ISO, and focal length when metadata is available
-- Deterministic application-owned scores that remain authoritative when Gemini is enabled
-- Optional Gemini narrative critique with automatic local-computer-vision fallback
-- Intent-aware feedback for styles such as minimalism, monochrome, and atmospheric photography
-- Personalized tutorials selected from a curated local catalog
-- Multi-page PDF critique export with the analyzed photograph and tutorial links
-- Responsive React results workspace with strengths, quick wins, visual evidence, and category-level details
+### Image intelligence
+
+- Exposure, contrast, saturation, sharpness, clutter, and color-palette analysis
+- Subject placement, saliency, horizon, face, eye, sky, and composition signals
+- EXIF extraction for camera, lens, shutter speed, aperture, ISO, and focal length
+- Intent-aware evaluation for styles such as minimalism, monochrome, and atmospheric photography
+
+### Actionable learning
+
+- Overall and category-level scores backed by local evidence
+- Plain-language strengths, quick wins, and improvement guidance
+- Personalized tutorials ranked from a curated local catalog
+- Optional Gemini narrative critique with automatic local fallback
+
+### Shareable results
+
+- Responsive React critique workspace with visual evidence and category details
+- Multi-page PDF report containing the photograph, scores, recommendations, metadata, and tutorial links
+- JPEG, PNG, and WebP uploads up to 15 MB in the current web interface
+
+## Example Critique
+
+An analysis connects an observation to a concrete action instead of returning only a score. A representative result looks like this:
+
+> **Observation:** The subject has strong separation, but the bright background competes for attention.
+>
+> **Next step:** Reduce the background highlights and use a tighter crop to strengthen the visual hierarchy.
+>
+> **Practice:** Review subject isolation and background-control techniques.
+
+The exact categories, evidence, and recommendations depend on the uploaded photograph and its available metadata.
 
 ## How It Works
 
@@ -32,70 +110,30 @@ flowchart LR
     I --> J["Display results or export PDF"]
 ```
 
-Local computer vision and EXIF data own the evidence and numeric scores. Gemini, when configured, adds language and interpretation but cannot replace those scores.
+| Layer | Responsibility |
+| --- | --- |
+| React + Vite | Upload workflow, progress states, evidence dashboard, tutorials, and PDF download |
+| FastAPI | Image validation, route orchestration, metadata, analysis, and report responses |
+| OpenCV + NumPy + Pillow | Local measurements, image preparation, saliency, composition signals, and EXIF handling |
+| Score and intent engines | Deterministic scoring, interpretation guardrails, and intent-aware feedback |
+| Gemini adapter | Optional narrative explanation; it does not own numeric scores |
+| ReportLab | Branded multi-page PDF critique generation |
 
-## Technology Stack
+## Quick Start
 
-- Frontend: React 19, Vite 8, Lucide React, CSS
-- Backend: Python 3.10+, FastAPI, Uvicorn
-- Image analysis: OpenCV, NumPy, Pillow
-- Optional AI: Google Gemini REST API through HTTPX
-- Reports: ReportLab
-- Tests: Python `unittest` and Oxlint
-
-## Prerequisites
-
-- Python 3.10 or newer
-- Node.js `^20.19.0` or `>=22.12.0`
-- npm
-- A Gemini API key only if AI-written narrative feedback is required
-
-The application remains usable without a Gemini key by falling back to local analysis.
-
-## Local Setup
-
-### 1. Clone and enter the repository
-
-```powershell
-git clone <repository-url>
-cd FocalPointAI
-```
-
-### 2. Create the backend environment
-
-From the repository root:
+### Backend
 
 ```powershell
 py -m venv .venv
 .\.venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip
 python -m pip install -r backend\requirements.txt
-```
-
-On macOS or Linux, activate the environment with `source .venv/bin/activate` and use forward slashes in paths.
-
-### 3. Configure optional Gemini analysis
-
-Create `backend/.env` only if Gemini feedback is wanted:
-
-```dotenv
-GEMINI_API_KEY=your_api_key_here
-```
-
-Do not commit this file. It is already excluded by `.gitignore`.
-
-### 4. Start the API
-
-```powershell
 cd backend
 uvicorn main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-The health response is available at `http://127.0.0.1:8000/`, and interactive API documentation is available at `http://127.0.0.1:8000/docs`.
+### Frontend
 
-### 5. Start the frontend
-
-Open another terminal:
+In a second terminal:
 
 ```powershell
 cd frontend
@@ -103,38 +141,68 @@ npm ci
 npm run dev
 ```
 
-Open the local URL printed by Vite, normally `http://localhost:5173`.
+Open the URL printed by Vite, normally `http://localhost:5173`. The API health response is at `http://127.0.0.1:8000/`, and interactive API documentation is at `http://127.0.0.1:8000/docs`.
 
-## Configuration
+## Installation and Configuration
+
+### Prerequisites
+
+- Python 3.10 or newer
+- Node.js `^20.19.0` or `>=22.12.0`
+- npm
+- A Gemini API key only when AI-written narrative feedback is wanted
+
+Clone the project and enter the repository:
+
+```powershell
+git clone <repository-url>
+cd FocalPointAI
+```
+
+On macOS or Linux, create the environment with `python3 -m venv .venv`, activate it with `source .venv/bin/activate`, and use forward slashes in commands.
+
+### Optional Gemini analysis
+
+Create `backend/.env` only when Gemini feedback is wanted:
+
+```dotenv
+GEMINI_API_KEY=your_api_key_here
+```
+
+Do not commit this file. It is excluded by `.gitignore`. When the key is absent or the provider request fails, the application uses its local computer-vision critique.
+
+### Environment variables
 
 | Variable | Location | Required | Purpose |
 | --- | --- | --- | --- |
-| `GEMINI_API_KEY` | `backend/.env` or process environment | No | Enables Gemini narrative analysis. Local CV is used when absent or when Gemini fails. |
-| `VITE_BACKEND_URL` | `frontend/.env.local` or build environment | No for local use | Overrides the default API URL, `http://127.0.0.1:8000`. Set this for deployment. |
+| `GEMINI_API_KEY` | `backend/.env` or process environment | No | Enables Gemini narrative analysis; local CV remains the fallback and score authority. |
+| `VITE_BACKEND_URL` | `frontend/.env.local` or build environment | No for local use | Overrides `http://127.0.0.1:8000`; set it for deployment. |
 | `VITE_SHOW_LEGACY_SCANNER` | `frontend/.env.local` | No | Enables the legacy scanner visualization. |
 
 Example frontend configuration:
 
 ```dotenv
-VITE_BACKEND_URL=https://api.example.com
+VITE_BACKEND_URL=https://focalpointai.onrender.com
 ```
 
 Vite reads environment variables at startup, so restart the frontend after changing them.
 
-## API Endpoints
+## API Reference
 
 | Method | Endpoint | Description |
 | --- | --- | --- |
-| `GET` | `/` | Backend health and application status |
+| `GET` | `/` | Returns backend health and application status |
 | `POST` | `/image-metadata` | Returns lightweight camera metadata for an uploaded image |
 | `POST` | `/analyze` | Runs the complete critique pipeline for an uploaded image |
 | `POST` | `/critique-pdf` | Builds a PDF from an existing analysis payload and optional image |
 | `GET` | `/tutorials` | Returns the curated tutorial catalog |
 | `POST` | `/tutorial-recommendations` | Ranks tutorials for an existing analysis payload |
 
-## Verification
+Use the [public Swagger UI](https://focalpointai.onrender.com/docs), or `http://127.0.0.1:8000/docs` while the backend is running locally, for request schemas and interactive testing.
 
-Run the backend tests from the repository root:
+## Development and Verification
+
+Run backend tests from the repository root:
 
 ```powershell
 .\.venv\Scripts\python.exe -m unittest discover -s backend -p "test_*.py" -v
@@ -148,16 +216,16 @@ npm run lint
 npm run build
 ```
 
-The verified baseline on July 18, 2026 is 19 passing backend tests, a clean frontend lint run, and a successful production build.
+The locally verified baseline on July 18, 2026 was 19 passing backend tests, a clean frontend lint run, and a successful production build. This is a dated baseline, not a continuously updated CI badge.
 
 ## Project Structure
 
 ```text
 FocalPointAI/
 |-- backend/
-|   |-- main.py                         # FastAPI routes and analysis orchestration
-|   |-- local_cv_engine.py              # OpenCV/NumPy image measurements
-|   |-- score_engine.py                 # Deterministic scores and Gemini guardrails
+|   |-- main.py                         # FastAPI routes and orchestration
+|   |-- local_cv_engine.py              # OpenCV and NumPy measurements
+|   |-- score_engine.py                 # Deterministic scores and AI guardrails
 |   |-- intent_engine.py                # Intent-aware technique evaluation
 |   |-- gemini_analysis.py              # Optional Gemini request handling
 |   |-- pdf_engine.py                   # PDF critique generation
@@ -168,28 +236,64 @@ FocalPointAI/
 |   |-- public/                         # Fonts, brand assets, and quote data
 |   `-- src/                            # React interface and styles
 |-- docs/
-|   `-- PROJECT_REPORT.md               # Current technical and product report
+|   `-- PROJECT_REPORT.md               # Technical and product assessment
 |-- fonts/                              # Google Sans files used by reports
 |-- roadmap.md                          # Long-term product roadmap
 `-- README.md
 ```
 
+## Roadmap
+
+### Shipped in the MVP
+
+- Local image analysis and deterministic scoring
+- Optional Gemini explanations with score guardrails
+- EXIF extraction and intent-aware feedback
+- Tutorial recommendations and PDF reports
+
+### Release hardening
+
+- Enforce upload and decoded-image limits consistently on every API route
+- Restrict production CORS and validate deployment configuration
+- Pin backend dependencies and add continuous integration
+- Validate Gemini behavior with a live key and representative image set
+- Add licensed local demo images, screenshots, and browser-level tests
+
+### Planned product work
+
+- RAW decoding and richer camera-setting intelligence
+- Concrete crop overlays and structured Lightroom adjustment guidance
+- Accounts, saved analyses, progress tracking, and personalized coaching
+- Learning challenges, portfolio review, and community critique features
+
+See the [full roadmap](roadmap.md) and [project report](docs/PROJECT_REPORT.md) for detailed status and priorities.
+
+## Contributing
+
+Feedback and focused improvements are welcome while the project is in MVP development:
+
+1. Fork the repository and create a descriptive feature branch.
+2. Keep changes scoped and add or update tests where behavior changes.
+3. Run the backend tests, frontend lint, and production build.
+4. Open a pull request explaining the problem, approach, and verification performed.
+
+Before actively accepting external contributions, the project should add a `CONTRIBUTING.md`, a code of conduct, and CI checks.
+
 ## Current Limitations
 
 - There is no authentication, database, analysis history, or cloud image storage.
 - RAW camera formats are not supported; the current UI accepts JPEG, PNG, and WebP.
-- The `/analyze` route should enforce its own upload limit; the 15 MB check currently exists in the UI and selected auxiliary API routes.
-- Production CORS is not restricted yet.
-- Backend dependencies are not version-pinned, and continuous integration is not configured.
-- Gemini behavior, quota, and the configured model must be verified with a live key before deployment.
-- The included demo photographs are loaded from Unsplash and require internet access.
+- The `/analyze` route does not yet enforce the same 15 MB server-side limit used by the UI and selected auxiliary routes.
+- Production CORS is not restricted, backend dependencies are not pinned, and CI is not configured.
+- Gemini model access, quota, and response behavior must be verified with a live key before deployment.
+- The included demo photographs load from Unsplash and require internet access.
 
-See [the project report](docs/PROJECT_REPORT.md) for the full status assessment and [the roadmap](roadmap.md) for planned development.
+## Privacy
 
-## Privacy Note
+Without `GEMINI_API_KEY`, image critique runs locally inside the backend process. When Gemini is enabled, the uploaded image and computed analysis context are sent to Google's Gemini API.
 
-Without `GEMINI_API_KEY`, image critique runs locally in the backend process. When Gemini is enabled, the uploaded image and computed analysis context are sent to Google's Gemini API. A production deployment should disclose this behavior and define image retention, consent, deletion, and logging policies.
+The public deployment should provide clear in-product consent and define image retention, deletion, provider disclosure, and logging policies. The active API does not intentionally persist uploaded images or analysis results.
 
 ## License
 
-No license file is currently included. Add a license before distributing or accepting external contributions.
+FocalPointAI is available under the [MIT License](LICENSE). You may use, copy, modify, merge, publish, distribute, sublicense, and sell copies subject to the license terms.

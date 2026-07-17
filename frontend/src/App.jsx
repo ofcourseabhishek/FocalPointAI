@@ -865,7 +865,7 @@ export default function App() {
 
                   <div className="ready-actions">
                     <button type="button" className="btn-secondary" onClick={handleBrowseClick}>Change Photo</button>
-                    <button type="submit" className="btn-primary analyze-button"><Sparkles size={20} />Analyze Photograph</button>
+                    <button type="submit" className="btn-primary analyze-button"><Sparkles size={20} />Get Feedback</button>
                   </div>
                 </div>
               )}
@@ -1146,7 +1146,8 @@ export default function App() {
               </div>
 
               <div className="workspace-body">
-                <aside className="photo-workbench">
+                <div className="workspace-sidebar">
+                  <aside className="photo-workbench">
                   <div className="photo-toolbar">
                     <div>
                       <span>IMAGE INSPECTOR</span>
@@ -1205,6 +1206,9 @@ export default function App() {
                     </div>
                   )}
 
+                  </aside>
+
+                  <div className="lesson-recommendations">
                   {recommendedLearning[0] && (() => {
                     const tutorial = recommendedLearning[0];
                     const skill = tutorial.based_on?.label || 'your lowest-scoring skill';
@@ -1312,7 +1316,30 @@ export default function App() {
                       </section>
                     );
                   })()}
-                </aside>
+
+                  {recommendedLearning.length > 1 && (
+                    <section className="learning-strip" aria-label="Recommended next lessons">
+                      <div>
+                        <h4>Recommended next</h4>
+                      </div>
+                      {recommendedLearning.slice(1).map((resource) => (
+                        <a
+                          key={resource.id}
+                          href={resource.youtube_link}
+                          target="_blank"
+                          rel="noreferrer"
+                          title={resource.reason}
+                        >
+                          <span>{tutorialMeta(resource)}</span>
+                          <strong>{resource.title}</strong>
+                          <small>{resource.creator}</small>
+                          <em><PlayCircle size={12} /> Watch on YouTube <ExternalLink size={11} /></em>
+                        </a>
+                      ))}
+                    </section>
+                  )}
+                  </div>
+                </div>
 
                 <section className="critique-panel">
                   <div className="score-summary">
@@ -1443,29 +1470,6 @@ export default function App() {
                           </section>
                         </div>
 
-                        {recommendedLearning.length > 0 && (
-                          <section className="learning-strip overview-learning-strip">
-                            <div>
-                              <span>LEARNING HUB</span>
-                              <h4>Recommended next</h4>
-                            </div>
-                            {recommendedLearning.map((resource) => (
-                              <a
-                                key={resource.id}
-                                href={resource.youtube_link}
-                                target="_blank"
-                                rel="noreferrer"
-                                title={resource.reason}
-                              >
-                                <span>{tutorialMeta(resource)}</span>
-                                <strong>{resource.title}</strong>
-                                <small>{resource.creator}</small>
-                                <em><PlayCircle size={12} /> Watch on YouTube <ExternalLink size={11} /></em>
-                              </a>
-                            ))}
-                          </section>
-                        )}
-
                         <section className="technique-analysis-panel">
                           <div className="section-heading compact">
                             <div><span>TECHNIQUE ANALYSIS</span><h3>What was used, what can grow</h3></div>
@@ -1474,7 +1478,9 @@ export default function App() {
                           {intentProfile ? (
                             <>
                               <div className="technique-analysis-grid">
-                                {Object.entries(intentProfile.technique_evaluations || {}).map(([key, evaluation]) => (
+                                {Object.entries(intentProfile.technique_evaluations || {})
+                                  .filter(([, evaluation]) => evaluation.status !== 'not_applicable')
+                                  .map(([key, evaluation]) => (
                                   <button
                                     type="button"
                                     key={key}
@@ -1491,7 +1497,7 @@ export default function App() {
                                     </div>
                                     <p>{evaluation.reason}</p>
                                   </button>
-                                ))}
+                                  ))}
                               </div>
                             </>
                           ) : (

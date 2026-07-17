@@ -1305,14 +1305,35 @@ svg {
   min-height: 720px;
 }
 
-.photo-workbench {
+.workspace-sidebar {
   align-self: start;
   position: sticky;
   top: 12px;
   min-width: 0;
-  padding: 18px;
   border-right: 1px solid var(--workspace-line);
   background: rgba(0, 0, 0, 0.16);
+}
+
+.photo-workbench {
+  min-width: 0;
+  padding: 18px;
+}
+
+.lesson-recommendations {
+  padding: 0 18px 18px;
+}
+
+.lesson-recommendations .primary-tutorial {
+  margin-top: 0;
+}
+
+.lesson-recommendations .learning-strip {
+  margin-top: 14px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.lesson-recommendations .learning-strip > div {
+  grid-column: 1 / -1;
 }
 
 .photo-toolbar,
@@ -2722,10 +2743,6 @@ svg {
   white-space: nowrap;
 }
 
-.overview-learning-strip {
-  display: grid;
-}
-
 @media (max-width: 1180px) {
   .workspace-body {
     grid-template-columns: minmax(340px, 0.8fr) minmax(560px, 1.2fr);
@@ -2741,10 +2758,21 @@ svg {
 @media (max-width: 920px) {
   .workspace-body { grid-template-columns: 1fr; }
 
+  .workspace-sidebar { display: contents; }
+
   .photo-workbench {
-    position: static;
-    border-right: 0;
+    order: 1;
     border-bottom: 1px solid var(--workspace-line);
+    background: rgba(0, 0, 0, 0.16);
+  }
+
+  .critique-panel { order: 2; }
+
+  .lesson-recommendations {
+    order: 3;
+    padding: 18px;
+    border-top: 1px solid var(--workspace-line);
+    background: rgba(0, 0, 0, 0.16);
   }
 
   .inspected-photo { min-height: 420px; max-height: 560px; }
@@ -2845,7 +2873,6 @@ svg {
   }
 
   .overview-columns { order: 1; }
-  .overview-learning-strip { order: 2; display: grid; }
   .quick-wins-section { order: 3; }
   .category-overview { order: 4; }
   .overview-layout > .system-note { order: 5; }
