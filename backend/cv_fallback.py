@@ -4,6 +4,29 @@ import base64
 import os
 import urllib.request
 
+
+# Full-resolution camera images can require several hundred megabytes once the
+# analyzer creates RGB, LAB, HSV, grayscale, and floating-point working arrays.
+# Keep enough resolution for the heuristics while staying within hosted-service
+# memory limits.
+MAX_ANALYSIS_DIMENSION = 1600
+
+
+def resize_for_analysis(img_bgr, max_dimension: int = MAX_ANALYSIS_DIMENSION):
+    """Return a memory-bounded image and its original dimensions."""
+    original_h, original_w = img_bgr.shape[:2]
+    largest_dimension = max(original_w, original_h)
+
+    if largest_dimension <= max_dimension:
+        return img_bgr, original_w, original_h
+
+    scale = max_dimension / float(largest_dimension)
+    analysis_w = max(1, round(original_w * scale))
+    analysis_h = max(1, round(original_h * scale))
+    resized = cv2.resize(img_bgr, (analysis_w, analysis_h), interpolation=cv2.INTER_AREA)
+    return resized, original_w, original_h
+
+
 def download_cascade(filename: str) -> str:
     """
     Downloads Haar Cascade XML from OpenCV repository if not already cached.
@@ -465,6 +488,7 @@ def analyze_cv_heuristics(image_bytes: bytes, exif_summary: dict = None) -> dict
     if img_bgr is None:
         raise ValueError("Could not decode image")
 
+    img_bgr, original_w, original_h = resize_for_analysis(img_bgr)
     img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
     img_gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
     h, w, _ = img_bgr.shape
@@ -836,7 +860,7 @@ def analyze_cv_heuristics(image_bytes: bytes, exif_summary: dict = None) -> dict
 
     eye_count = sum(len(face.get("eyes", [])) for face in advanced_cv.get("faces", []))
     image_statistics = {
-        "dimensions": f"{w}x{h}",
+        "dimensions": f"{original_w}x{original_h}",
         "brightness": {
             "value": round(mean_brightness / 255.0, 2),
             "level": "Low" if mean_brightness < 90 else "High" if mean_brightness > 160 else "Balanced",
