@@ -869,6 +869,10 @@ def analyze_cv_heuristics(image_bytes: bytes, exif_summary: dict = None) -> dict
             "value": round(std_contrast, 1),
             "level": "Low" if std_contrast < 40 else "High" if std_contrast > 75 else "Medium",
         },
+        "saturation": {
+            "value": round(mean_sat, 1),
+            "level": "Low" if mean_sat < 25 else "High" if mean_sat > 150 else "Medium",
+        },
         "sharpness": {
             "value": round(variance_sharp, 1),
             "level": "Low" if variance_sharp < 80 else "High" if variance_sharp > 500 else "Medium",

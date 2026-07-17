@@ -6,3 +6,4 @@ python-dotenv
 httpx
 numpy
 opencv-python-headless
+reportlab
