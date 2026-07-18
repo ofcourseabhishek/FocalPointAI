@@ -17,7 +17,7 @@
   <img alt="Python 3.10 or newer" src="https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white">
   <img alt="FastAPI" src="https://img.shields.io/badge/FastAPI-backend-009688?logo=fastapi&logoColor=white">
   <img alt="React 19" src="https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=1f2937">
-  <a href="https://focalpointai.vercel.app"><img alt="Live demo" src="https://img.shields.io/badge/demo-live-brightgreen"></a>
+  <a href="https://focalpoint-ai.vercel.app"><img alt="Live demo" src="https://img.shields.io/badge/demo-live-brightgreen"></a>
   <a href="LICENSE"><img alt="Apache License 2.0" src="https://img.shields.io/badge/license-Apache%202.0-green"></a>
 </p>
 
@@ -31,7 +31,7 @@
 </p>
 
 <p align="center">
-  <a href="https://focalpointai.vercel.app">
+  <a href="https://focalpoint-ai.vercel.app">
     <img src="docs/focalpointai_demo/banner.png" alt="FocalPointAI critique workspace showing a photograph, overall score, professional assessment, strengths, and improvement opportunities" width="100%">
   </a>
 </p>
@@ -45,7 +45,7 @@ FocalPointAI analyzes a photograph with deterministic computer-vision measuremen
 
 | Service | URL |
 | --- | --- |
-| Web application | [focalpointai.vercel.app](https://focalpointai.vercel.app) |
+| Web application | [focalpoint-ai.vercel.app](https://focalpoint-ai.vercel.app) |
 | Backend API | [focalpointai.onrender.com](https://focalpointai.onrender.com) |
 | Interactive API documentation | [focalpointai.onrender.com/docs](https://focalpointai.onrender.com/docs) |
 | Full recorded walkthrough | [Watch `demo_video.mp4`](docs/focalpointai_demo/demo_video.mp4) |
@@ -57,7 +57,7 @@ These smooth animated clips are taken from the [full recorded walkthrough](docs/
 ### 1. Choose a photograph
 
 <p align="center">
-  <a href="https://focalpointai.vercel.app">
+  <a href="https://focalpoint-ai.vercel.app">
     <img src="docs/media/01-choose-photo.webp" alt="FocalPointAI home screen panning from the demo photographs toward the upload area" width="720">
   </a>
 </p>
@@ -67,7 +67,7 @@ Start with one of the demonstration photographs, or drag and drop your own JPEG,
 ### 2. Run the critique
 
 <p align="center">
-  <a href="https://focalpointai.vercel.app">
+  <a href="https://focalpoint-ai.vercel.app">
     <img src="docs/media/02-run-analysis.webp" alt="FocalPointAI validating a photograph, progressing through analysis stages, and opening the completed critique" width="720">
   </a>
 </p>
@@ -77,7 +77,7 @@ Keep the page open while FocalPointAI validates the image, extracts metadata, me
 ### 3. Read the result from top to bottom
 
 <p align="center">
-  <a href="https://focalpointai.vercel.app">
+  <a href="https://focalpoint-ai.vercel.app">
     <img src="docs/media/03-review-results.webp" alt="FocalPointAI results workspace moving from the overall score through priority feedback, improvements, and measured evidence" width="720">
   </a>
 </p>
@@ -87,7 +87,7 @@ Begin with the overall score and summary, then review the strongest technique, q
 ### 4. Explore category details
 
 <p align="center">
-  <a href="https://focalpointai.vercel.app">
+  <a href="https://focalpoint-ai.vercel.app">
     <img src="docs/media/04-explore-details.webp" alt="FocalPointAI switching among critique categories and comparing their detailed scores and suggestions" width="720">
   </a>
 </p>
@@ -97,7 +97,7 @@ Use the category tabs to compare composition, lighting, focus, color, subject an
 ### 5. Continue with a lesson or practice action
 
 <p align="center">
-  <a href="https://focalpointai.vercel.app">
+  <a href="https://focalpoint-ai.vercel.app">
     <img src="docs/media/05-learning-actions.webp" alt="FocalPointAI moving through recommended tutorials, exercises, practice checklists, and next actions" width="720">
   </a>
 </p>
