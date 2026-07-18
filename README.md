@@ -18,11 +18,12 @@
   <img alt="FastAPI" src="https://img.shields.io/badge/FastAPI-backend-009688?logo=fastapi&logoColor=white">
   <img alt="React 19" src="https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=1f2937">
   <a href="https://focalpointai.vercel.app"><img alt="Live demo" src="https://img.shields.io/badge/demo-live-brightgreen"></a>
-  <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/license-MIT-green"></a>
+  <a href="LICENSE"><img alt="Apache License 2.0" src="https://img.shields.io/badge/license-Apache%202.0-green"></a>
 </p>
 
 <p align="center">
   <a href="#live-demo">Live demo</a> &middot;
+  <a href="#product-walkthrough">Walkthrough</a> &middot;
   <a href="#quick-start">Quick start</a> &middot;
   <a href="#how-it-works">How it works</a> &middot;
   <a href="#api-reference">API</a> &middot;
@@ -31,7 +32,7 @@
 
 <p align="center">
   <a href="https://focalpointai.vercel.app">
-    <img src="docs/assets/readme-hero.png" alt="FocalPointAI photography analysis concept showing a camera aperture, composition grid, focus points, histogram, and tonal curve" width="100%">
+    <img src="docs/focalpointai_demo/landing page.png" alt="FocalPointAI critique workspace showing a photograph, overall score, professional assessment, strengths, and improvement opportunities" width="100%">
   </a>
 </p>
 
@@ -47,6 +48,86 @@ FocalPointAI analyzes a photograph with deterministic computer-vision measuremen
 | Web application | [focalpointai.vercel.app](https://focalpointai.vercel.app) |
 | Backend API | [focalpointai.onrender.com](https://focalpointai.onrender.com) |
 | Interactive API documentation | [focalpointai.onrender.com/docs](https://focalpointai.onrender.com/docs) |
+| Full recorded walkthrough | [Watch `demo_video.mp4`](docs/focalpointai_demo/demo_video.mp4) |
+
+## Product Walkthrough
+
+These smooth animated clips are taken from the [full recorded walkthrough](docs/focalpointai_demo/demo_video.mp4). They shorten waiting time and use gentle pans and zooms to keep the active part of the interface readable.
+
+### 1. Choose a photograph
+
+<p align="center">
+  <a href="https://focalpointai.vercel.app">
+    <img src="docs/media/01-choose-photo.webp" alt="FocalPointAI home screen panning from the demo photographs toward the upload area" width="720">
+  </a>
+</p>
+
+Start with one of the demonstration photographs, or drag and drop your own JPEG, PNG, or WebP image into the upload area. For a local file, confirm the preview and available metadata before selecting **Get Feedback**. The current interface accepts files up to 15 MB.
+
+### 2. Run the critique
+
+<p align="center">
+  <a href="https://focalpointai.vercel.app">
+    <img src="docs/media/02-run-analysis.webp" alt="FocalPointAI validating a photograph, progressing through analysis stages, and opening the completed critique" width="720">
+  </a>
+</p>
+
+Keep the page open while FocalPointAI validates the image, extracts metadata, measures visual evidence, builds scores, and prepares recommendations. The public Render service may need a short warm-up after being idle; the progress panel shows which analysis stages have completed.
+
+### 3. Read the result from top to bottom
+
+<p align="center">
+  <a href="https://focalpointai.vercel.app">
+    <img src="docs/media/03-review-results.webp" alt="FocalPointAI results workspace moving from the overall score through priority feedback, improvements, and measured evidence" width="720">
+  </a>
+</p>
+
+Begin with the overall score and summary, then review the strongest technique, quick wins, and image-specific evidence. Continue down the page for editing opportunities, camera metadata, and tutorials matched to the weakest relevant areas.
+
+### 4. Explore category details
+
+<p align="center">
+  <a href="https://focalpointai.vercel.app">
+    <img src="docs/media/04-explore-details.webp" alt="FocalPointAI switching among critique categories and comparing their detailed scores and suggestions" width="720">
+  </a>
+</p>
+
+Use the category tabs to compare composition, lighting, focus, color, subject and story, and post-processing. Expand the supporting evidence when you want to understand the measurements and suggestions behind a score.
+
+### 5. Continue with a lesson or practice action
+
+<p align="center">
+  <a href="https://focalpointai.vercel.app">
+    <img src="docs/media/05-learning-actions.webp" alt="FocalPointAI moving through recommended tutorials, exercises, practice checklists, and next actions" width="720">
+  </a>
+</p>
+
+Open a recommended lesson for focused practice, follow the exercises and checklist, or compare the example images to plan your next shoot. Use **Download PDF** when you want a portable copy of the critique and learning plan.
+
+## Interface Highlights
+
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <strong>Composition analysis</strong><br>
+      <img src="docs/focalpointai_demo/composition_page.png" alt="Composition category showing its score, technique breakdown, and priority fixes" width="100%">
+    </td>
+    <td width="50%" valign="top">
+      <strong>Lighting and exposure</strong><br>
+      <img src="docs/focalpointai_demo/lightinging page.png" alt="Lighting and exposure category showing tonal measurements and suggested adjustments" width="100%">
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <strong>Apply the feedback</strong><br>
+      <img src="docs/focalpointai_demo/apply the feed back.png" alt="Actionable feedback with priority fixes, explanations, exercises, a practice checklist, and before-and-after examples" width="100%">
+    </td>
+    <td width="50%" valign="top">
+      <strong>Learning recommendations</strong><br>
+      <img src="docs/focalpointai_demo/learning_page.png" alt="Personalized tutorial, next actions, skill progress, histogram, EXIF evidence, and focus map" width="100%">
+    </td>
+  </tr>
+</table>
 
 ## Why FocalPointAI?
 
@@ -236,8 +317,13 @@ FocalPointAI/
 |   |-- public/                         # Fonts, brand assets, and quote data
 |   `-- src/                            # React interface and styles
 |-- docs/
+|   |-- assets/                         # README and report artwork
+|   |-- focalpointai_demo/              # Screenshots and full walkthrough video
+|   |-- media/                          # Animated product walkthrough clips
 |   `-- PROJECT_REPORT.md               # Technical and product assessment
 |-- fonts/                              # Google Sans files used by reports
+|-- scripts/
+|   `-- readme_media.py                 # Regenerates walkthrough media
 |-- roadmap.md                          # Long-term product roadmap
 `-- README.md
 ```
@@ -296,4 +382,4 @@ The public deployment should provide clear in-product consent and define image r
 
 ## License
 
-FocalPointAI is available under the [MIT License](LICENSE). You may use, copy, modify, merge, publish, distribute, sublicense, and sell copies subject to the license terms.
+FocalPointAI source code is available under the [Apache License 2.0](LICENSE). The Focalpoint AI name and logo are not covered by this license. See [NOTICE](NOTICE) for details.
