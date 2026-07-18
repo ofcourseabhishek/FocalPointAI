@@ -4,7 +4,7 @@ import os
 
 import uvicorn
 
-from PIL import Image
+from PIL import Image, ImageCms
 from PIL.ExifTags import TAGS, GPSTAGS
 from PIL.TiffImagePlugin import IFDRational
 
@@ -75,6 +75,17 @@ def extract_exif_data(image) -> dict:
                         exif_data[tag_name] = val
             except Exception as e:
                 print(f"Error parsing GPS EXIF: {e}")
+
+            # 4. Embedded ICC profile (when present). This is stored outside
+            # the EXIF IFD but is still part of the image metadata users expect.
+            icc_profile = image.info.get("icc_profile")
+            if icc_profile:
+                try:
+                    profile = ImageCms.ImageCmsProfile(io.BytesIO(icc_profile))
+                    description = ImageCms.getProfileDescription(profile).strip("\x00 \r\n")
+                    exif_data["ICCProfileDescription"] = description or "Embedded ICC profile"
+                except Exception:
+                    exif_data["ICCProfileDescription"] = "Embedded ICC profile"
     except Exception as e:
         print(f"Failed to extract EXIF: {e}")
     return exif_data
@@ -115,13 +126,77 @@ def get_camera_device_name(exif_data: dict) -> str | None:
     return model or make or None
 
 
+def format_flash_usage(value) -> str | None:
+    """Convert the EXIF Flash bit field into the simple state shown in the UI."""
+    value = clean_exif_value(value)
+    if value is None:
+        return None
+    try:
+        return "Flash used" if int(value) & 1 else "No flash"
+    except (TypeError, ValueError):
+        text = str(value).strip().casefold()
+        if not text:
+            return None
+        return "No flash" if "not" in text or "no flash" in text else "Flash used"
+
+
+def format_exposure_compensation(value) -> str | None:
+    """Format EXIF exposure bias as a signed exposure-value adjustment."""
+    value = clean_exif_value(value)
+    if value is None:
+        return None
+    try:
+        ev = float(value)
+    except (TypeError, ValueError):
+        return str(value).strip() or None
+
+    if abs(ev) < 0.005:
+        return "0 EV"
+    magnitude = f"{abs(ev):.2f}".rstrip("0").rstrip(".")
+    sign = "+" if ev > 0 else "−"
+    return f"{sign}{magnitude} EV"
+
+
+def get_color_profile_name(exif_data: dict) -> str | None:
+    """Prefer an ICC description, then fall back to EXIF color-space tags."""
+    icc_description = clean_exif_value(exif_data.get("ICCProfileDescription"))
+    if icc_description:
+        return str(icc_description).strip() or None
+
+    color_space = clean_exif_value(exif_data.get("ColorSpace"))
+    try:
+        color_space_code = int(color_space) if color_space is not None else None
+    except (TypeError, ValueError):
+        color_space_code = None
+
+    if color_space_code == 1:
+        return "sRGB"
+    if color_space_code == 2:
+        return "Adobe RGB"
+    if color_space_code == 0xFFFF:
+        return "Uncalibrated"
+    if color_space not in (None, ""):
+        return str(color_space)
+
+    interoperability = str(clean_exif_value(exif_data.get("InteroperabilityIndex")) or "").strip().upper()
+    if interoperability == "R98":
+        return "sRGB"
+    if interoperability == "R03":
+        return "Adobe RGB"
+    return None
+
+
 def get_exif_summary(exif_data: dict) -> dict:
     exposure_time = clean_exif_value(exif_data.get('ExposureTime'))
     f_number = clean_exif_value(exif_data.get('FNumber'))
     iso = clean_exif_value(exif_data.get('ISOSpeedRatings'))
     focal_length = clean_exif_value(exif_data.get('FocalLength'))
+    focal_length_35mm = clean_exif_value(exif_data.get('FocalLengthIn35mmFilm'))
+    flash = clean_exif_value(exif_data.get('Flash'))
+    exposure_compensation = clean_exif_value(exif_data.get('ExposureBiasValue'))
     camera = get_camera_device_name(exif_data)
     lens = clean_exif_value(exif_data.get('LensModel'))
+    color_profile = get_color_profile_name(exif_data)
 
     if isinstance(iso, (list, tuple)) and len(iso) > 0:
         iso = iso[0]
@@ -130,6 +205,9 @@ def get_exif_summary(exif_data: dict) -> dict:
     aperture_str = f"f/{f_number}" if f_number else None
     iso_str = f"ISO {iso}" if iso else None
     focal_length_str = f"{round(focal_length)}mm" if focal_length else None
+    focal_length_35mm_str = f"{round(focal_length_35mm)}mm" if focal_length_35mm else None
+    flash_usage_str = format_flash_usage(flash)
+    exposure_compensation_str = format_exposure_compensation(exposure_compensation)
 
     # Construct human readable text for Gemini
     lines = []
@@ -145,6 +223,10 @@ def get_exif_summary(exif_data: dict) -> dict:
             "f_number": f_number,
             "iso": iso,
             "focal_length": focal_length,
+            "focal_length_35mm": focal_length_35mm,
+            "flash": flash,
+            "exposure_compensation": exposure_compensation,
+            "color_profile": color_profile,
             "camera": camera,
             "lens": lens
         },
@@ -153,6 +235,10 @@ def get_exif_summary(exif_data: dict) -> dict:
             "aperture": aperture_str,
             "iso": iso_str,
             "focal_length": focal_length_str,
+            "focal_length_35mm": focal_length_35mm_str,
+            "flash_usage": flash_usage_str,
+            "exposure_compensation": exposure_compensation_str,
+            "color_profile": color_profile,
             "camera": str(camera) if camera else None,
             "lens": str(lens) if lens else None
         },
@@ -180,11 +266,13 @@ async def read_image_metadata(file: UploadFile = File(...)):
     except Exception as exc:
         raise HTTPException(status_code=400, detail="The image metadata could not be read") from exc
 
+    exif_summary = get_exif_summary(exif_data)
     return {
         "camera": get_camera_device_name(exif_data),
         "make": clean_exif_value(exif_data.get("Make")),
         "model": clean_exif_value(exif_data.get("Model")),
         "has_exif": bool(exif_data),
+        "camera_settings": exif_summary["formatted"],
     }
 
 
@@ -251,7 +339,7 @@ async def analyze_image(
             
         # Add basic info
         analysis_results["filename"] = file.filename
-        analysis_results["tutorial_recommendations"] = recommend_tutorials(analysis_results, limit=3)
+        analysis_results["tutorial_recommendations"] = recommend_tutorials(analysis_results, limit=12)
 
         return analysis_results
 

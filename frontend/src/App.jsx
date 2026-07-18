@@ -664,7 +664,48 @@ export default function App() {
     'post-processing': new Set(['edits_needed', 'brightness', 'contrast', 'highlights', 'shadows', 'colour', 'saturation']),
   };
 
-  const recommendationsForTab = (recommendations, tabId, limit = 2) => {
+  const learningContentByTab = {
+    composition: {
+      exercises: ['Shoot the same subject centered and on each thirds intersection.', 'Create three frames using foreground, subject, and background layers.', 'Make one composition with deliberate negative space.'],
+      checklist: ['Identify the visual anchor', 'Check frame edges for distractions', 'Confirm the horizon is intentional', 'Compare centered and off-center crops'],
+      concepts: ['Rule of thirds', 'Visual hierarchy', 'Leading lines', 'Negative space', 'Layering'],
+      filter: 'contrast(1.04) saturate(1.03)',
+      transform: 'scale(1.07)',
+    },
+    lighting: {
+      exercises: ['Photograph one subject with front, side, and back light.', 'Bracket three exposures one stop apart.', 'Protect highlights, then recover shadow detail in editing.'],
+      checklist: ['Check highlight clipping', 'Check blocked shadows', 'Identify light direction', 'Match exposure to the intended mood'],
+      concepts: ['Dynamic range', 'Light direction', 'Metering', 'Histogram', 'Exposure triangle'],
+      filter: 'brightness(1.08) contrast(1.08)',
+    },
+    focus: {
+      exercises: ['Compare single-point and continuous autofocus.', 'Shoot a shutter-speed sequence from 1/30s to 1/500s.', 'Place focus on the nearest eye in five portraits.'],
+      checklist: ['Zoom to 100 percent', 'Verify the intended focus plane', 'Check motion and camera shake', 'Avoid excessive sharpening halos'],
+      concepts: ['Depth of field', 'Focus modes', 'Hyperfocal distance', 'Motion blur', 'Micro-contrast'],
+      filter: 'contrast(1.16) saturate(1.02)',
+    },
+    color: {
+      exercises: ['Create warm, neutral, and cool versions of one image.', 'Limit a frame to one dominant and one accent color.', 'Adjust vibrance before global saturation.'],
+      checklist: ['Neutralize unwanted casts', 'Protect skin tones', 'Check saturated-channel clipping', 'Use accents intentionally'],
+      concepts: ['White balance', 'Complementary color', 'Color temperature', 'HSL', 'Vibrance'],
+      filter: 'saturate(1.2) contrast(1.04) sepia(0.05)',
+    },
+    subject: {
+      exercises: ['Tell the same story in wide, medium, and close frames.', 'Remove one distracting element before each exposure.', 'Build a five-frame sequence with a beginning and ending.'],
+      checklist: ['State the story in one sentence', 'Separate subject from background', 'Look for gesture or peak action', 'Remove elements that dilute intent'],
+      concepts: ['Visual narrative', 'Decisive moment', 'Subject separation', 'Gesture', 'Context'],
+      filter: 'contrast(1.08) brightness(1.03)',
+      transform: 'scale(1.05)',
+    },
+    'post-processing': {
+      exercises: ['Complete one edit using only five global sliders.', 'Create subtle and dramatic versions, then compare after a break.', 'Use one local mask to guide attention.'],
+      checklist: ['Correct global tone first', 'Compare against the original', 'Inspect edges and gradients', 'Export in the correct color space'],
+      concepts: ['Non-destructive editing', 'Local masks', 'Tone curve', 'Dodge and burn', 'Output sharpening'],
+      filter: 'brightness(1.06) contrast(1.1) saturate(1.08)',
+    },
+  };
+
+  const recommendationsForTab = (recommendations, tabId, limit = 3) => {
     const relevantKeys = recommendationKeysByTab[tabId];
     if (!relevantKeys) return recommendations.slice(0, limit);
     const directMatches = recommendations.filter((item) => relevantKeys.has(item.based_on?.key));
@@ -1032,12 +1073,22 @@ export default function App() {
           const recommendedLearning = (analysisResult.tutorial_recommendations || []).slice(0, 3);
           const intentProfile = analysisResult.intent_profile;
           const cameraSettings = analysisResult.exif_analysis?.camera_settings;
-          const engineLabel = analysisResult.mode === 'gemini_ai'
-            ? 'Gemini AI'
-            : analysisResult.ai_status === 'rate_limited'
-              ? 'Local CV · API limited'
-              : 'Local CV';
+          const focalLengthDisplay = cameraSettings?.focal_length
+            ? `${cameraSettings.focal_length}${cameraSettings.focal_length_35mm ? ` (Equivalent focal length ${cameraSettings.focal_length_35mm})` : ''}`
+            : cameraSettings?.focal_length_35mm
+              ? `Equivalent focal length ${cameraSettings.focal_length_35mm}`
+              : '—';
           const cv = analysisResult.advanced_cv || {};
+          const imageStatistics = analysisResult.image_statistics || {};
+          const histogramBins = imageStatistics.luminance_histogram || [];
+          const focusMapSrc = cv.focus_map_b64 || cv.saliency_map_b64;
+          const selectedLearningContent = selectedParam ? learningContentByTab[selectedParam.id] : null;
+          const selectedTutorials = selectedParam
+            ? recommendationsForTab(analysisResult.tutorial_recommendations || [], selectedParam.id)
+            : [];
+          const selectedPriorityFixes = selectedParam
+            ? [...selectedParam.subAspects].sort((a, b) => a.rating - b.rating).slice(0, 3)
+            : [];
           const compositionSignals = cv.composition || {};
           const centroid = cv.subject_centering?.centroid || [0.5, 0.55];
           const clampPercent = (value, fallback) => `${Math.round(Math.max(12, Math.min(88, (Number(value) || fallback) * 100)))}%`;
@@ -1130,7 +1181,6 @@ export default function App() {
                   <h2>{file?.name || 'Photography critique'}</h2>
                 </div>
                 <div className="workspace-actions">
-                  <span className="engine-pill"><Cpu size={14} /> {engineLabel}</span>
                   <button
                     type="button"
                     className="quiet-button download-button"
@@ -1202,7 +1252,7 @@ export default function App() {
                       <div><span>Shutter</span><strong>{cameraSettings.shutter_speed || '—'}</strong></div>
                       <div><span>Aperture</span><strong>{cameraSettings.aperture || '—'}</strong></div>
                       <div><span>ISO</span><strong>{cameraSettings.iso || '—'}</strong></div>
-                      <div><span>Focal</span><strong>{cameraSettings.focal_length || '—'}</strong></div>
+                      <div className="exif-focal-length"><span>Focal length</span><strong>{focalLengthDisplay}</strong></div>
                     </div>
                   )}
 
@@ -1472,8 +1522,70 @@ export default function App() {
 
                         <section className="technique-analysis-panel">
                           <div className="section-heading compact">
-                            <div><span>TECHNIQUE ANALYSIS</span><h3>What was used, what can grow</h3></div>
+                            <div><span>TECHNICAL ANALYSIS</span><h3>Measured evidence from this photograph</h3></div>
                             <Target size={18} />
+                          </div>
+                          <div className="technical-evidence-grid">
+                            <article className="histogram-card">
+                              <div className="evidence-card-heading">
+                                <div><span>TONAL DISTRIBUTION</span><h4>Histogram</h4></div>
+                                <Sliders size={16} />
+                              </div>
+                              {histogramBins.length > 0 ? (
+                                <div className="histogram-plot" aria-label={`Luminance histogram: ${imageStatistics.histogram || 'distribution available'}`}>
+                                  {histogramBins.map((value, index) => (
+                                    <i key={`${index}-${value}`} style={{ height: `${Math.max(3, value)}%` }} />
+                                  ))}
+                                </div>
+                              ) : (
+                                <div className="evidence-unavailable">Histogram unavailable for this analysis.</div>
+                              )}
+                              <div className="histogram-axis"><span>Shadows</span><span>Midtones</span><span>Highlights</span></div>
+                              <p>{imageStatistics.histogram || 'Analyze tonal balance and clipping across the frame.'}</p>
+                              <div className="evidence-metrics">
+                                <span>Shadow clipping <strong>{imageStatistics.shadow_clipping_percent ?? 'â€”'}%</strong></span>
+                                <span>Highlight clipping <strong>{imageStatistics.highlight_clipping_percent ?? 'â€”'}%</strong></span>
+                              </div>
+                            </article>
+
+                            <article className="exif-insight-card">
+                              <div className="evidence-card-heading">
+                                <div><span>CAPTURE CONTEXT</span><h4>EXIF insights</h4></div>
+                                <Camera size={16} />
+                              </div>
+                              {cameraSettings ? (
+                                <>
+                                  <div className="technical-exif-list">
+                                    <span><small>Flash information</small><strong>{cameraSettings.flash_usage || 'Not embedded'}</strong></span>
+                                    <span><small>Color &amp; image processing</small><strong>{cameraSettings.color_profile || 'Not embedded'}</strong></span>
+                                    <span><small>Exposure setting</small><strong>{cameraSettings.exposure_compensation || 'Not embedded'}</strong></span>
+                                  </div>
+                                  <p>{analysisResult.exif_analysis?.diagnostics?.issue || 'Capture settings are available for technical review.'}</p>
+                                </>
+                              ) : (
+                                <div className="evidence-unavailable">No embedded EXIF settings were available.</div>
+                              )}
+                            </article>
+
+                            <article className="focus-map-card">
+                              <div className="evidence-card-heading">
+                                <div><span>EDGE CONFIDENCE</span><h4>Focus map</h4></div>
+                                <Eye size={16} />
+                              </div>
+                              {focusMapSrc ? (
+                                <div className="focus-map-visual">
+                                  <img src={`data:image/jpeg;base64,${focusMapSrc}`} alt="Focus confidence heatmap for the analyzed photograph" />
+                                  <span>Low detail</span><span>High detail</span>
+                                </div>
+                              ) : (
+                                <div className="evidence-unavailable">Focus map unavailable for this analysis.</div>
+                              )}
+                              <p>{cv.blur?.description || `Sharpness is ${imageStatistics.sharpness?.level?.toLowerCase() || 'being evaluated'} across the frame.`}</p>
+                            </article>
+                          </div>
+                          <div className="technical-technique-heading">
+                            <span>TECHNIQUE REVIEW</span>
+                            <h4>What was used, what can grow</h4>
                           </div>
                           {intentProfile ? (
                             <>
@@ -1512,13 +1624,6 @@ export default function App() {
                             </div>
                           )}
                         </section>
-
-                        {analysisResult.ai_status === 'rate_limited' && (
-                          <div className="system-note">
-                            <Info size={16} />
-                            <p>The AI quota was unavailable, so this report uses the local computer-vision engine.</p>
-                          </div>
-                        )}
                       </div>
                     ) : selectedParam ? (
                       <div className="detail-layout">
@@ -1578,26 +1683,97 @@ export default function App() {
                           })}
                         </div>
 
-                        <section className="learning-strip">
-                          <div>
-                            <span>LEARN IN CONTEXT</span>
-                            <h4>Build this skill</h4>
-                          </div>
-                          {recommendationsForTab(analysisResult.tutorial_recommendations || [], selectedParam.id).map((resource) => (
-                            <a
-                              key={resource.id}
-                              href={resource.youtube_link}
-                              target="_blank"
-                              rel="noreferrer"
-                              title={resource.reason}
-                            >
-                              <span>{tutorialMeta(resource)}</span>
-                              <strong>{resource.title}</strong>
-                              <small>{resource.creator}</small>
-                              <em><PlayCircle size={12} /> Watch on YouTube <ExternalLink size={11} /></em>
-                            </a>
-                          ))}
-                        </section>
+                        {selectedLearningContent && (
+                          <>
+                            <section className="detail-resource-section suggestions-section">
+                              <div className="resource-section-heading">
+                                <div><span>APPLY THE FEEDBACK</span><h3>Suggestions</h3></div>
+                                <Sliders size={18} />
+                              </div>
+
+                              <div className="priority-fixes-block">
+                                <div className="subsection-title"><span>01</span><div><strong>Priority fixes</strong><small>Start with the changes that offer the greatest improvement.</small></div></div>
+                                <div className="priority-fix-grid">
+                                  {selectedPriorityFixes.map((item, index) => (
+                                    <article key={`${selectedParam.id}-priority-${item.key || index}`}>
+                                      <span>Priority {index + 1}</span>
+                                      <strong>{item.label}</strong>
+                                      <p>{item.what_could_be_improved}</p>
+                                      {item.suggested_edit_hint && <small><Sliders size={12} /> {item.suggested_edit_hint}</small>}
+                                    </article>
+                                  ))}
+                                </div>
+                              </div>
+
+                              <div className="detailed-explanations-block">
+                                <div className="subsection-title"><span>02</span><div><strong>Detailed explanations</strong><small>Connect each score to a visible choice in the photograph.</small></div></div>
+                                <div className="explanation-list">
+                                  {selectedParam.subAspects.map((item, index) => (
+                                    <article key={`${selectedParam.id}-explanation-${item.key || index}`}>
+                                      <div><strong>{item.label}</strong><span>{Math.round(item.rating)}/100</span></div>
+                                      <p><b>Why it matters:</b> {item.what_works}</p>
+                                      <p><b>What to change:</b> {item.what_could_be_improved}</p>
+                                    </article>
+                                  ))}
+                                </div>
+                              </div>
+
+                              <div className="practice-grid">
+                                <div className="exercise-block">
+                                  <div className="subsection-title"><span>03</span><div><strong>Exercises</strong><small>Short assignments for the next shoot.</small></div></div>
+                                  <ol>
+                                    {selectedLearningContent.exercises.map((exercise) => <li key={exercise}>{exercise}</li>)}
+                                  </ol>
+                                </div>
+                                <div className="checklist-block">
+                                  <div className="subsection-title"><span>04</span><div><strong>Practice checklist</strong><small>Use before pressing the shutter.</small></div></div>
+                                  <div>
+                                    {selectedLearningContent.checklist.map((item) => <p key={item}><Check size={13} /> {item}</p>)}
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="example-images-block">
+                                <div className="subsection-title"><span>05</span><div><strong>Example images (before/after)</strong><small>A concept preview of the recommended direction, not a finished edit.</small></div></div>
+                                <div className="before-after-grid">
+                                  <figure>
+                                    <div><img src={previewUrl} alt="Original analyzed photograph" /></div>
+                                    <figcaption><span>Before</span><strong>Current photograph</strong></figcaption>
+                                  </figure>
+                                  <figure>
+                                    <div><img src={previewUrl} alt={`Concept preview for improved ${selectedParam.label.toLowerCase()}`} style={{ filter: selectedLearningContent.filter, transform: selectedLearningContent.transform || 'none' }} /></div>
+                                    <figcaption><span>After</span><strong>Suggested direction</strong></figcaption>
+                                  </figure>
+                                </div>
+                              </div>
+                            </section>
+
+                            <section className="detail-resource-section tutorials-section">
+                              <div className="resource-section-heading">
+                                <div><span>KEEP LEARNING</span><h3>Tutorials</h3></div>
+                                <PlayCircle size={18} />
+                              </div>
+                              <div className="youtube-resource-block">
+                                <div className="subsection-title"><span>01</span><div><strong>YouTube videos</strong><small>Matched to the evidence and scores in this tab.</small></div></div>
+                                <div className="youtube-resource-grid">
+                                  {selectedTutorials.map((resource) => (
+                                    <a key={resource.id} href={resource.youtube_link} target="_blank" rel="noreferrer" title={resource.reason}>
+                                      <span>{tutorialMeta(resource)}</span>
+                                      <strong>{resource.title}</strong>
+                                      <small>{resource.creator}</small>
+                                      <em><PlayCircle size={12} /> Watch on YouTube <ExternalLink size={11} /></em>
+                                    </a>
+                                  ))}
+                                </div>
+                              </div>
+
+                              <div className="related-concepts-block">
+                                <div className="subsection-title"><span>02</span><div><strong>Related concepts</strong><small>Topics that reinforce this skill.</small></div></div>
+                                <div>{selectedLearningContent.concepts.map((concept) => <span key={concept}>{concept}</span>)}</div>
+                              </div>
+                            </section>
+                          </>
+                        )}
                       </div>
                     ) : null}
                   </div>
@@ -1616,15 +1792,6 @@ export default function App() {
               <div>
                 <span style={{ color: 'var(--primary)', fontSize: '0.78rem', fontWeight: '800', textTransform: 'uppercase', tracking: '0.08em', display: 'inline-block', marginBottom: '6px', border: '1px solid var(--primary-glow)', padding: '2px 8px', borderRadius: '6px', backgroundColor: 'rgba(99, 102, 241, 0.05)' }}>Analysis Complete</span>
                 <h3 style={{ fontSize: '1.8rem', fontWeight: '900', marginBottom: '6px', letterSpacing: '-0.02em', color: '#fff' }}>Constructive Critique Dashboard</h3>
-                <p style={{ color: 'var(--text-secondary)', fontSize: '0.88rem', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
-                  Engine: <span style={{ color: analysisResult.ai_status === 'rate_limited' ? 'var(--warning)' : 'var(--secondary)', fontWeight: '700' }}>
-                    {analysisResult.mode === 'gemini_ai'
-                      ? 'Gemini 3.5 Flash AI Engine'
-                      : analysisResult.ai_status === 'rate_limited'
-                        ? 'Local OpenCV Core (Gemini rate limited)'
-                        : 'Local OpenCV Core'}
-                  </span>
-                </p>
               </div>
 
               {/* Radial Rating Circular SVG */}
@@ -1753,7 +1920,7 @@ export default function App() {
                         boxShadow: 'inset 0 2px 8px rgba(0,0,0,0.5)',
                         fontFamily: 'system-ui, -apple-system, sans-serif'
                       }}>
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', textAlign: 'center', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '10px' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '10px', textAlign: 'center', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '10px' }}>
                           <div>
                             <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', display: 'block', letterSpacing: '0.05em' }}>Shutter Speed</span>
                             <span style={{ fontSize: '1.2rem', fontWeight: '900', color: '#38BDF8', letterSpacing: '-0.02em' }}>
@@ -1772,16 +1939,19 @@ export default function App() {
                               {analysisResult.exif_analysis.camera_settings.iso || 'N/A'}
                             </span>
                           </div>
-                        </div>
-                        
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '12px', fontSize: '0.8rem', paddingTop: '4px' }}>
-                          <div>
+                          <div style={{ gridColumn: 'span 2', borderLeft: '1px solid rgba(255,255,255,0.05)' }}>
                             <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', display: 'block', letterSpacing: '0.05em' }}>Focal Length</span>
-                            <span style={{ color: '#fff', fontWeight: '600' }}>
+                            <span style={{ fontSize: '1rem', fontWeight: '800', color: '#A78BFA', letterSpacing: '-0.02em' }}>
                               {analysisResult.exif_analysis.camera_settings.focal_length || 'N/A'}
+                              {analysisResult.exif_analysis.camera_settings.focal_length_35mm
+                                ? ` (Equivalent focal length ${analysisResult.exif_analysis.camera_settings.focal_length_35mm})`
+                                : ''}
                             </span>
                           </div>
-                          <div style={{ borderLeft: '1px solid rgba(255,255,255,0.05)', paddingLeft: '12px' }}>
+                        </div>
+
+                        <div style={{ fontSize: '0.8rem', paddingTop: '4px' }}>
+                          <div>
                             <span style={{ color: '#fff', fontWeight: '600', display: 'block', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }} title={analysisResult.exif_analysis.camera_settings.camera}>
                               {analysisResult.exif_analysis.camera_settings.camera || 'Generic Camera'}
                             </span>
@@ -2354,11 +2524,7 @@ export default function App() {
 
       {/* Footer */}
       <footer style={{ marginTop: '48px', padding: '24px 0', borderTop: '1px solid var(--border-color)', textAlign: 'center', fontSize: '0.8rem', color: 'var(--text-muted)', zIndex: 10 }}>
-        <p style={{ marginBottom: '6px' }}>© 2026 FocalpointAI. Designed as a real-time photography mentor for aperture, shadows, details, crops, and color composition.</p>
-        <p style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
-          <ShieldCheck size={14} style={{ color: 'var(--success)' }} />
-          Local computer vision fallbacks fully active.
-        </p>
+        <p>© 2026 Focalpoint AI. Source code licensed under Apache License 2.0. Focalpoint AI name and logo are not covered by this license.</p>
       </footer>
 
     </div>

@@ -111,6 +111,12 @@ def analyze_advanced_cv(image_bytes: bytes, img_bgr, img_gray, img_rgb) -> dict:
     saliency = np.sqrt(np.sum(diff_lab**2, axis=2))
     saliency_norm = cv2.normalize(saliency, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
 
+    # Local edge energy provides a focus-confidence heatmap: brighter/warmer
+    # regions contain more recoverable fine detail and stronger focus cues.
+    focus_energy = cv2.convertScaleAbs(cv2.Laplacian(img_gray, cv2.CV_64F))
+    focus_energy = cv2.GaussianBlur(focus_energy, (9, 9), 0)
+    focus_norm = cv2.normalize(focus_energy, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
+
     # Compute saliency centroid
     moments = cv2.moments(saliency_norm)
     if moments["m00"] > 0:
@@ -248,6 +254,13 @@ def analyze_advanced_cv(image_bytes: bytes, img_bgr, img_gray, img_rgb) -> dict:
     small_sal = cv2.resize(saliency_norm, (sal_w, sal_h), interpolation=cv2.INTER_LINEAR)
     _, sal_buffer = cv2.imencode('.jpg', small_sal, [int(cv2.IMWRITE_JPEG_QUALITY), 75])
     saliency_map_b64 = base64.b64encode(sal_buffer).decode('utf-8')
+
+    focus_w = 320
+    focus_h = max(10, int(h * focus_w / w))
+    small_focus = cv2.resize(focus_norm, (focus_w, focus_h), interpolation=cv2.INTER_LINEAR)
+    focus_heatmap = cv2.applyColorMap(small_focus, cv2.COLORMAP_TURBO)
+    _, focus_buffer = cv2.imencode('.jpg', focus_heatmap, [int(cv2.IMWRITE_JPEG_QUALITY), 82])
+    focus_map_b64 = base64.b64encode(focus_buffer).decode('utf-8')
 
     # 8. Color Palette (K-Means, K=5)
     small_rgb = cv2.resize(img_rgb, (100, 100))
@@ -473,6 +486,7 @@ def analyze_advanced_cv(image_bytes: bytes, img_bgr, img_gray, img_rgb) -> dict:
             "description": bg_clutter_desc
         },
         "saliency_map_b64": saliency_map_b64,
+        "focus_map_b64": focus_map_b64,
         "color_palette": palette
     }
 
@@ -739,6 +753,10 @@ def analyze_cv_heuristics(image_bytes: bytes, exif_summary: dict = None) -> dict
         iso = raw_exif.get("iso")
         aperture = formatted_exif.get("aperture")
         focal_length_str = formatted_exif.get("focal_length")
+        focal_length_35mm_str = formatted_exif.get("focal_length_35mm")
+        flash_usage = formatted_exif.get("flash_usage")
+        exposure_compensation = formatted_exif.get("exposure_compensation")
+        color_profile = formatted_exif.get("color_profile")
         focal_length = raw_exif.get("focal_length")
         camera = formatted_exif.get("camera")
         lens = formatted_exif.get("lens")
@@ -813,6 +831,10 @@ def analyze_cv_heuristics(image_bytes: bytes, exif_summary: dict = None) -> dict
                 "iso": int(iso) if iso else None,
                 "aperture": aperture,
                 "focal_length": focal_length_str,
+                "focal_length_35mm": focal_length_35mm_str,
+                "flash_usage": flash_usage,
+                "exposure_compensation": exposure_compensation,
+                "color_profile": color_profile,
                 "lens": lens,
                 "camera": camera
             },
@@ -859,6 +881,12 @@ def analyze_cv_heuristics(image_bytes: bytes, exif_summary: dict = None) -> dict
         histogram_summary = "No significant clipping"
 
     eye_count = sum(len(face.get("eyes", [])) for face in advanced_cv.get("faces", []))
+    histogram_values = cv2.calcHist([img_gray], [0], None, [24], [0, 256]).flatten()
+    histogram_peak = float(histogram_values.max()) if histogram_values.size else 0.0
+    luminance_histogram = [
+        round(float(value) / histogram_peak * 100, 1) if histogram_peak else 0.0
+        for value in histogram_values
+    ]
     image_statistics = {
         "dimensions": f"{original_w}x{original_h}",
         "brightness": {
@@ -883,6 +911,7 @@ def analyze_cv_heuristics(image_bytes: bytes, exif_summary: dict = None) -> dict
         "eyes_detected": eye_count > 0,
         "eye_count": eye_count,
         "histogram": histogram_summary,
+        "luminance_histogram": luminance_histogram,
         "highlight_clipping_percent": round(high_pixels * 100, 1),
         "shadow_clipping_percent": round(shadow_pixels * 100, 1),
     }
