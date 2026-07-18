@@ -32,7 +32,7 @@
 
 <p align="center">
   <a href="https://focalpointai.vercel.app">
-    <img src="docs/focalpointai_demo/landing page.png" alt="FocalPointAI critique workspace showing a photograph, overall score, professional assessment, strengths, and improvement opportunities" width="100%">
+    <img src="docs/focalpointai_demo/banner.png" alt="FocalPointAI critique workspace showing a photograph, overall score, professional assessment, strengths, and improvement opportunities" width="100%">
   </a>
 </p>
 
