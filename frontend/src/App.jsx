@@ -234,14 +234,11 @@ export default function App() {
 
     const objectUrl = URL.createObjectURL(nextFile);
     try {
-      const [dimensions, camera] = await Promise.all([
-        readImageDimensions(objectUrl),
-        readCameraMetadata(nextFile),
-      ]);
+      const dimensions = await readImageDimensions(objectUrl);
       if (previewUrl) URL.revokeObjectURL(previewUrl);
       setFile(nextFile);
       setPreviewUrl(objectUrl);
-      setFileMetadata({ ...dimensions, camera, size: formatFileSize(nextFile.size) });
+      setFileMetadata({ ...dimensions, size: formatFileSize(nextFile.size) });
       setUploadState('uploading');
       await new Promise((resolve) => {
         let progress = 0;
