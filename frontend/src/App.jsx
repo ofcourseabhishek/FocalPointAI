@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
-  Camera, UploadCloud, Mail, CheckCircle, AlertCircle, Sparkles, 
+  Camera, UploadCloud, Download, CheckCircle, AlertCircle, Sparkles,
   RefreshCw, Sun, Contrast, Droplet, Eye, Thermometer, Info, 
-  Moon, Palette, Compass, Check, Sliders, ShieldCheck, Target, Cpu, AlertTriangle
+  Moon, Palette, Compass, Check, Sliders, ShieldCheck, Target, Cpu, AlertTriangle,
+  PlayCircle, ExternalLink
 } from 'lucide-react';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL?.replace(/\/$/, '') || 'http://127.0.0.1:8000';
@@ -25,30 +26,27 @@ const DEMO_PRESETS = [
     id: 'sunset',
     name: 'Beach Sunset',
     description: 'Moody low-light & high dynamic range',
-    url: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=800&q=80',
-    email: 'sunset.learner@focalpoint.ai'
+    url: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=800&q=80'
   },
   {
     id: 'portrait',
     name: 'Studio Portrait',
     description: 'Soft lighting & high-detail face focus',
-    url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=800&q=80',
-    email: 'portrait.learner@focalpoint.ai'
+    url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=800&q=80'
   },
   {
     id: 'neon',
     name: 'Cyberpunk Alley',
     description: 'Harsh contrast & heavy color saturation',
-    url: 'https://images.unsplash.com/photo-1515621061946-eff1c2a352bd?auto=format&fit=crop&w=800&q=80',
-    email: 'neon.learner@focalpoint.ai'
+    url: 'https://images.unsplash.com/photo-1515621061946-eff1c2a352bd?auto=format&fit=crop&w=800&q=80'
   }
 ];
 
 export default function App() {
   const [file, setFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState('');
-  const [email, setEmail] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
   const [loadingStep, setLoadingStep] = useState(-1);
   const [analysisProgress, setAnalysisProgress] = useState(0);
   const [analysisResult, setAnalysisResult] = useState(null);
@@ -62,6 +60,7 @@ export default function App() {
   const [expandedAspect, setExpandedAspect] = useState(null);
   const [showGuides, setShowGuides] = useState(true);
   const [activeHotspot, setActiveHotspot] = useState(null);
+  const [playingTutorialId, setPlayingTutorialId] = useState(null);
   
   // Redesign custom features state
   const [loadingDemo, setLoadingDemo] = useState(false);
@@ -69,6 +68,7 @@ export default function App() {
   const [copiedColor, setCopiedColor] = useState('');
   
   const imgRef = useRef(null);
+  const reviewRef = useRef(null);
 
   const copyColorToClipboard = (hex) => {
     navigator.clipboard.writeText(hex);
@@ -192,6 +192,23 @@ export default function App() {
     image.src = url;
   });
 
+  const readCameraMetadata = async (imageFile) => {
+    const metadataForm = new FormData();
+    metadataForm.append('file', imageFile);
+
+    try {
+      const response = await fetch(`${BACKEND_URL}/image-metadata`, {
+        method: 'POST',
+        body: metadataForm,
+      });
+      if (!response.ok) return 'Device metadata unavailable';
+      const metadata = await response.json();
+      return metadata.camera || (metadata.has_exif ? 'Camera model not embedded' : 'EXIF metadata not embedded');
+    } catch {
+      return 'Device metadata unavailable';
+    }
+  };
+
   const processUploadFile = async (nextFile, demoId = null) => {
     setSelectedDemoId(demoId);
     setUploadError(null);
@@ -221,7 +238,7 @@ export default function App() {
       if (previewUrl) URL.revokeObjectURL(previewUrl);
       setFile(nextFile);
       setPreviewUrl(objectUrl);
-      setFileMetadata({ ...dimensions, camera: 'Not available', size: formatFileSize(nextFile.size) });
+      setFileMetadata({ ...dimensions, size: formatFileSize(nextFile.size) });
       setUploadState('uploading');
       await new Promise((resolve) => {
         let progress = 0;
@@ -276,7 +293,6 @@ export default function App() {
       const ext = blob.type === 'image/png' ? 'png' : blob.type === 'image/webp' ? 'webp' : 'jpg';
       const demoFile = new File([blob], `demo_${preset.id}.${ext}`, { type: blob.type });
       
-      setEmail(preset.email);
       await processUploadFile(demoFile, preset.id);
     } catch (err) {
       console.error(err);
@@ -293,11 +309,6 @@ export default function App() {
       setError('Please select or drop an image first.');
       return;
     }
-    if (!email) {
-      setError('Please enter your email address to receive updates.');
-      return;
-    }
-
     // Shuffle and select a quote for the loading screen
     const randomIdx = Math.floor(Math.random() * quotesList.length);
     setCurrentQuote(quotesList[randomIdx]);
@@ -305,11 +316,11 @@ export default function App() {
     setIsLoading(true);
     setUploadState('analyzing');
     setAnalysisResult(null);
+    setPlayingTutorialId(null);
     setError('');
 
     const formData = new FormData();
     formData.append('file', file);
-    formData.append('email', email);
 
     try {
       const analysisStartedAt = Date.now();
@@ -339,6 +350,46 @@ export default function App() {
     }
   };
 
+  const handleDownloadPdf = async () => {
+    if (!analysisResult || isDownloadingPdf) return;
+
+    setIsDownloadingPdf(true);
+    setError('');
+    const formData = new FormData();
+    formData.append('analysis_json', JSON.stringify(analysisResult));
+    if (file) formData.append('file', file);
+
+    try {
+      const response = await fetch(`${BACKEND_URL}/critique-pdf`, {
+        method: 'POST',
+        body: formData,
+      });
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || 'Could not generate the PDF critique.');
+      }
+
+      const blob = await response.blob();
+      const disposition = response.headers.get('Content-Disposition') || '';
+      const serverFilename = disposition.match(/filename="?([^";]+)"?/i)?.[1];
+      const fallbackStem = (file?.name || 'photograph')
+        .replace(/\.[^.]+$/, '')
+        .replace(/[^a-z0-9._-]+/gi, '-');
+      const objectUrl = URL.createObjectURL(blob);
+      const downloadLink = document.createElement('a');
+      downloadLink.href = objectUrl;
+      downloadLink.download = serverFilename || `${fallbackStem || 'photograph'}-critique.pdf`;
+      document.body.appendChild(downloadLink);
+      downloadLink.click();
+      downloadLink.remove();
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+    } catch (err) {
+      setError(err.message || 'Could not download the PDF critique.');
+    } finally {
+      setIsDownloadingPdf(false);
+    }
+  };
+
   const handleReset = () => {
     setFile(null);
     setPreviewUrl('');
@@ -347,6 +398,7 @@ export default function App() {
     setActiveTab('overview');
     setExpandedAspect(null);
     setActiveHotspot(null);
+    setPlayingTutorialId(null);
     setSelectedDemoId(null);
     setUploadState('idle');
     setUploadProgress(0);
@@ -600,32 +652,106 @@ export default function App() {
     return 'Needs work';
   };
 
-  const learningByTab = {
-    composition: [
-      { title: 'Stronger framing in 5 minutes', meta: '5 min · Composition' },
-      { title: 'Using negative space with intent', meta: '7 min · Visual balance' },
-    ],
-    lighting: [
-      { title: 'Reading highlights and shadows', meta: '6 min · Exposure' },
-      { title: 'Shape a subject with natural light', meta: '8 min · Lighting' },
-    ],
-    focus: [
-      { title: 'Choose the right focus point', meta: '4 min · Sharpness' },
-      { title: 'Control depth of field', meta: '7 min · Technique' },
-    ],
-    color: [
-      { title: 'Build a coherent color palette', meta: '6 min · Color' },
-      { title: 'Correct white balance by eye', meta: '5 min · Editing' },
-    ],
-    subject: [
-      { title: 'Create clearer visual stories', meta: '8 min · Storytelling' },
-      { title: 'Direct attention inside the frame', meta: '5 min · Subject' },
-    ],
-    'post-processing': [
-      { title: 'A clean five-step edit', meta: '9 min · Workflow' },
-      { title: 'Edit without over-processing', meta: '6 min · Restraint' },
-    ],
+  const recommendationKeysByTab = {
+    composition: new Set(['composition', 'crop', 'thirds', 'leading_lines', 'framing', 'negative_space', 'layering']),
+    lighting: new Set(['brightness', 'contrast', 'highlights', 'shadows', 'ambiance', 'exif_settings']),
+    focus: new Set(['details', 'sharpness']),
+    color: new Set(['colour', 'saturation', 'warmth']),
+    subject: new Set(['wow_factor', 'emotional_impact']),
+    'post-processing': new Set(['edits_needed', 'brightness', 'contrast', 'highlights', 'shadows', 'colour', 'saturation']),
   };
+
+  const learningContentByTab = {
+    composition: {
+      exercises: ['Shoot the same subject centered and on each thirds intersection.', 'Create three frames using foreground, subject, and background layers.', 'Make one composition with deliberate negative space.'],
+      checklist: ['Identify the visual anchor', 'Check frame edges for distractions', 'Confirm the horizon is intentional', 'Compare centered and off-center crops'],
+      concepts: ['Rule of thirds', 'Visual hierarchy', 'Leading lines', 'Negative space', 'Layering'],
+      filter: 'contrast(1.04) saturate(1.03)',
+      transform: 'scale(1.07)',
+    },
+    lighting: {
+      exercises: ['Photograph one subject with front, side, and back light.', 'Bracket three exposures one stop apart.', 'Protect highlights, then recover shadow detail in editing.'],
+      checklist: ['Check highlight clipping', 'Check blocked shadows', 'Identify light direction', 'Match exposure to the intended mood'],
+      concepts: ['Dynamic range', 'Light direction', 'Metering', 'Histogram', 'Exposure triangle'],
+      filter: 'brightness(1.08) contrast(1.08)',
+    },
+    focus: {
+      exercises: ['Compare single-point and continuous autofocus.', 'Shoot a shutter-speed sequence from 1/30s to 1/500s.', 'Place focus on the nearest eye in five portraits.'],
+      checklist: ['Zoom to 100 percent', 'Verify the intended focus plane', 'Check motion and camera shake', 'Avoid excessive sharpening halos'],
+      concepts: ['Depth of field', 'Focus modes', 'Hyperfocal distance', 'Motion blur', 'Micro-contrast'],
+      filter: 'contrast(1.16) saturate(1.02)',
+    },
+    color: {
+      exercises: ['Create warm, neutral, and cool versions of one image.', 'Limit a frame to one dominant and one accent color.', 'Adjust vibrance before global saturation.'],
+      checklist: ['Neutralize unwanted casts', 'Protect skin tones', 'Check saturated-channel clipping', 'Use accents intentionally'],
+      concepts: ['White balance', 'Complementary color', 'Color temperature', 'HSL', 'Vibrance'],
+      filter: 'saturate(1.2) contrast(1.04) sepia(0.05)',
+    },
+    subject: {
+      exercises: ['Tell the same story in wide, medium, and close frames.', 'Remove one distracting element before each exposure.', 'Build a five-frame sequence with a beginning and ending.'],
+      checklist: ['State the story in one sentence', 'Separate subject from background', 'Look for gesture or peak action', 'Remove elements that dilute intent'],
+      concepts: ['Visual narrative', 'Decisive moment', 'Subject separation', 'Gesture', 'Context'],
+      filter: 'contrast(1.08) brightness(1.03)',
+      transform: 'scale(1.05)',
+    },
+    'post-processing': {
+      exercises: ['Complete one edit using only five global sliders.', 'Create subtle and dramatic versions, then compare after a break.', 'Use one local mask to guide attention.'],
+      checklist: ['Correct global tone first', 'Compare against the original', 'Inspect edges and gradients', 'Export in the correct color space'],
+      concepts: ['Non-destructive editing', 'Local masks', 'Tone curve', 'Dodge and burn', 'Output sharpening'],
+      filter: 'brightness(1.06) contrast(1.1) saturate(1.08)',
+    },
+  };
+
+  const recommendationsForTab = (recommendations, tabId, limit = 3) => {
+    const relevantKeys = recommendationKeysByTab[tabId];
+    if (!relevantKeys) return recommendations.slice(0, limit);
+    const directMatches = recommendations.filter((item) => relevantKeys.has(item.based_on?.key));
+    const remaining = recommendations.filter((item) => !directMatches.includes(item));
+    return [...directMatches, ...remaining].slice(0, limit);
+  };
+
+  const tutorialTabId = (tutorial) => Object.entries(recommendationKeysByTab)
+    .find(([, keys]) => keys.has(tutorial.based_on?.key))?.[0] || 'overview';
+
+  const formatTechniqueLabel = (key) => ({
+    colour: 'Color',
+    thirds: 'Rule of Thirds',
+    leading_lines: 'Leading Lines',
+    negative_space: 'Negative Space',
+    layering: 'Depth & Layering',
+    framing: 'Natural Framing',
+    contrast: 'Tonal Contrast',
+  }[key] || key.replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase()));
+
+  const techniqueStatusLabel = (status) => ({
+    present: 'Used effectively',
+    absent_but_applicable: 'Opportunity',
+    not_applicable: 'Not applicable',
+    intentional_absence: 'Not used intentionally',
+  }[status] || 'Evaluated');
+
+  const difficultyLabel = (level) => ({
+    beginner: 'Beginner',
+    novice: 'Intermediate',
+    experienced: 'Advanced',
+    professional: 'Advanced',
+  }[level] || 'Beginner');
+
+  const watchTimeLabel = (runtime) => {
+    const parts = String(runtime || '').split(':').map(Number);
+    if (parts.some(Number.isNaN)) return runtime || 'Short lesson';
+    if (parts.length === 3) {
+      const [hours, minutes] = parts;
+      return minutes ? `${hours} hr ${minutes} min` : `${hours} hr`;
+    }
+    return `${Math.max(1, parts[0] || 0)} min`;
+  };
+
+  const tutorialMeta = (tutorial) => [
+    watchTimeLabel(tutorial.runtime),
+    difficultyLabel(tutorial.level),
+    tutorial.confidence_label,
+  ].filter(Boolean).join(' · ');
 
 
 
@@ -634,11 +760,11 @@ export default function App() {
       
       {/* Header */}
       <header className="site-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '48px', zIndex: 10 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div style={{ width: '42px', height: '42px', borderRadius: '12px', background: 'linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 15px rgba(99,102,241,0.4)' }}>
-            <Camera size={22} color="#fff" />
+        <div className="site-brand" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div className="brand-mark">
+            <img src="/focalpoint-favicon.png" alt="FocalPoint AI" />
           </div>
-          <div>
+          <div className="brand-copy">
             <h1 style={{ fontSize: '1.4rem', fontWeight: '700', letterSpacing: '-0.03em', margin: 0 }}>
               Focalpoint<span className="gradient-text">.AI</span>
             </h1>
@@ -666,7 +792,7 @@ export default function App() {
                 Perfect Your<br />
                 <span className="gradient-text">Photography</span>
               </h2>
-              <p style={{ color: 'var(--text-muted)', fontSize: '1.25rem', lineHeight: '1.6', maxWidth: '600px', margin: '24px auto 0' }}>
+              <p className="hero-subtitle" style={{ color: 'var(--text-muted)', fontSize: '1.25rem', lineHeight: '1.6', maxWidth: '600px', margin: '24px auto 0' }}>
                 Instant AI critique that helps you improve your light, color balance, sharpness, and composition.
               </p>
             </div>
@@ -677,7 +803,7 @@ export default function App() {
                 <Sparkles size={16} className="text-secondary" />
                 No photo ready? Test with a Demo Image Sandbox:
               </p>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>
+              <div className="demo-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>
                 {DEMO_PRESETS.map((preset) => (
                   <div 
                     key={preset.id}
@@ -712,6 +838,7 @@ export default function App() {
                 ref={fileInputRef}
                 onChange={handleFileChange}
                 accept="image/jpeg,image/png,image/webp"
+                aria-label="Choose a photograph to analyze"
                 style={{ display: 'none' }}
               />
 
@@ -766,19 +893,17 @@ export default function App() {
                   <div className="ready-details">
                     <div><span>File</span><strong>{file?.name}</strong></div>
                     <div><span>Dimensions</span><strong>{fileMetadata?.width}×{fileMetadata?.height}</strong></div>
-                    <div><span>Camera</span><strong>{fileMetadata?.camera}</strong></div>
+                    <div>
+                      <span>Camera</span>
+                      <strong className="camera-device-name" title={fileMetadata?.camera}>{fileMetadata?.camera}</strong>
+                    </div>
                     <div><span>Size</span><strong>{fileMetadata?.size}</strong></div>
                   </div>
                   <div className="ready-status"><CheckCircle size={20} /> Ready for Analysis</div>
 
-                  <div className="ready-email">
-                    <label htmlFor="email"><Mail size={16} /> Your Email Address</label>
-                    <input id="email" type="email" placeholder="photographer@focalpoint.ai" value={email} onChange={(e) => setEmail(e.target.value)} className="form-input" required />
-                  </div>
-
                   <div className="ready-actions">
                     <button type="button" className="btn-secondary" onClick={handleBrowseClick}>Change Photo</button>
-                    <button type="submit" className="btn-primary analyze-button"><Sparkles size={20} />Analyze Photograph</button>
+                    <button type="submit" className="btn-primary analyze-button"><Sparkles size={20} />Get Feedback</button>
                   </div>
                 </div>
               )}
@@ -942,21 +1067,107 @@ export default function App() {
           const improvementItems = quickWins.length > 0
             ? quickWins
             : allAspects.slice(0, 3);
+          const recommendedLearning = (analysisResult.tutorial_recommendations || []).slice(0, 3);
+          const intentProfile = analysisResult.intent_profile;
           const cameraSettings = analysisResult.exif_analysis?.camera_settings;
-          const engineLabel = analysisResult.mode === 'gemini_ai'
-            ? 'Gemini AI'
-            : analysisResult.ai_status === 'rate_limited'
-              ? 'Local CV · API limited'
-              : 'Local CV';
-          const hotspots = [
-            { id: 'composition', label: 'Framing', hint: 'Review subject placement', x: '28%', y: '38%' },
-            { id: 'lighting', label: 'Highlight', hint: 'Inspect tonal balance', x: '72%', y: '27%' },
-            { id: 'subject', label: 'Subject', hint: 'Review visual attention', x: '57%', y: '61%' },
-          ];
+          const focalLengthDisplay = cameraSettings?.focal_length
+            ? `${cameraSettings.focal_length}${cameraSettings.focal_length_35mm ? ` (Equivalent focal length ${cameraSettings.focal_length_35mm})` : ''}`
+            : cameraSettings?.focal_length_35mm
+              ? `Equivalent focal length ${cameraSettings.focal_length_35mm}`
+              : '—';
+          const cv = analysisResult.advanced_cv || {};
+          const imageStatistics = analysisResult.image_statistics || {};
+          const histogramBins = imageStatistics.luminance_histogram || [];
+          const focusMapSrc = cv.focus_map_b64 || cv.saliency_map_b64;
+          const selectedLearningContent = selectedParam ? learningContentByTab[selectedParam.id] : null;
+          const selectedTutorials = selectedParam
+            ? recommendationsForTab(analysisResult.tutorial_recommendations || [], selectedParam.id)
+            : [];
+          const selectedPriorityFixes = selectedParam
+            ? [...selectedParam.subAspects].sort((a, b) => a.rating - b.rating).slice(0, 3)
+            : [];
+          const compositionSignals = cv.composition || {};
+          const centroid = cv.subject_centering?.centroid || [0.5, 0.55];
+          const clampPercent = (value, fallback) => `${Math.round(Math.max(12, Math.min(88, (Number(value) || fallback) * 100)))}%`;
+          const evidenceHotspots = [];
+          const negativeSpaceScore = Number(compositionSignals.negative_space?.score || 0);
+          const leadingLinesScore = Number(compositionSignals.leading_lines?.score || 0);
+          const framingScore = Number(compositionSignals.framing?.score || 0);
 
-          const openWorkspaceTab = (tabId) => {
+          if (negativeSpaceScore >= 50) {
+            evidenceHotspots.push({
+              id: 'negative-space', tabId: 'composition', label: 'Negative space',
+              hint: 'Negative space creates subject isolation',
+              x: centroid[0] > 0.5 ? '24%' : '76%', y: clampPercent(centroid[1] - 0.12, 0.4),
+            });
+          }
+          if (cv.horizon?.detected) {
+            evidenceHotspots.push({
+              id: 'horizon', tabId: 'lighting', label: 'Horizon',
+              hint: cv.horizon.is_level ? 'Horizon creates calm balance' : 'Horizon alignment affects balance',
+              x: '72%', y: clampPercent(cv.horizon.y_position, 0.45),
+            });
+          }
+          evidenceHotspots.push({
+            id: 'subject', tabId: 'subject', label: 'Subject',
+            hint: 'Subject placement creates a visual anchor',
+            x: clampPercent(centroid[0], 0.5), y: clampPercent(centroid[1], 0.55),
+          });
+          if (leadingLinesScore >= 50) {
+            const line = compositionSignals.leading_lines?.lines?.[0];
+            evidenceHotspots.push({
+              id: 'leading-lines', tabId: 'composition', label: 'Leading lines',
+              hint: 'Natural lines guide attention toward the subject',
+              x: line ? `${Math.round(((line.start[0] + line.end[0]) / 2) * 100)}%` : '50%',
+              y: line ? `${Math.round(((line.start[1] + line.end[1]) / 2) * 100)}%` : '50%',
+            });
+          } else if (framingScore >= 50) {
+            evidenceHotspots.push({
+              id: 'framing', tabId: 'composition', label: 'Natural framing',
+              hint: 'Framing elements add depth around the subject', x: '20%', y: '28%',
+            });
+          }
+          const hotspots = evidenceHotspots.slice(0, 3);
+
+          const openWorkspaceTab = (tabId, scrollToReview = false) => {
             setActiveTab(tabId);
             setExpandedAspect(null);
+            if (scrollToReview) {
+              window.requestAnimationFrame(() => {
+                window.requestAnimationFrame(() => {
+                  const review = reviewRef.current;
+                  if (!review) return;
+
+                  const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+                  const behavior = prefersReducedMotion ? 'auto' : 'smooth';
+
+                  if (window.matchMedia('(max-width: 920px)').matches) {
+                    review.scrollIntoView({ behavior, block: 'start' });
+                    return;
+                  }
+
+                  const viewportMargin = 24;
+                  const comfortableTop = Math.max(viewportMargin, Math.min(104, window.innerHeight * 0.12));
+                  const reviewBounds = review.getBoundingClientRect();
+                  const visibleReviewHeight = Math.max(
+                    0,
+                    Math.min(reviewBounds.bottom, window.innerHeight - viewportMargin)
+                      - Math.max(reviewBounds.top, viewportMargin)
+                  );
+                  const desiredVisibleHeight = Math.min(
+                    reviewBounds.height,
+                    Math.max(280, Math.min(480, window.innerHeight * 0.55))
+                  );
+
+                  if (reviewBounds.top < viewportMargin || visibleReviewHeight < desiredVisibleHeight) {
+                    window.scrollBy({
+                      top: reviewBounds.top - comfortableTop,
+                      behavior,
+                    });
+                  }
+                });
+              });
+            }
           };
 
           return (
@@ -967,7 +1178,14 @@ export default function App() {
                   <h2>{file?.name || 'Photography critique'}</h2>
                 </div>
                 <div className="workspace-actions">
-                  <span className="engine-pill"><Cpu size={14} /> {engineLabel}</span>
+                  <button
+                    type="button"
+                    className="quiet-button download-button"
+                    onClick={handleDownloadPdf}
+                    disabled={isDownloadingPdf}
+                  >
+                    <Download size={15} /> {isDownloadingPdf ? 'Preparing PDF...' : 'Download PDF'}
+                  </button>
                   <button type="button" className="quiet-button" onClick={handleReset}>
                     <RefreshCw size={15} /> New analysis
                   </button>
@@ -975,7 +1193,8 @@ export default function App() {
               </div>
 
               <div className="workspace-body">
-                <aside className="photo-workbench">
+                <div className="workspace-sidebar">
+                  <aside className="photo-workbench">
                   <div className="photo-toolbar">
                     <div>
                       <span>IMAGE INSPECTOR</span>
@@ -1009,7 +1228,7 @@ export default function App() {
                             onMouseLeave={() => setActiveHotspot(null)}
                             onFocus={() => setActiveHotspot(hotspot.id)}
                             onBlur={() => setActiveHotspot(null)}
-                            onClick={() => openWorkspaceTab(hotspot.id)}
+                            onClick={() => openWorkspaceTab(hotspot.tabId || hotspot.id, true)}
                             aria-label={`${hotspot.label}: ${hotspot.hint}`}
                           >
                             <span>{index + 1}</span>
@@ -1030,10 +1249,144 @@ export default function App() {
                       <div><span>Shutter</span><strong>{cameraSettings.shutter_speed || '—'}</strong></div>
                       <div><span>Aperture</span><strong>{cameraSettings.aperture || '—'}</strong></div>
                       <div><span>ISO</span><strong>{cameraSettings.iso || '—'}</strong></div>
-                      <div><span>Focal</span><strong>{cameraSettings.focal_length || '—'}</strong></div>
+                      <div className="exif-focal-length"><span>Focal length</span><strong>{focalLengthDisplay}</strong></div>
                     </div>
                   )}
-                </aside>
+
+                  </aside>
+
+                  <div className="lesson-recommendations">
+                  {recommendedLearning[0] && (() => {
+                    const tutorial = recommendedLearning[0];
+                    const skill = tutorial.based_on?.label || 'your lowest-scoring skill';
+                    const isPlaying = playingTutorialId === tutorial.video_id;
+                    const strongestArea = [...majorParams].sort((a, b) => b.rating - a.rating)[0];
+                    const addressedNeeds = tutorial.addresses || [tutorial.based_on].filter(Boolean);
+                    const reasonChips = [...new Set(addressedNeeds.map((item) => item.label).filter(Boolean))].slice(0, 3);
+                    const secondaryNeeds = addressedNeeds.slice(1).map((item) => item.label);
+                    const learningOutcomes = (tutorial.skills_taught || []).slice(0, 4);
+                    const currentScore = tutorial.based_on?.score || 0;
+                    const targetScore = tutorial.target_score || Math.min(90, currentScore + 25);
+                    const focusText = secondaryNeeds.length
+                      ? `${skill}, ${secondaryNeeds.join(' and ')}`
+                      : skill;
+                    return (
+                      <section className="primary-tutorial" aria-label="Most-needed tutorial recommendation">
+                        <div className="recommendation-intro recommendation-intro-sentence">
+                          <span>Based on the feedback, this video will help you improve the most</span>
+                        </div>
+
+                        <div className="recommendation-title">
+                          <h3>{tutorial.title}</h3>
+                          <p>{tutorial.creator}</p>
+                        </div>
+
+                        <div className="reason-chips" aria-label="Why this tutorial was selected">
+                          {reasonChips.map((reason) => <span key={reason}><Check size={11} /> {reason}</span>)}
+                        </div>
+
+                        <div className="recommendation-meta">
+                          <span>{difficultyLabel(tutorial.level)}</span>
+                          <span>{watchTimeLabel(tutorial.runtime)}</span>
+                          <span>{tutorial.confidence_label || 'Highly Recommended'}</span>
+                        </div>
+
+                        <div className="tutorial-player">
+                          {isPlaying ? (
+                            <iframe
+                              src={`${tutorial.embed_url}?autoplay=1&rel=0`}
+                              title={tutorial.title}
+                              referrerPolicy="strict-origin-when-cross-origin"
+                              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                              allowFullScreen
+                            />
+                          ) : (
+                            <button
+                              type="button"
+                              className="tutorial-poster"
+                              onClick={() => setPlayingTutorialId(tutorial.video_id)}
+                              aria-label={`Play ${tutorial.title}`}
+                            >
+                              <img
+                                src={tutorial.thumbnail_url}
+                                alt=""
+                                loading="lazy"
+                                onError={(event) => {
+                                  if (event.currentTarget.dataset.fallback) return;
+                                  event.currentTarget.dataset.fallback = 'true';
+                                  event.currentTarget.src = tutorial.thumbnail_fallback_url;
+                                }}
+                              />
+                              <span><PlayCircle size={42} /> Play tutorial</span>
+                            </button>
+                          )}
+                        </div>
+
+                        <div className="recommendation-section recommendation-why">
+                          <span>WHY THIS RECOMMENDATION?</span>
+                          <p>
+                            Your {strongestArea?.label.toLowerCase() || 'composition'} is a relative strength at {strongestArea?.rating || '—'}/100,
+                            but {focusText} needs more attention. {tutorial.teaching_statement || `This tutorial teaches practical techniques for improving ${skill}.`}
+                          </p>
+                        </div>
+
+                        <div className="recommendation-section skill-progress">
+                          <div className="recommendation-section-title">
+                            <span>SKILL PROGRESS</span>
+                            <strong>{skill}</strong>
+                          </div>
+                          <div className="progress-values">
+                            <div><span>Current</span><strong>{currentScore}</strong></div>
+                            <div><span>Target</span><strong>{targetScore}</strong></div>
+                          </div>
+                          <div
+                            className="learning-progress-track"
+                            role="progressbar"
+                            aria-label={`${skill} progress`}
+                            aria-valuemin="0"
+                            aria-valuemax="100"
+                            aria-valuenow={currentScore}
+                          >
+                            <span style={{ width: `${currentScore}%` }} />
+                            <i style={{ left: `${targetScore}%` }} title={`Target: ${targetScore}`} />
+                          </div>
+                          <small>{currentScore} / 100</small>
+                        </div>
+
+                        <div className="recommendation-section learning-outcomes">
+                          <span>AFTER WATCHING YOU'LL LEARN</span>
+                          <div>
+                            {learningOutcomes.map((outcome) => <p key={outcome}><Check size={12} /> {outcome}</p>)}
+                          </div>
+                        </div>
+
+                      </section>
+                    );
+                  })()}
+
+                  {recommendedLearning.length > 1 && (
+                    <section className="learning-strip" aria-label="Recommended next lessons">
+                      <div>
+                        <h4>Recommended next</h4>
+                      </div>
+                      {recommendedLearning.slice(1).map((resource) => (
+                        <a
+                          key={resource.id}
+                          href={resource.youtube_link}
+                          target="_blank"
+                          rel="noreferrer"
+                          title={resource.reason}
+                        >
+                          <span>{tutorialMeta(resource)}</span>
+                          <strong>{resource.title}</strong>
+                          <small>{resource.creator}</small>
+                          <em><PlayCircle size={12} /> Watch on YouTube <ExternalLink size={11} /></em>
+                        </a>
+                      ))}
+                    </section>
+                  )}
+                  </div>
+                </div>
 
                 <section className="critique-panel">
                   <div className="score-summary">
@@ -1072,9 +1425,52 @@ export default function App() {
                     ))}
                   </nav>
 
-                  <div className="workspace-content">
+                  <div className="workspace-content" ref={reviewRef}>
                     {activeTab === 'overview' ? (
                       <div className="overview-layout">
+                        {intentProfile && (
+                          <section className="intent-profile-card">
+                            <div className="section-heading compact">
+                              <div><span>IMAGE INTERPRETATION</span><h3>{intentProfile.primary_intent}</h3></div>
+                              <Target size={18} />
+                            </div>
+                            <div className="intent-style-chips">
+                              {(intentProfile.style_signals || []).map((signal) => (
+                                <span key={signal.label}><Check size={12} /> {signal.label}</span>
+                              ))}
+                            </div>
+                            {(() => {
+                              const detectedStrengths = (intentProfile.strengths || [])
+                                .slice(0, 3)
+                                .map((item) => formatTechniqueLabel(item.technique).toLowerCase());
+                              const strengthSummary = detectedStrengths.length
+                                ? detectedStrengths.length === 1
+                                  ? detectedStrengths[0]
+                                  : `${detectedStrengths.slice(0, -1).join(', ')}, and ${detectedStrengths.at(-1)}`
+                                : 'its chosen composition, visual elements, and creative choices';
+                              return (
+                                <div className="intent-ai-insight">
+                                  <Sparkles size={15} />
+                                  <p><strong>AI Insight</strong> We first understand the photographer's intent before evaluating technique. This image uses {strengthSummary} effectively to communicate its visual story.</p>
+                                </div>
+                              );
+                            })()}
+                            <div className="intent-columns">
+                              <div>
+                                <span>STRENGTHS</span>
+                                {(intentProfile.strengths || []).slice(0, 3).map((item) => (
+                                  <p key={item.technique}><Check size={12} /> <strong>{item.label}</strong>{item.reason}</p>
+                                ))}
+                              </div>
+                              <div>
+                                <span>OPPORTUNITIES</span>
+                                {(intentProfile.opportunities || []).slice(0, 3).map((item) => (
+                                  <p key={item.technique}><Target size={12} /> <strong>{item.label}</strong>{item.reason}</p>
+                                ))}
+                              </div>
+                            </div>
+                          </section>
+                        )}
                         <section className="quick-wins-section">
                           <div className="section-heading">
                             <div>
@@ -1121,31 +1517,110 @@ export default function App() {
                           </section>
                         </div>
 
-                        <section className="category-overview">
+                        <section className="technique-analysis-panel">
                           <div className="section-heading compact">
-                            <div><span>PERFORMANCE MAP</span><h3>Category scores</h3></div>
+                            <div><span>TECHNICAL ANALYSIS</span><h3>Measured evidence from this photograph</h3></div>
+                            <Target size={18} />
                           </div>
-                          <div className="category-grid">
-                            {majorParams.map((param) => (
-                              <button type="button" key={param.id} onClick={() => openWorkspaceTab(param.id)}>
-                                <div><span>{param.label}</span><strong>{param.rating}</strong></div>
-                                <div className="score-track"><i style={{ width: `${param.rating}%`, background: getScoreColor(param.rating) }} /></div>
-                                <small>{getScoreLabel(param.rating)} <span>View critique →</span></small>
-                              </button>
-                            ))}
-                          </div>
-                        </section>
+                          <div className="technical-evidence-grid">
+                            <article className="histogram-card">
+                              <div className="evidence-card-heading">
+                                <div><span>TONAL DISTRIBUTION</span><h4>Histogram</h4></div>
+                                <Sliders size={16} />
+                              </div>
+                              {histogramBins.length > 0 ? (
+                                <div className="histogram-plot" aria-label={`Luminance histogram: ${imageStatistics.histogram || 'distribution available'}`}>
+                                  {histogramBins.map((value, index) => (
+                                    <i key={`${index}-${value}`} style={{ height: `${Math.max(3, value)}%` }} />
+                                  ))}
+                                </div>
+                              ) : (
+                                <div className="evidence-unavailable">Histogram unavailable for this analysis.</div>
+                              )}
+                              <div className="histogram-axis"><span>Shadows</span><span>Midtones</span><span>Highlights</span></div>
+                              <p>{imageStatistics.histogram || 'Analyze tonal balance and clipping across the frame.'}</p>
+                              <div className="evidence-metrics">
+                                <span>Shadow clipping <strong>{imageStatistics.shadow_clipping_percent ?? 'â€”'}%</strong></span>
+                                <span>Highlight clipping <strong>{imageStatistics.highlight_clipping_percent ?? 'â€”'}%</strong></span>
+                              </div>
+                            </article>
 
-                        {(analysisResult.ai_status === 'rate_limited' || !['queued', 'sent'].includes(analysisResult.email_status)) && (
-                          <div className="system-note">
-                            <Info size={16} />
-                            <p>
-                              {analysisResult.ai_status === 'rate_limited'
-                                ? 'The AI quota was unavailable, so this report uses the local computer-vision engine.'
-                                : 'Email delivery is in simulation mode; the critique is still complete in this workspace.'}
-                            </p>
+                            <article className="exif-insight-card">
+                              <div className="evidence-card-heading">
+                                <div><span>CAPTURE CONTEXT</span><h4>EXIF insights</h4></div>
+                                <Camera size={16} />
+                              </div>
+                              {cameraSettings ? (
+                                <>
+                                  <div className="technical-exif-list">
+                                    <span><small>Flash information</small><strong>{cameraSettings.flash_usage || 'Not embedded'}</strong></span>
+                                    <span><small>Color &amp; image processing</small><strong>{cameraSettings.color_profile || 'Not embedded'}</strong></span>
+                                    <span><small>Exposure setting</small><strong>{cameraSettings.exposure_compensation || 'Not embedded'}</strong></span>
+                                  </div>
+                                  <p>{analysisResult.exif_analysis?.diagnostics?.issue || 'Capture settings are available for technical review.'}</p>
+                                </>
+                              ) : (
+                                <div className="evidence-unavailable">No embedded EXIF settings were available.</div>
+                              )}
+                            </article>
+
+                            <article className="focus-map-card">
+                              <div className="evidence-card-heading">
+                                <div><span>EDGE CONFIDENCE</span><h4>Focus map</h4></div>
+                                <Eye size={16} />
+                              </div>
+                              {focusMapSrc ? (
+                                <div className="focus-map-visual">
+                                  <img src={`data:image/jpeg;base64,${focusMapSrc}`} alt="Focus confidence heatmap for the analyzed photograph" />
+                                  <span>Low detail</span><span>High detail</span>
+                                </div>
+                              ) : (
+                                <div className="evidence-unavailable">Focus map unavailable for this analysis.</div>
+                              )}
+                              <p>{cv.blur?.description || `Sharpness is ${imageStatistics.sharpness?.level?.toLowerCase() || 'being evaluated'} across the frame.`}</p>
+                            </article>
                           </div>
-                        )}
+                          <div className="technical-technique-heading">
+                            <span>TECHNIQUE REVIEW</span>
+                            <h4>What was used, what can grow</h4>
+                          </div>
+                          {intentProfile ? (
+                            <>
+                              <div className="technique-analysis-grid">
+                                {Object.entries(intentProfile.technique_evaluations || {})
+                                  .filter(([, evaluation]) => evaluation.status !== 'not_applicable')
+                                  .map(([key, evaluation]) => (
+                                  <button
+                                    type="button"
+                                    key={key}
+                                    className={`technique-analysis-item technique-${evaluation.status}`}
+                                    onClick={() => openWorkspaceTab(tutorialTabId({ based_on: { key } }))}
+                                  >
+                                    <div className="technique-analysis-topline">
+                                      <strong>{formatTechniqueLabel(key)}</strong>
+                                      <span>{techniqueStatusLabel(evaluation.status)}</span>
+                                    </div>
+                                    <div className="technique-analysis-metrics">
+                                      <span>Usage <b>{evaluation.status === 'not_applicable' || evaluation.status === 'intentional_absence' ? '—' : `${evaluation.usage_score}/100`}</b></span>
+                                      <span>Execution <b>{evaluation.status === 'not_applicable' || evaluation.status === 'intentional_absence' ? '—' : `${evaluation.effectiveness_score}/100`}</b></span>
+                                    </div>
+                                    <p>{evaluation.reason}</p>
+                                  </button>
+                                  ))}
+                              </div>
+                            </>
+                          ) : (
+                            <div className="category-grid">
+                              {majorParams.map((param) => (
+                                <button type="button" key={param.id} onClick={() => openWorkspaceTab(param.id)}>
+                                  <div><span>{param.label}</span><strong>{param.rating}</strong></div>
+                                  <div className="score-track"><i style={{ width: `${param.rating}%`, background: getScoreColor(param.rating) }} /></div>
+                                  <small>{getScoreLabel(param.rating)} <span>View critique →</span></small>
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </section>
                       </div>
                     ) : selectedParam ? (
                       <div className="detail-layout">
@@ -1205,19 +1680,97 @@ export default function App() {
                           })}
                         </div>
 
-                        <section className="learning-strip">
-                          <div>
-                            <span>LEARN IN CONTEXT</span>
-                            <h4>Build this skill</h4>
-                          </div>
-                          {(learningByTab[selectedParam.id] || []).map((resource) => (
-                            <button type="button" key={resource.title}>
-                              <span>{resource.meta}</span>
-                              <strong>{resource.title}</strong>
-                              <em>Open lesson →</em>
-                            </button>
-                          ))}
-                        </section>
+                        {selectedLearningContent && (
+                          <>
+                            <section className="detail-resource-section suggestions-section">
+                              <div className="resource-section-heading">
+                                <div><span>APPLY THE FEEDBACK</span><h3>Suggestions</h3></div>
+                                <Sliders size={18} />
+                              </div>
+
+                              <div className="priority-fixes-block">
+                                <div className="subsection-title"><span>01</span><div><strong>Priority fixes</strong><small>Start with the changes that offer the greatest improvement.</small></div></div>
+                                <div className="priority-fix-grid">
+                                  {selectedPriorityFixes.map((item, index) => (
+                                    <article key={`${selectedParam.id}-priority-${item.key || index}`}>
+                                      <span>Priority {index + 1}</span>
+                                      <strong>{item.label}</strong>
+                                      <p>{item.what_could_be_improved}</p>
+                                      {item.suggested_edit_hint && <small><Sliders size={12} /> {item.suggested_edit_hint}</small>}
+                                    </article>
+                                  ))}
+                                </div>
+                              </div>
+
+                              <div className="detailed-explanations-block">
+                                <div className="subsection-title"><span>02</span><div><strong>Detailed explanations</strong><small>Connect each score to a visible choice in the photograph.</small></div></div>
+                                <div className="explanation-list">
+                                  {selectedParam.subAspects.map((item, index) => (
+                                    <article key={`${selectedParam.id}-explanation-${item.key || index}`}>
+                                      <div><strong>{item.label}</strong><span>{Math.round(item.rating)}/100</span></div>
+                                      <p><b>Why it matters:</b> {item.what_works}</p>
+                                      <p><b>What to change:</b> {item.what_could_be_improved}</p>
+                                    </article>
+                                  ))}
+                                </div>
+                              </div>
+
+                              <div className="practice-grid">
+                                <div className="exercise-block">
+                                  <div className="subsection-title"><span>03</span><div><strong>Exercises</strong><small>Short assignments for the next shoot.</small></div></div>
+                                  <ol>
+                                    {selectedLearningContent.exercises.map((exercise) => <li key={exercise}>{exercise}</li>)}
+                                  </ol>
+                                </div>
+                                <div className="checklist-block">
+                                  <div className="subsection-title"><span>04</span><div><strong>Practice checklist</strong><small>Use before pressing the shutter.</small></div></div>
+                                  <div>
+                                    {selectedLearningContent.checklist.map((item) => <p key={item}><Check size={13} /> {item}</p>)}
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="example-images-block">
+                                <div className="subsection-title"><span>05</span><div><strong>Example images (before/after)</strong><small>A concept preview of the recommended direction, not a finished edit.</small></div></div>
+                                <div className="before-after-grid">
+                                  <figure>
+                                    <div><img src={previewUrl} alt="Original analyzed photograph" /></div>
+                                    <figcaption><span>Before</span><strong>Current photograph</strong></figcaption>
+                                  </figure>
+                                  <figure>
+                                    <div><img src={previewUrl} alt={`Concept preview for improved ${selectedParam.label.toLowerCase()}`} style={{ filter: selectedLearningContent.filter, transform: selectedLearningContent.transform || 'none' }} /></div>
+                                    <figcaption><span>After</span><strong>Suggested direction</strong></figcaption>
+                                  </figure>
+                                </div>
+                              </div>
+                            </section>
+
+                            <section className="detail-resource-section tutorials-section">
+                              <div className="resource-section-heading">
+                                <div><span>KEEP LEARNING</span><h3>Tutorials</h3></div>
+                                <PlayCircle size={18} />
+                              </div>
+                              <div className="youtube-resource-block">
+                                <div className="subsection-title"><span>01</span><div><strong>YouTube videos</strong><small>Matched to the evidence and scores in this tab.</small></div></div>
+                                <div className="youtube-resource-grid">
+                                  {selectedTutorials.map((resource) => (
+                                    <a key={resource.id} href={resource.youtube_link} target="_blank" rel="noreferrer" title={resource.reason}>
+                                      <span>{tutorialMeta(resource)}</span>
+                                      <strong>{resource.title}</strong>
+                                      <small>{resource.creator}</small>
+                                      <em><PlayCircle size={12} /> Watch on YouTube <ExternalLink size={11} /></em>
+                                    </a>
+                                  ))}
+                                </div>
+                              </div>
+
+                              <div className="related-concepts-block">
+                                <div className="subsection-title"><span>02</span><div><strong>Related concepts</strong><small>Topics that reinforce this skill.</small></div></div>
+                                <div>{selectedLearningContent.concepts.map((concept) => <span key={concept}>{concept}</span>)}</div>
+                              </div>
+                            </section>
+                          </>
+                        )}
                       </div>
                     ) : null}
                   </div>
@@ -1236,16 +1789,6 @@ export default function App() {
               <div>
                 <span style={{ color: 'var(--primary)', fontSize: '0.78rem', fontWeight: '800', textTransform: 'uppercase', tracking: '0.08em', display: 'inline-block', marginBottom: '6px', border: '1px solid var(--primary-glow)', padding: '2px 8px', borderRadius: '6px', backgroundColor: 'rgba(99, 102, 241, 0.05)' }}>Analysis Complete</span>
                 <h3 style={{ fontSize: '1.8rem', fontWeight: '900', marginBottom: '6px', letterSpacing: '-0.02em', color: '#fff' }}>Constructive Critique Dashboard</h3>
-                <p style={{ color: 'var(--text-secondary)', fontSize: '0.88rem', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
-                  Workspace: <span style={{ fontFamily: 'var(--font-mono)', color: '#fff', fontWeight: '600' }}>{analysisResult.email}</span> 
-                  • Engine: <span style={{ color: analysisResult.ai_status === 'rate_limited' ? 'var(--warning)' : 'var(--secondary)', fontWeight: '700' }}>
-                    {analysisResult.mode === 'gemini_ai'
-                      ? 'Gemini 3.5 Flash AI Engine'
-                      : analysisResult.ai_status === 'rate_limited'
-                        ? 'Local OpenCV Core (Gemini rate limited)'
-                        : 'Local OpenCV Core'}
-                  </span>
-                </p>
               </div>
 
               {/* Radial Rating Circular SVG */}
@@ -1294,48 +1837,6 @@ export default function App() {
                 </div>
               </div>
             )}
-
-            {/* Email Config Alert Banner */}
-            <div 
-              className={`alert-banner ${
-                ['queued', 'sent'].includes(analysisResult.email_status) ? 'alert-banner-info' : 'alert-banner-warning'
-              }`}
-            >
-              <div style={{ 
-                display: 'flex', 
-                alignItems: 'center', 
-                justifyContent: 'center', 
-                width: '42px', 
-                height: '42px', 
-                borderRadius: '10px', 
-                backgroundColor: ['queued', 'sent'].includes(analysisResult.email_status) ? 'rgba(20, 88, 149, 0.16)' : 'rgba(245, 158, 11, 0.12)',
-                color: ['queued', 'sent'].includes(analysisResult.email_status) ? 'var(--primary-hover)' : 'var(--warning)',
-                flexShrink: 0
-              }}>
-                <Mail size={22} />
-              </div>
-              <div style={{ flex: 1, fontSize: '0.9rem', lineHeight: '1.5' }}>
-                {['queued', 'sent'].includes(analysisResult.email_status) ? (
-                  <>
-                    <strong style={{ color: '#FFFFFF', display: 'block', fontSize: '0.98rem', marginBottom: '2px' }}>SMTP Report Queued</strong>
-                    <span style={{ color: 'var(--text-secondary)' }}>
-                      Your styled dashboard report is being delivered to <span style={{ color: '#fff', fontWeight: '600' }}>{analysisResult.email}</span>. Please check your spam folder if it doesn't arrive within 1 minute.
-                    </span>
-                  </>
-                ) : (
-                  <>
-                    <strong style={{ color: '#FFFFFF', display: 'block', fontSize: '0.98rem', marginBottom: '2px' }}>SMTP Simulation Mode Active</strong>
-                    <span style={{ color: 'var(--text-secondary)' }}>
-                      The email critique report was saved as a simulated file because SMTP settings are offline. 
-                      To receive live critiques directly in your inbox, set environment variables (`SMTP_HOST`, `SMTP_USERNAME`, `SMTP_PASSWORD`) inside the <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--secondary)', fontWeight: '600' }}>backend/.env</span> file.
-                    </span>
-                    <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '6px', padding: '6px 12px', borderRadius: '6px', backgroundColor: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.03)', fontFamily: 'var(--font-mono)', display: 'inline-block' }}>
-Mock HTML output written to: <span style={{ color: '#fff' }}>backend/email_simulation.html</span>
-                    </div>
-                  </>
-                )}
-              </div>
-            </div>
 
             {/* Redesigned Critique Dashboard Layout */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
@@ -1416,7 +1917,7 @@ Mock HTML output written to: <span style={{ color: '#fff' }}>backend/email_simul
                         boxShadow: 'inset 0 2px 8px rgba(0,0,0,0.5)',
                         fontFamily: 'system-ui, -apple-system, sans-serif'
                       }}>
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', textAlign: 'center', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '10px' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '10px', textAlign: 'center', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '10px' }}>
                           <div>
                             <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', display: 'block', letterSpacing: '0.05em' }}>Shutter Speed</span>
                             <span style={{ fontSize: '1.2rem', fontWeight: '900', color: '#38BDF8', letterSpacing: '-0.02em' }}>
@@ -1435,16 +1936,19 @@ Mock HTML output written to: <span style={{ color: '#fff' }}>backend/email_simul
                               {analysisResult.exif_analysis.camera_settings.iso || 'N/A'}
                             </span>
                           </div>
-                        </div>
-                        
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '12px', fontSize: '0.8rem', paddingTop: '4px' }}>
-                          <div>
+                          <div style={{ gridColumn: 'span 2', borderLeft: '1px solid rgba(255,255,255,0.05)' }}>
                             <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', display: 'block', letterSpacing: '0.05em' }}>Focal Length</span>
-                            <span style={{ color: '#fff', fontWeight: '600' }}>
+                            <span style={{ fontSize: '1rem', fontWeight: '800', color: '#A78BFA', letterSpacing: '-0.02em' }}>
                               {analysisResult.exif_analysis.camera_settings.focal_length || 'N/A'}
+                              {analysisResult.exif_analysis.camera_settings.focal_length_35mm
+                                ? ` (Equivalent focal length ${analysisResult.exif_analysis.camera_settings.focal_length_35mm})`
+                                : ''}
                             </span>
                           </div>
-                          <div style={{ borderLeft: '1px solid rgba(255,255,255,0.05)', paddingLeft: '12px' }}>
+                        </div>
+
+                        <div style={{ fontSize: '0.8rem', paddingTop: '4px' }}>
+                          <div>
                             <span style={{ color: '#fff', fontWeight: '600', display: 'block', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }} title={analysisResult.exif_analysis.camera_settings.camera}>
                               {analysisResult.exif_analysis.camera_settings.camera || 'Generic Camera'}
                             </span>
@@ -2017,11 +2521,7 @@ Mock HTML output written to: <span style={{ color: '#fff' }}>backend/email_simul
 
       {/* Footer */}
       <footer style={{ marginTop: '48px', padding: '24px 0', borderTop: '1px solid var(--border-color)', textAlign: 'center', fontSize: '0.8rem', color: 'var(--text-muted)', zIndex: 10 }}>
-        <p style={{ marginBottom: '6px' }}>© 2026 FocalpointAI. Designed as a real-time photography mentor for aperture, shadows, details, crops, and color composition.</p>
-        <p style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
-          <ShieldCheck size={14} style={{ color: 'var(--success)' }} />
-          Local computer vision fallbacks fully active.
-        </p>
+        <p>© 2026 Focalpoint AI. Source code licensed under Apache License 2.0. Focalpoint AI name and logo are not covered by this license.</p>
       </footer>
 
     </div>

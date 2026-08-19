@@ -3,9 +3,9 @@ import unittest
 from fastapi import HTTPException
 
 try:
-    from .gemini_request import classify_gemini_error
+    from .gemini_analysis import classify_gemini_error
 except ImportError:
-    from gemini_request import classify_gemini_error
+    from gemini_analysis import classify_gemini_error
 
 
 class GeminiErrorClassificationTests(unittest.TestCase):

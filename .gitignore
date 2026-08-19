@@ -74,3 +74,6 @@ backend/email_simulation_*.html
 backend/test_api.py
 backend/test_cv_local.py
 backend/test_simulation.html
+
+
+tmp-*.log
