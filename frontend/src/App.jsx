@@ -238,7 +238,7 @@ export default function App() {
       if (previewUrl) URL.revokeObjectURL(previewUrl);
       setFile(nextFile);
       setPreviewUrl(objectUrl);
-      setFileMetadata({ ...dimensions, size: formatFileSize(nextFile.size) });
+      setFileMetadata({ ...dimensions });
       setUploadState('uploading');
       await new Promise((resolve) => {
         let progress = 0;
@@ -893,11 +893,6 @@ export default function App() {
                   <div className="ready-details">
                     <div><span>File</span><strong>{file?.name}</strong></div>
                     <div><span>Dimensions</span><strong>{fileMetadata?.width}×{fileMetadata?.height}</strong></div>
-                    <div>
-                      <span>Camera</span>
-                      <strong className="camera-device-name" title={fileMetadata?.camera}>{fileMetadata?.camera}</strong>
-                    </div>
-                    <div><span>Size</span><strong>{fileMetadata?.size}</strong></div>
                   </div>
                   <div className="ready-status"><CheckCircle size={20} /> Ready for Analysis</div>
 
@@ -1241,7 +1236,6 @@ export default function App() {
 
                   <div className="image-caption">
                     <div><span>File</span><strong>{file?.name || 'critique-image.jpg'}</strong></div>
-                    <div><span>Size</span><strong>{fileMetadata?.size || '—'}</strong></div>
                   </div>
 
                   {cameraSettings && (
