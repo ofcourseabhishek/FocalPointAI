@@ -106,18 +106,13 @@ export function Footer() {
     return () => observer.disconnect();
   }, []);
 
-  // Track the spacer scrolling into view
+  // We still track scroll to trigger the text stagger
   const { scrollYProgress } = useScroll({
     target: spacerRef,
     offset: ['start end', 'end end'],
   });
 
-  // Spring animation for smooth reveal
-  const smoothProgress = useSpring(scrollYProgress, { damping: 25, stiffness: 120 });
-  const y = useTransform(smoothProgress, [0, 1], [80, 0]);
-  const opacity = useTransform(smoothProgress, [0, 1], [0, 1]);
-
-  // Trigger brand text stagger
+  // Trigger brand text stagger when the curtain starts revealing the footer
   useMotionValueEvent(scrollYProgress, 'change', (latest) => {
     if (latest > 0.15 && !isRevealed) setIsRevealed(true);
     if (latest <= 0.15 && isRevealed) setIsRevealed(false);
@@ -128,25 +123,18 @@ export function Footer() {
   return (
     <>
       {/* Spacer to push content up and reveal footer */}
-      <div ref={spacerRef} style={{ height }} className="relative w-full z-[-1]" />
+      <div ref={spacerRef} style={{ height }} className="relative w-full z-0" />
 
       <div
         ref={fixedRef}
-        className="fixed bottom-0 left-0 w-full bg-[#050505] text-[#e4e4e2] overflow-hidden z-[-2]"
-        style={{
-          fontFamily: "'Neue Haas Grotesk Text Pro', 'Helvetica Neue', Helvetica, Arial, sans-serif",
-        }}
+        className="fixed bottom-0 left-0 w-full bg-[#050505] text-[#e4e4e2] overflow-hidden z-0 font-sans"
       >
-        <motion.div
-          style={{ y, opacity }}
-          className="mx-auto w-full max-w-7xl px-6 py-12 md:px-12 md:py-24"
-        >
+        <div className="mx-auto w-full max-w-7xl px-6 py-12 md:px-12 md:py-24">
           {/* Top Section: Brand Statement & Description */}
           <div className="flex flex-col items-start mb-24 md:mb-40 max-w-4xl">
             <h2 
-              className="text-5xl md:text-7xl lg:text-9xl font-medium tracking-tight mb-8 flex flex-wrap gap-x-3 md:gap-x-4 gap-y-2"
+              className="text-5xl md:text-7xl lg:text-9xl font-medium tracking-tight mb-8 flex flex-wrap gap-x-3 md:gap-x-4 gap-y-2 font-sans"
               style={{
-                fontFamily: "'Neue Haas Grotesk Display Pro', 'Helvetica Neue', Helvetica, Arial, sans-serif",
                 letterSpacing: '-0.02em'
               }}
             >
@@ -227,7 +215,7 @@ export function Footer() {
               <a href="#" className="hover:text-white transition-colors">License</a>
             </div>
           </div>
-        </motion.div>
+        </div>
       </div>
     </>
   );

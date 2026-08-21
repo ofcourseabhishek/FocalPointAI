@@ -1,6 +1,7 @@
 import { Hero } from "@/components/landing/Hero";
 import { TheRead } from "@/components/landing/TheRead";
 import { LearnToSee } from "@/components/landing/LearnToSee";
+import { BeyondTheScore } from "@/components/landing/BeyondTheScore";
 import { Footer } from "@/components/landing/Footer";
 
 export default function Home() {
@@ -14,6 +15,7 @@ export default function Home() {
         <Hero />
         <TheRead />
         <LearnToSee />
+        <BeyondTheScore />
       </div>
       
       <Footer />
