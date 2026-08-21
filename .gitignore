@@ -1,79 +1,126 @@
-# System files
-.DS_Store
-Thumbs.db
+# ==========================
+# Dependencies
+# ==========================
+node_modules/
+**/node_modules/
 
-# Python
+# Python dependencies
 __pycache__/
 *.py[cod]
 *$py.class
-.Python
-env/
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-share/python-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-MANIFEST
-.venv
+
+# Virtual environments
 venv/
-ENV/
-env.bak/
-venv.bak/
-.pytest_cache/
-.coverage
-htmlcov/
+.venv/
+env/
 
-# Node & Frontend Build
-node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-lerna-debug.log*
-frontend/dist/
-frontend/node_modules/
-.svelte-kit/
-.next/
-out/
 
-# IDEs and Editors
-.idea/
-.vscode/
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
-*.workspace
-
-# Configuration & Secrets
+# ==========================
+# Environment variables
+# ==========================
 .env
 .env.local
 .env.development.local
 .env.test.local
 .env.production.local
 
-frontend/.env
-frontend/.env.local
-
-# Local simulated files
-backend/email_simulation.html
-backend/email_simulation_*.html
-*.html_sim
-backend/test_api.py
-backend/test_cv_local.py
-backend/test_simulation.html
+# Backend secrets
+*.pem
+*.key
 
 
-tmp-*.log
+# ==========================
+# Next.js
+# ==========================
+.next/
+out/
+
+# Vercel
+.vercel/
+
+
+# ==========================
+# Build files
+# ==========================
+dist/
+build/
+
+
+# ==========================
+# Logs
+# ==========================
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+
+# ==========================
+# OS files
+# ==========================
+.DS_Store
+Thumbs.db
+
+
+# ==========================
+# IDE settings
+# ==========================
+.vscode/
+.idea/
+
+# Keep workspace settings if needed
+!.vscode/extensions.json
+
+
+# ==========================
+# Testing / Coverage
+# ==========================
+coverage/
+.nyc_output/
+
+
+# ==========================
+# Python ML / CV files
+# ==========================
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Model weights (important for Snapgrade)
+*.pt
+*.pth
+*.onnx
+*.h5
+*.keras
+
+# Large datasets
+data/
+datasets/
+uploads/
+processed/
+
+
+# ==========================
+# Generated media
+# ==========================
+
+# User uploaded images
+public/uploads/
+
+# Generated analysis images
+generated/
+tmp/
+
+
+# ==========================
+# Local database files
+# ==========================
+*.sqlite
+*.db
+
+
+# ==========================
+# Cache
+# ==========================
+.cache/
+.parquet
