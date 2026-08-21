@@ -92,23 +92,33 @@ const MobileAccordion = ({
 };
 
 export function Footer() {
-  const spacerRef = useRef<HTMLDivElement>(null);
-  const fixedRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
   const [height, setHeight] = useState(0);
+  const [windowHeight, setWindowHeight] = useState(0);
   const [isRevealed, setIsRevealed] = useState(false);
 
   useEffect(() => {
-    if (!fixedRef.current) return;
+    setWindowHeight(window.innerHeight);
+    const handleResize = () => setWindowHeight(window.innerHeight);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  useEffect(() => {
+    if (!contentRef.current) return;
     const observer = new ResizeObserver((entries) => {
       setHeight(entries[0].contentRect.height);
     });
-    observer.observe(fixedRef.current);
+    observer.observe(contentRef.current);
     return () => observer.disconnect();
   }, []);
 
-  // We still track scroll to trigger the text stagger
+  const isTaller = height > 0 && windowHeight > 0 && height > windowHeight;
+
+  // We track scroll on the container (which might be the spacer or the footer itself)
   const { scrollYProgress } = useScroll({
-    target: spacerRef,
+    target: containerRef,
     offset: ['start end', 'end end'],
   });
 
@@ -122,14 +132,20 @@ export function Footer() {
 
   return (
     <>
-      {/* Spacer to push content up and reveal footer */}
-      <div ref={spacerRef} style={{ height }} className="relative w-full z-0" />
+      {/* Spacer to push content up and reveal footer (only if it fits on screen) */}
+      {!isTaller && (
+        <div ref={containerRef} style={{ height }} className="relative w-full z-0" />
+      )}
 
       <div
-        ref={fixedRef}
-        className="fixed bottom-0 left-0 w-full bg-[#050505] text-[#e4e4e2] overflow-hidden z-0 font-sans"
+        ref={isTaller ? containerRef : undefined}
+        className={
+          isTaller
+            ? "relative w-full bg-[#050505] text-[#e4e4e2] overflow-hidden z-0 font-sans"
+            : "fixed bottom-0 left-0 w-full bg-[#050505] text-[#e4e4e2] overflow-hidden z-0 font-sans"
+        }
       >
-        <div className="mx-auto w-full max-w-7xl px-6 py-12 md:px-12 md:py-24">
+        <div ref={contentRef} className="mx-auto w-full max-w-7xl px-6 py-12 md:px-12 md:py-24">
           {/* Top Section: Brand Statement & Description */}
           <div className="flex flex-col items-start mb-24 md:mb-40 max-w-4xl">
             <h2 
