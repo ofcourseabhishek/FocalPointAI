@@ -1,0 +1,4 @@
+{
+  "buildPath": "hybrid",
+  "buildPathNotes": "Hybrid. Comp-first for major new visual/marketing surfaces where composition, storytelling, photography, or motion define the experience. Code-first for product UI, dashboards, utilities, and iterative improvements. For comp-first work, the implementation should closely match the approved visual direction; for code-first work, preserve the established design system and audit the finished result for quality and consistency."
+}

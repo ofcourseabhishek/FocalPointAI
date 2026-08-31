@@ -1,0 +1,67 @@
+@import "tailwindcss";
+
+:root {
+  /* This editorial page has authored dark and paper sections, not an OS theme. */
+  color-scheme: dark;
+  --background: #0a0a0a;
+  --foreground: #e4e4e2;
+  /* Shared desktop anchors; the photograph may still bleed beyond the grid. */
+  --page-gutter: clamp(24px, 5vw, 80px);
+  --content-max: 1440px;
+  --page-inset: max(var(--page-gutter), calc((100vw - var(--content-max)) / 2));
+  --landing-text-primary: #f0f0ed;
+  --landing-text-body: #b9b9b6;
+  --landing-text-meta: #92928e;
+  --landing-rule-dark: rgba(255, 255, 255, 0.2);
+  --landing-rule-light: rgba(23, 23, 20, 0.25);
+  --landing-label-tracking: 0.16em;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+html {
+  scrollbar-color: #73746e var(--background);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+}
+
+.feedback-button-layer {
+  transform: translate3d(0.5rem, 0.5rem, 0);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .feedback-button:hover .feedback-button-layer {
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+.feedback-button:focus-visible .feedback-button-layer {
+  transform: translate3d(0, 0, 0);
+  transition: none;
+}
+
+.feedback-button:focus-visible:active {
+  transform: none;
+}
+
+.hero-wordmark {
+  /* Keep the loaded font crisp: no synthetic weight or retained 3D layer. */
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .feedback-button-layer,
+  .feedback-button:hover .feedback-button-layer,
+  .feedback-button:focus-visible .feedback-button-layer {
+    transform: translate3d(0.5rem, 0.5rem, 0);
+  }
+}
