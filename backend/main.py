@@ -30,7 +30,7 @@ app = FastAPI(title="FocalPointAI Backend")
 # Enable CORS for the frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, specify the actual frontend bc URL
+    allow_origins=["https://snapgradebyark.vercel.app","https://snapgrade-app.vercel.app"],  # In production, specify the actual frontend bc URL
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
