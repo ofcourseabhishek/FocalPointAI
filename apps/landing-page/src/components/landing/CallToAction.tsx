@@ -3,7 +3,7 @@ import { ArrowUpRight } from "lucide-react";
 export function CallToAction() {
   // The upload application is deployed separately; README.md records this URL.
   const analyzerUrl =
-    process.env.NEXT_PUBLIC_ANALYZER_URL || "https://focalpoint-ai.vercel.app";
+    process.env.NEXT_PUBLIC_ANALYZER_URL || "https://snapgrade-app.vercel.app";
 
   return (
     <section

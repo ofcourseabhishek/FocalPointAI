@@ -244,7 +244,7 @@ export function Hero() {
   const [activeStage, setActiveStage] = useState<HeroStage>(0);
   const [hasFinalStageExited, setHasFinalStageExited] = useState(false);
   const analyzerUrl =
-    process.env.NEXT_PUBLIC_ANALYZER_URL || "https://focalpoint-ai.vercel.app";
+    process.env.NEXT_PUBLIC_ANALYZER_URL || "https://snapgrade-app.vercel.app";
   const { scrollYProgress } = useScroll({ target: containerRef, offset: ["start start", "end end"] });
   const [introTimeline, ...processTimeline] = DESKTOP_HERO_TIMELINE;
 
