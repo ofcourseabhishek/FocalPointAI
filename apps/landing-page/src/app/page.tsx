@@ -1,24 +1,21 @@
 import { Hero } from "@/components/landing/Hero";
-import { TheRead } from "@/components/landing/TheRead";
-import { LearnToSee } from "@/components/landing/LearnToSee";
-import { BeyondTheScore } from "@/components/landing/BeyondTheScore";
+import { ReadSection } from "@/components/landing/ReadSection";
+import { ObservationToDirection } from "@/components/landing/ObservationToDirection";
+import { CallToAction } from "@/components/landing/CallToAction";
 import { Footer } from "@/components/landing/Footer";
 
 export default function Home() {
   return (
-    <main className="flex min-h-screen flex-col">
-      {/* 
-        Wrap main content in a container with a background color and higher z-index 
-        so it smoothly scrolls over the sticky footer revealing it from underneath.
-      */}
-      <div className="z-10 bg-[#0a0a0a] w-full flex flex-col relative">
+    <>
+      {/* The foreground preserves the footer's curtain reveal. */}
+      <main className="relative z-10 flex min-h-screen w-full flex-col bg-[#0a0a0a]">
         <Hero />
-        <TheRead />
-        <LearnToSee />
-        <BeyondTheScore />
-      </div>
+        <ReadSection />
+        <ObservationToDirection />
+        <CallToAction />
+      </main>
       
       <Footer />
-    </main>
+    </>
   );
 }

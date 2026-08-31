@@ -17,6 +17,9 @@
 /.next/
 /out/
 
+# Local design previews and verification snapshots
+/.tmp/
+
 # production
 /build
 

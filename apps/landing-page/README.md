@@ -16,6 +16,12 @@ bun dev
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
+The final **Analyze a photo** link opens the separate upload application at the
+public URL recorded in the repository README. Set `NEXT_PUBLIC_ANALYZER_URL` in
+`.env.local` (or the deployment environment) to point to another upload app, for
+example `http://localhost:5173` when developing both apps locally. Restart the
+development server after changing the variable.
+
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.

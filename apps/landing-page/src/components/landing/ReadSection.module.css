@@ -1,0 +1,43 @@
+.entryGap {
+  display: none;
+}
+
+.pinTrack {
+  position: relative;
+}
+
+.pinFrame {
+  position: relative;
+  min-height: 100svh;
+}
+
+.pinnedScene {
+  position: relative;
+  min-height: 100svh;
+}
+
+@media (min-width: 1024px) and (min-height: 600px), (min-width: 768px) and (min-height: 701px) {
+  .entryGap {
+    display: block;
+    height: 48px;
+  }
+
+  .pinTrack {
+    height: calc(var(--read-pin-track-vh) * 100svh);
+  }
+
+  .pinFrame {
+    position: sticky;
+    top: 0;
+    height: 100svh;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .pinnedScene {
+    position: absolute;
+    inset: 0;
+    min-height: 0;
+    overflow: hidden;
+  }
+}

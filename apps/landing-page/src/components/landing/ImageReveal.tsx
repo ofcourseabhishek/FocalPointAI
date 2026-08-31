@@ -1,47 +1,27 @@
 "use client";
 
-import { motion } from "framer-motion";
-import { DecisionMarkers } from "./DecisionMarkers";
 import Image from "next/image";
+import type { ReactNode } from "react";
+import { READ_IMAGE_URL } from "./read-image";
 
-interface ImageRevealProps {
-  activeStage: number;
-}
+interface ImageRevealProps { overlay?: ReactNode; }
 
-export function ImageReveal({ activeStage }: ImageRevealProps) {
-  // Curated architectural image
-  const imageUrl = "https://images.unsplash.com/photo-1633811126490-eb4dd98691ed?q=80&w=387&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D";
-
+/** A stable, calibrated photo frame. Lens changes are carried by its overlay. */
+export function ImageReveal({ overlay }: ImageRevealProps) {
   return (
-    <div className="relative w-full h-full overflow-hidden bg-[#0a0a0a] rounded-xl shadow-2xl">
-      <motion.div 
-        className="relative w-full h-full"
-        initial={{ scale: 0.98, opacity: 0.95 }}
-        animate={
-          activeStage >= 3
-            ? { scale: [1, 1.015], opacity: 1 }
-            : { scale: 1, opacity: 1 }
-        }
-        transition={
-          activeStage >= 3
-            ? { duration: 12, ease: "easeInOut", repeat: Infinity, repeatType: "reverse" }
-            : { duration: 1.8, ease: [0.16, 1, 0.3, 1] }
-        }
-      >
-        <Image 
-          src={imageUrl} 
-          alt="Cinematic street photography" 
+    <div className="relative h-full w-full overflow-hidden rounded-sm bg-[#0a0a0a] shadow-2xl">
+      {/* The photo and calibrated atlas share this original 2:3 source canvas. */}
+      <div className="absolute inset-x-0 top-1/2 aspect-[2/3] -translate-y-1/2">
+        <Image
+          src={READ_IMAGE_URL}
+          alt="Editorial storefront photograph prepared for visual analysis"
           fill
-          priority
           className="object-cover"
-          sizes="(max-width: 768px) 100vw, 45vw"
+          sizes="(max-width: 767px) calc(100vw - 3rem), 50vw"
         />
-        
-        {/* Subtle grain overlay for editorial feel */}
-        <div className="absolute inset-0 bg-[url('https://upload.wikimedia.org/wikipedia/commons/7/76/1k_Dissolve_Noise_Texture.png')] opacity-[0.03] mix-blend-overlay pointer-events-none" />
-      </motion.div>
-
-      <DecisionMarkers stage={4} activeStage={activeStage} />
+        <div className="pointer-events-none absolute inset-0 bg-[url('https://upload.wikimedia.org/wikipedia/commons/7/76/1k_Dissolve_Noise_Texture.png')] opacity-[0.03] mix-blend-overlay" />
+        {overlay}
+      </div>
     </div>
   );
 }
