@@ -12,11 +12,11 @@ import {
 import { MorphicNavbar } from './ui/morphic-navbar';
 import { Button } from './ui/button';
 import { Skeleton } from './ui/skeleton';
-import { ResultPhotoViewport } from './shared/result/ResultPhotoViewport';
-import { PhotoMetaStrip } from './shared/result/PhotoMetaStrip';
-import { ResultDiagnosticSelector } from './shared/result/ResultDiagnosticSelector';
-import { DiagnosticPanel } from './shared/result/DiagnosticPanel';
-import { MetricEvidenceRow as SharedMetricEvidenceRow } from './shared/result/MetricEvidenceRow';
+import { ResultPhotoViewport } from './result/ResultPhotoViewport';
+import { PhotoMetaStrip } from './result/PhotoMetaStrip';
+import { ResultDiagnosticSelector } from './result/ResultDiagnosticSelector';
+import { DiagnosticPanel } from './result/DiagnosticPanel';
+import { MetricEvidenceRow as SharedMetricEvidenceRow } from './result/MetricEvidenceRow';
 
 import { DownloadIcon } from './icons/snapgrade-icons';
 
@@ -172,12 +172,12 @@ function FramePhoto({ previewUrl, file, imageDimensions, category, categories, a
   const visibleCategoryId = activeCategory || visibleCategory.id;
   const photoAlt = file?.name ? `Analyzed photograph: ${file.name}` : 'Analyzed photograph';
   return <div className="result-read__frame-visual flex flex-col h-full">
-    <figure className="result-read__frame-photo-frame" style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: '400px' }}>
-      <ResultPhotoViewport src={previewUrl} alt={photoAlt} className="flex-1 w-full h-full">
+    <DiagnosticPanel modes={[]} activeModeId={visibleCategoryId} onModeChange={() => {}}>
+      <ResultPhotoViewport src={previewUrl} alt={photoAlt} className="w-full h-full">
         <VisualEvidenceOverlay categories={visibleCategories} activeCategory={visibleCategoryId} motionMode={motionMode} />
       </ResultPhotoViewport>
       {analysis?.exif_analysis?.camera_settings && <PhotoMetaStrip {...analysis.exif_analysis.camera_settings} />}
-    </figure>
+    </DiagnosticPanel>
     <OverlayDiagnostics category={visibleCategory} />
     <FramePaletteRail categories={visibleCategories} activeCategory={visibleCategoryId} />
   </div>;
@@ -346,58 +346,62 @@ function MeasuredEvidenceSection({ evidence, frameWorks, previewUrl, file, image
         
         <aside className="result-read__evidence-viewer-sticky">
           <div className="result-read__evidence-viewer h-full flex flex-col">
-            <ResultPhotoViewport src={previewUrl} alt={photoAlt} className="flex-1 min-h-[400px]">
-                <EvidenceLayer activeTab={activeCategory} layers={layers} motionMode="pointer" />
-                {evidence.focus?.map && (
-                  <img 
-                    className="result-read__evidence-focus-map absolute inset-0 w-full h-full object-contain pointer-events-none transition-opacity duration-500" 
-                    src={evidence.focus.map} 
-                    alt="Focus map" 
-                    style={{ opacity: activeCategory === 'focus' ? 1 : 0 }}
-                  />
+            <DiagnosticPanel
+              modes={[]} // No modes in Analysis tab for now
+            >
+              <ResultPhotoViewport src={previewUrl} alt={photoAlt} className="w-full h-full min-h-[400px]">
+                  <EvidenceLayer activeTab={activeCategory} layers={layers} motionMode="pointer" />
+                  {evidence.focus?.map && (
+                    <img 
+                      className="result-read__evidence-focus-map absolute inset-0 w-full h-full object-contain pointer-events-none transition-opacity duration-500" 
+                      src={evidence.focus.map} 
+                      alt="Focus map" 
+                      style={{ opacity: activeCategory === 'focus' ? 1 : 0 }}
+                    />
+                  )}
+              </ResultPhotoViewport>
+              {analysis?.exif_analysis?.camera_settings && <PhotoMetaStrip {...analysis.exif_analysis.camera_settings} />}
+              
+              <div className="absolute bottom-4 left-4 right-4 pointer-events-none">
+                {activeCategory === 'light' && evidence.tonal?.histogram?.length > 0 && (
+                  <div className="result-read__evidence-technical-region bg-white/90 dark:bg-zinc-950/90 backdrop-blur-md p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 pointer-events-auto shadow-lg" data-region="histogram">
+                    <h4 className="result-read__evidence-eyebrow text-xs font-bold tracking-widest text-zinc-500 mb-2">ANALYSIS / TONAL DISTRIBUTION</h4>
+                    <div className="result-read__histogram-chart-mini" aria-hidden="true">
+                      <Suspense fallback={<Skeleton className="result-read__histogram-skeleton h-24" />}>
+                        <MeasuredHistogramChart data={evidence.tonal.histogram.map((value, index) => ({ bin: index + 1, value }))} />
+                      </Suspense>
+                    </div>
+                    <div className="result-read__histogram-labels flex justify-between text-[10px] font-bold text-zinc-400 mt-2">
+                      <span>SHADOWS</span>
+                      <span>MIDTONES</span>
+                      <span>HIGHLIGHTS</span>
+                    </div>
+                  </div>
                 )}
-            </ResultPhotoViewport>
-            {analysis?.exif_analysis?.camera_settings && <PhotoMetaStrip {...analysis.exif_analysis.camera_settings} />}
-            
-            <DiagnosticPanel className="mt-4 border border-zinc-200 dark:border-zinc-800 rounded-lg overflow-hidden shrink-0" title={`Analysis: ${activeCategoryData.label}`}>
-              {activeCategory === 'light' && evidence.tonal?.histogram?.length > 0 && (
-                <div className="result-read__evidence-technical-region" data-region="histogram">
-                  <h4 className="result-read__evidence-eyebrow">ANALYSIS / TONAL DISTRIBUTION</h4>
-                  <div className="result-read__histogram-chart-mini" aria-hidden="true">
-                    <Suspense fallback={<Skeleton className="result-read__histogram-skeleton" />}>
-                      <MeasuredHistogramChart data={evidence.tonal.histogram.map((value, index) => ({ bin: index + 1, value }))} />
-                    </Suspense>
+                
+                {activeCategory === 'color' && activeCategoryData.palette && activeCategoryData.palette.length > 0 && (
+                  <div className="result-read__evidence-technical-region bg-white/90 dark:bg-zinc-950/90 backdrop-blur-md p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 pointer-events-auto shadow-lg" data-region="palette">
+                    <h4 className="result-read__evidence-eyebrow text-xs font-bold tracking-widest text-zinc-500 mb-2">ANALYSIS / COLOUR PROFILE</h4>
+                    <div className="result-read__measured-palette-mini flex gap-1 h-12">
+                      {activeCategoryData.palette.map((c, i) => (
+                        <div key={i} className="result-read__palette-swatch-mini flex-1 rounded-sm relative overflow-hidden group">
+                          <span className="absolute inset-0" style={{ backgroundColor: c.hex || c }} aria-hidden="true" />
+                          {c.percentage != null && <small className="absolute bottom-1 left-1 bg-black/50 text-white text-[10px] px-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">{c.percentage.toFixed(0)}%</small>}
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                  <div className="result-read__histogram-labels">
-                    <span>SHADOWS</span>
-                    <span>MIDTONES</span>
-                    <span>HIGHLIGHTS</span>
+                )}
+                
+                {activeCategory === 'focus' && evidence.focus?.metrics && evidence.focus.metrics.length > 0 && (
+                  <div className="result-read__evidence-technical-region bg-white/90 dark:bg-zinc-950/90 backdrop-blur-md p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 pointer-events-auto shadow-lg inline-block" data-region="focus">
+                    <h4 className="result-read__evidence-eyebrow text-xs font-bold tracking-widest text-zinc-500 mb-2">PRIMARY FOCUS</h4>
+                    <div className="result-read__focus-metrics-mini font-mono text-sm text-zinc-800 dark:text-zinc-200">
+                      {evidence.focus.metrics.map(m => m.value).join(' · ')}
+                    </div>
                   </div>
-                </div>
-              )}
-              
-              {activeCategory === 'color' && activeCategoryData.palette && activeCategoryData.palette.length > 0 && (
-                <div className="result-read__evidence-technical-region" data-region="palette">
-                  <h4 className="result-read__evidence-eyebrow">ANALYSIS / COLOUR PROFILE</h4>
-                  <div className="result-read__measured-palette-mini">
-                    {activeCategoryData.palette.map((c, i) => (
-                      <div key={i} className="result-read__palette-swatch-mini">
-                        <span style={{ backgroundColor: c.hex || c }} aria-hidden="true" />
-                        {c.percentage != null && <small>{c.percentage.toFixed(0)}%</small>}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-              
-              {activeCategory === 'focus' && evidence.focus?.metrics && evidence.focus.metrics.length > 0 && (
-                <div className="result-read__evidence-technical-region" data-region="focus">
-                  <h4 className="result-read__evidence-eyebrow">PRIMARY FOCUS</h4>
-                  <div className="result-read__focus-metrics-mini" style={{ fontSize: '13px', color: 'var(--rr-ink)' }}>
-                    {evidence.focus.metrics.map(m => m.value).join(' · ')}
-                  </div>
-                </div>
-              )}
+                )}
+              </div>
             </DiagnosticPanel>
             
           </div>
@@ -625,9 +629,18 @@ export function ResultRead({ analysis, file, previewUrl, imageDimensions, onDown
       <div className="result-read__view-content" aria-busy={isTransitioning} inert={isTransitioning}>
         <section className="result-read__view-panel result-read__view-panel--overview result-read__chapter-page" data-active={activeView === 'overview'} id="result-read-view-panel-overview" ref={(element) => { viewPanelRefs.current.overview = element; }} role="tabpanel" aria-labelledby="result-read-view-tab-overview" hidden={activeView !== 'overview'}>
           <div className="result-read__grid">
-            <section className="result-read__image-column" aria-label="Photograph and visual evidence"><div className="result-read__photo-stage" id="result-read-stage" role="tabpanel" aria-labelledby={`result-read-tab-${activeTab}`}><div className="result-read__photo-frame" style={{ height: '60vh', minHeight: '400px', display: 'flex', flexDirection: 'column' }}><ResultPhotoViewport src={previewUrl} alt={file?.name ? `Analyzed photograph: ${file.name}` : 'Analyzed photograph'} className="flex-1" objectFit="contain" onDimensionsLoaded={() => {}}><EvidenceLayer activeTab={activeTab} layers={model.evidence.layers} motionMode={motionMode} /></ResultPhotoViewport>{analysis?.exif_analysis?.camera_settings && <PhotoMetaStrip {...analysis.exif_analysis.camera_settings} />}
-<div className="result-read__tablist" role="tablist" aria-label="Visual evidence layers">{TAB_ORDER.map((tab, index) => { const enabled = available[tab]; return <button className="result-read__tab" data-active={activeTab === tab} disabled={!enabled} key={tab} id={`result-read-tab-${tab}`} ref={(element) => { tabsRef.current[tab] = element; }} role="tab" type="button" aria-controls="result-read-stage" aria-selected={activeTab === tab} aria-label={enabled ? `${TAB_LABELS[tab]} evidence` : `${TAB_LABELS[tab]} evidence unavailable`} tabIndex={activeTab === tab ? 0 : -1} title={enabled ? undefined : 'No spatial evidence is available for this layer.'} onPointerDown={() => setMotionMode('pointer')} onClick={(event) => selectTab(tab, event.detail === 0 ? 'keyboard' : 'pointer')} onKeyDown={(event) => moveFocus(event, index)}>{TAB_LABELS[tab]}</button>; })}</div>
-</div></div></section>
+            <section className="result-read__image-column" aria-label="Photograph and visual evidence">
+              <DiagnosticPanel 
+                modes={model.diagnosticModes} 
+                activeModeId={activeTab} 
+                onModeChange={(id) => selectTab(id, 'pointer')}
+              >
+                <ResultPhotoViewport src={previewUrl} alt={photoAlt} className="w-full h-full">
+                  <EvidenceLayer activeTab={activeTab} layers={model.evidence.layers} motionMode={motionMode} />
+                </ResultPhotoViewport>
+                {analysis?.exif_analysis?.camera_settings && <PhotoMetaStrip {...analysis.exif_analysis.camera_settings} />}
+              </DiagnosticPanel>
+            </section>
             <aside className="result-read__read" aria-label="Overview"><h2 className="result-read__eyebrow">What matters most.</h2>{model.read.primary && <p className="result-read__statement">{model.read.primary}</p>}{model.read.supporting && <p className="result-read__supporting">{model.read.supporting}</p>}{!model.read.primary && !model.read.supporting && <p className="result-read__supporting">No written read was returned for this photograph.</p>}{model.score != null && <div className="result-read__score" aria-label={`Overall score: ${model.score} out of 100`}><span>Overall</span><strong>{model.score}</strong><small>/100</small></div>}</aside>
           </div>
           <OverviewActions actions={model.overviewActions} onAnalyzeAnother={onAnalyzeAnother} />
