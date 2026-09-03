@@ -31,7 +31,8 @@ class ResizeForAnalysisTests(unittest.TestCase):
         encoded, buffer = cv2.imencode(".jpg", image)
         self.assertTrue(encoded)
 
-        result = analyze_cv_heuristics(buffer.tobytes())
+        oriented_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        result = analyze_cv_heuristics(oriented_rgb)
 
         histogram = result["image_statistics"]["luminance_histogram"]
         self.assertEqual(len(histogram), 24)

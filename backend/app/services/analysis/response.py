@@ -101,7 +101,7 @@ def build_canonical_response(raw: dict, metadata: dict, recommended: list[dict])
             source = (aspects.get("feel") or {}).get(metric_id, {}) if metric_id in {"wow_factor", "emotional_impact", "angle_and_viewpoint"} else aspects.get(metric_id, {})
             rating = engine_categories.get("noise") if metric_id == "noise" else authority.get(metric_id, source.get("rating") if isinstance(source, dict) else None)
             if rating is None: continue
-            metric = {"id": metric_id, "label": metric_id.replace("_", " ").title(), "rating": _score(rating), "score": _score(rating), "summary": source.get("what_works") if isinstance(source, dict) else None, "detail": source.get("what_could_be_improved") if isinstance(source, dict) else None, "recommendation": next((edit.get("text") for edit in raw.get("suggested_edits") or [] if edit.get("key") == metric_id), None), "evidence": evidence_ids[category_id]}
+            metric = {"id": metric_id, "label": metric_id.replace("_", " ").title(), "rating": _score(rating), "score": _score(rating), "summary": source.get("what_works") if isinstance(source, dict) else None, "detail": source.get("what_could_be_improved") if isinstance(source, dict) else None, "recommendation": next((edit.get("text") for edit in raw.get("suggested_edits") or [] if edit.get("key") == metric_id), None), "evidence": evidence_ids[category_id], "observation": source.get("what_could_be_improved") if isinstance(source, dict) else None, "evidence_ids": evidence_ids[category_id], "source": "gemini" if "gemini" in raw.get("mode", "") else "local_cv"}
             metrics.append(metric); metric_map[metric_id] = (category_id, metric)
         category_score = authority.get("feel", {}).get("emotional_impact") if engine_id == "subject" else engine_categories.get("noise") if engine_id == "post_processing" else engine_categories.get(engine_id)
         normalized_category_score = _score(category_score) if category_score is not None else (metrics[0]["score"] if metrics else None)
@@ -122,12 +122,86 @@ def build_canonical_response(raw: dict, metadata: dict, recommended: list[dict])
                 matched.append(metric_id)
         tutorials.append({"id": tutorial["id"], "title": tutorial["title"], "url": url, "topic": tutorial.get("category_label") or tutorial.get("category") or "Photography", "video_id": tutorial.get("video_id"), "thumbnail_url": tutorial.get("thumbnail_url"), "thumbnail_fallback_url": tutorial.get("thumbnail_fallback_url"), "channel": tutorial.get("creator"), "matched_metric_ids": matched, "reason": tutorial.get("reason"), "priority": len(tutorials) + 1, "priority_label": "START HERE" if not tutorials else "THEN EXPLORE" if len(tutorials) < 3 else "OPTIONAL DEEPER DIVE"})
     supplied_overview = raw.get("overview") if isinstance(raw.get("overview"), dict) else {}
+    
+    change_one_thing = None
+    if supplied_overview.get("change_one_thing"):
+        gemini_cot = supplied_overview.get("change_one_thing")
+        if isinstance(gemini_cot, dict) and (gemini_cot.get("action") or gemini_cot.get("text")):
+            change_one_thing = {
+                "category": gemini_cot.get("category", "General"),
+                "action": gemini_cot.get("action") or gemini_cot.get("text", ""),
+                "observation": gemini_cot.get("observation") or gemini_cot.get("detail"),
+                "consequence": gemini_cot.get("consequence") or gemini_cot.get("why"),
+                "text": gemini_cot.get("action") or gemini_cot.get("text", ""),
+                "detail": gemini_cot.get("observation") or gemini_cot.get("detail"),
+                "why": gemini_cot.get("consequence") or gemini_cot.get("why")
+            }
+    else:
+        for metric in weakest:
+            if metric.get("recommendation"):
+                change_one_thing = {
+                    "category": metric_map[metric["id"]][0],
+                    "action": metric["recommendation"],
+                    "observation": metric.get("detail"),
+                    "consequence": None,
+                    "text": metric["recommendation"],
+                    "detail": metric.get("detail"),
+                    "why": None
+                }
+                break
+                
+    try_this_next = None
+    if supplied_overview.get("try_this_next") and isinstance(supplied_overview.get("try_this_next"), dict) and ("variations" in supplied_overview.get("try_this_next") or "steps" in supplied_overview.get("try_this_next")):
+        gemini_ttn = supplied_overview.get("try_this_next")
+        raw_variations = gemini_ttn.get("variations") or gemini_ttn.get("steps") or []
+        variations = [{"label": v.get("label", ""), "instruction": v.get("instruction") or v.get("text", ""), "text": v.get("instruction") or v.get("text", "")} for v in raw_variations]
+        if len(variations) == 3:
+            try_this_next = {
+                "status": "available",
+                "title": gemini_ttn.get("title"),
+                "instruction": gemini_ttn.get("instruction") or gemini_ttn.get("text"),
+                "supporting": gemini_ttn.get("supporting"),
+                "variations": variations,
+                "closing": gemini_ttn.get("closing"),
+                "text": gemini_ttn.get("instruction") or gemini_ttn.get("text"),
+                "steps": variations
+            }
+        else:
+            try_this_next = {"status": "insufficient", "variations": [], "steps": []}
+    else:
+        variations = []
+        for metric in weakest:
+            if metric.get("recommendation"):
+                variations.append({
+                    "label": metric["label"],
+                    "instruction": metric["recommendation"],
+                    "text": metric["recommendation"]
+                })
+            if len(variations) == 3:
+                break
+        if len(variations) == 3:
+            try_this_next = {
+                "status": "available",
+                "variations": variations,
+                "steps": variations
+            }
+        else:
+            try_this_next = {"status": "insufficient", "variations": [], "steps": []}
+
     overview = {
         "summary": supplied_overview.get("summary") or raw.get("first_impression") or "A local computer-vision critique is ready.",
         "keep": supplied_overview.get("keep") if isinstance(supplied_overview.get("keep"), list) else [x["summary"] for x in sorted((item[1] for item in metric_map.values()), key=lambda item: item["score"], reverse=True)[:2] if x.get("summary")],
-        "change_one_thing": supplied_overview.get("change_one_thing") or (learning[0] if learning else None),
-        "try_this_next": supplied_overview.get("try_this_next") or [x.get("recommendation") for x in weakest if x.get("recommendation")],
+        "change_one_thing": change_one_thing,
+        "try_this_next": try_this_next,
     }
-    canonical = {"metadata": metadata, "overview": overview, "analysis": {"overall_score": _score(engine.get("overall"), _score(raw.get("overall_rating")) * 10), "categories": categories}, "visual_breakdown": {"evidence": evidence, "composition": composition if (composition := (raw.get("advanced_cv") or {}).get("composition", {})) else {}, "lighting": (raw.get("image_statistics") or {}).get("brightness", {}), "focus": (raw.get("advanced_cv") or {}).get("blur", {}), "color": {"palette": (raw.get("advanced_cv") or {}).get("color_palette", [])}, "subject": (raw.get("advanced_cv") or {}).get("subject_centering", {}), "post_processing": {"suggested_edits": raw.get("suggested_edits", [])}}, "learning_next": learning, "tutorials": tutorials, "diagnostics": {"analysis_id": "SG-" + hashlib.sha1((metadata.get("filename") or "image").encode()).hexdigest()[:10], "mode": raw.get("mode", "computer_vision"), "ai_status": raw.get("ai_status", "not_configured"), "score_source": engine.get("source", "application"), "coordinate_space": "normalized"}}
+    diagnostic_modes = []
+    diagnostic_modes.append({"id": "composition", "category": "composition", "supported": True, "representations": ["geometry", "text"], "unavailable_reason": None})
+    diagnostic_modes.append({"id": "light", "category": "lighting", "supported": True, "representations": ["histogram", "text"], "unavailable_reason": None})
+    diagnostic_modes.append({"id": "focus", "category": "focus", "supported": True, "representations": ["asset", "text"], "unavailable_reason": None})
+    diagnostic_modes.append({"id": "color", "category": "color", "supported": True, "representations": ["palette", "text"], "unavailable_reason": None})
+    diagnostic_modes.append({"id": "visualHierarchy", "category": "subject", "supported": True, "representations": ["asset", "text"], "unavailable_reason": None})
+    diagnostic_modes.append({"id": "postProcessing", "category": "post_processing", "supported": True, "representations": ["text"], "unavailable_reason": None})
+    
+    canonical = {"metadata": metadata, "overview": overview, "analysis": {"overall_score": _score(engine.get("overall"), _score(raw.get("overall_rating")) * 10), "categories": categories}, "visual_breakdown": {"evidence": evidence, "diagnostic_modes": diagnostic_modes, "composition": composition if (composition := (raw.get("advanced_cv") or {}).get("composition", {})) else {}, "lighting": (raw.get("image_statistics") or {}).get("brightness", {}), "focus": (raw.get("advanced_cv") or {}).get("blur", {}), "color": {"palette": (raw.get("advanced_cv") or {}).get("color_palette", [])}, "subject": (raw.get("advanced_cv") or {}).get("subject_centering", {}), "post_processing": {"suggested_edits": raw.get("suggested_edits", [])}}, "learning_next": learning, "tutorials": tutorials, "diagnostics": {"analysis_id": "SG-" + hashlib.sha1((metadata.get("filename") or "image").encode()).hexdigest()[:10], "mode": raw.get("mode", "computer_vision"), "ai_status": raw.get("ai_status", "not_configured"), "score_source": engine.get("source", "application"), "coordinate_space": "normalized"}}
     validator = getattr(AnalysisResponse, "model_validate", AnalysisResponse.parse_obj); model = validator(canonical)
     return getattr(model, "model_dump", model.dict)(exclude_none=True)

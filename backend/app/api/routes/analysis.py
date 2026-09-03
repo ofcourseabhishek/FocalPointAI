@@ -22,11 +22,16 @@ router = APIRouter()
 IMAGE_CPU_LIMITER = asyncio.Semaphore(1)
 
 
-def _inspect_uploaded_image(image_bytes: bytes, filename: str | None) -> tuple[dict, dict, dict]:
+import numpy as np
+
+def process_image(image_bytes: bytes, filename: str | None) -> tuple[dict, dict, dict, np.ndarray]:
     image = open_verified_image(image_bytes)
     try:
         exif_data = extract_exif_data(image)
-        return exif_data, image_metadata(filename, image, exif_data), get_exif_summary(exif_data)
+        metadata = image_metadata(filename, image, exif_data)
+        exif_summary = get_exif_summary(exif_data)
+        oriented_rgb = np.array(image.convert("RGB"))
+        return exif_data, metadata, exif_summary, oriented_rgb
     finally:
         image.close()
 
@@ -48,7 +53,7 @@ async def read_image_metadata(file: UploadFile = File(...)):
     require_image_upload(file)
     image_bytes = await read_image_bytes(file)
     async with IMAGE_CPU_LIMITER:
-        exif_data, _, exif_summary = await run_in_threadpool(_inspect_uploaded_image, image_bytes, file.filename)
+        exif_data, _, exif_summary, _ = await run_in_threadpool(process_image, image_bytes, file.filename)
     return {"camera": get_camera_device_name(exif_data), "make": exif_data.get("Make"), "model": exif_data.get("Model"), "has_exif": bool(exif_data), "camera_settings": exif_summary["formatted"]}
 
 
@@ -58,8 +63,8 @@ async def analyze_image(file: UploadFile = File(...)):
     image_bytes = await read_image_bytes(file)
     try:
         async with IMAGE_CPU_LIMITER:
-            _, metadata, exif_summary = await run_in_threadpool(_inspect_uploaded_image, image_bytes, file.filename)
-            local = await run_in_threadpool(analyze_cv_heuristics, image_bytes, exif_summary=exif_summary)
+            _, metadata, exif_summary, oriented_rgb = await run_in_threadpool(process_image, image_bytes, file.filename)
+            local = await run_in_threadpool(analyze_cv_heuristics, oriented_rgb, exif_summary=exif_summary)
         local["intent_profile"] = build_intent_profile(local)
         score_engine = build_score_engine(local, exif_summary)
         local = enforce_authoritative_scores(local, local, score_engine)

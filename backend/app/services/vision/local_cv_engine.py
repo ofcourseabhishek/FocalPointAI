@@ -55,7 +55,7 @@ def download_cascade(filename: str) -> str:
         print(f"Warning: Failed to download cascade {filename}: {e}")
         return None
 
-def analyze_advanced_cv(image_bytes: bytes, img_bgr, img_gray, img_rgb) -> dict:
+def analyze_advanced_cv(img_bgr, img_gray, img_rgb) -> dict:
     """
     Advanced CV Analyzer using OpenCV/NumPy.
     Computes: face/eye detection, subject centering, horizon line, blur score,
@@ -492,25 +492,22 @@ def analyze_advanced_cv(image_bytes: bytes, img_bgr, img_gray, img_rgb) -> dict:
         "color_palette": palette
     }
 
-def analyze_cv_heuristics(image_bytes: bytes, exif_summary: dict = None) -> dict:
+def analyze_cv_heuristics(oriented_rgb: np.ndarray, exif_summary: dict = None) -> dict:
     """
-    Fallback CV Analyzer that uses OpenCV/PIL to analyze the image
+    Fallback CV Analyzer that uses a pre-oriented RGB numpy array to analyze the image
     and generate structured response metrics.
     """
-    # Load image in OpenCV
-    nparr = np.frombuffer(image_bytes, np.uint8)
-    img_bgr = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+    # Load image from the provided oriented RGB array
+    original_h, original_w = oriented_rgb.shape[:2]
+    img_bgr = cv2.cvtColor(oriented_rgb, cv2.COLOR_RGB2BGR)
 
-    if img_bgr is None:
-        raise ValueError("Could not decode image")
-
-    img_bgr, original_w, original_h = resize_for_analysis(img_bgr)
+    img_bgr, analyzed_w, analyzed_h = resize_for_analysis(img_bgr)
     img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
     img_gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
     h, w, _ = img_bgr.shape
 
     # Run advanced CV analysis
-    advanced_cv = analyze_advanced_cv(image_bytes, img_bgr, img_gray, img_rgb)
+    advanced_cv = analyze_advanced_cv(img_bgr, img_gray, img_rgb)
 
     # 1. Brightness
     mean_brightness = float(np.mean(img_gray))
@@ -919,6 +916,10 @@ def analyze_cv_heuristics(image_bytes: bytes, exif_summary: dict = None) -> dict
     }
 
     return {
+        "coordinate_space": "normalized",
+        "coordinate_basis": "display_oriented",
+        "analyzed_width": analyzed_w,
+        "analyzed_height": analyzed_h,
         "overall_rating": overall_rating,
         "first_impression": first_impression_text,
         "aspects": {

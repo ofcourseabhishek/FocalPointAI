@@ -93,11 +93,11 @@ class AnalysisContractTests(unittest.TestCase):
         raw = dict(self.data)
         raw["overview"] = {
             "keep": [{"label": "Light", "text": "The side light gives the subject shape."}],
-            "change_one_thing": {"text": "Simplify the upper edge.", "detail": "A bright mark competes.", "why": "It divides attention."},
-            "try_this_next": {"title": "Edge study", "text": "Make three tighter frames."},
+            "change_one_thing": {"category": "composition", "text": "Simplify the upper edge.", "detail": "A bright mark competes.", "why": "It divides attention."},
+            "try_this_next": {"title": "Edge study", "text": "Make three tighter frames.", "variations": [{"label": "1", "instruction": "A"}, {"label": "2", "instruction": "B"}, {"label": "3", "instruction": "C"}]},
         }
         canonical = build_canonical_response(raw, self.data["metadata"], [])
-        self.assertEqual(canonical["overview"]["change_one_thing"]["text"], "Simplify the upper edge.")
+        self.assertEqual(canonical["overview"]["change_one_thing"]["action"], "Simplify the upper edge.")
         self.assertEqual(canonical["overview"]["try_this_next"]["title"], "Edge study")
 
     def test_exif_orientation_matches_analysis_coordinate_space(self):

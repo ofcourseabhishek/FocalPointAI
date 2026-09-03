@@ -18,6 +18,9 @@ class Metric(_Model):
     detail: str | None = None
     evidence: list[str] = Field(default_factory=list)
     recommendation: str | None = None
+    observation: str | None = None
+    evidence_ids: list[str] = Field(default_factory=list)
+    source: str | None = None
 
 
 class Category(_Model):
@@ -71,11 +74,41 @@ class Metadata(_Model):
     camera_settings: dict[str, Any] | None = None
 
 
+class ChangeOneThing(_Model):
+    category: str
+    action: str
+    observation: str | None = None
+    consequence: str | None = None
+    # Legacy fields
+    text: str | None = None
+    detail: str | None = None
+    why: str | None = None
+
+
+class PracticeVariation(_Model):
+    label: str
+    instruction: str
+    # Legacy field
+    text: str | None = None
+
+
+class PracticeExercise(_Model):
+    status: Literal["available", "unavailable", "insufficient"]
+    title: str | None = None
+    instruction: str | None = None
+    supporting: str | None = None
+    variations: list[PracticeVariation] = Field(default_factory=list)
+    closing: str | None = None
+    # Legacy fields
+    text: str | None = None
+    steps: list[Any] = Field(default_factory=list)
+
+
 class Overview(_Model):
     summary: str
     keep: list[Any] = Field(default_factory=list)
-    change_one_thing: dict[str, Any] | LearningNext | None = None
-    try_this_next: list[Any] | dict[str, Any] = Field(default_factory=list)
+    change_one_thing: ChangeOneThing | None = None
+    try_this_next: PracticeExercise | None = None
 
 
 class Analysis(_Model):
@@ -83,8 +116,17 @@ class Analysis(_Model):
     categories: list[Category]
 
 
+class DiagnosticMode(_Model):
+    id: str
+    category: str
+    supported: bool
+    representations: list[str] = Field(default_factory=list)
+    unavailable_reason: str | None = None
+
+
 class VisualBreakdown(_Model):
     evidence: list[Evidence] = Field(default_factory=list)
+    diagnostic_modes: list[DiagnosticMode] = Field(default_factory=list)
     composition: dict[str, Any] = Field(default_factory=dict)
     lighting: dict[str, Any] = Field(default_factory=dict)
     focus: dict[str, Any] = Field(default_factory=dict)

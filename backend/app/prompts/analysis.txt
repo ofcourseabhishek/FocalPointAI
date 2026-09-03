@@ -30,19 +30,19 @@ Return this structure:
       {"label": "A concise strength label.", "text": "A specific evidence-based strength."}
     ],
     "change_one_thing": {
-      "text": "One specific, high-priority improvement.",
-      "detail": "A concise supporting observation about the current frame.",
-      "why": "Why this single improvement matters for the frame."
+      "category": "The specific aspect or technique being addressed. Never use this as an action verb.",
+      "action": "One specific, high-priority, photographer-doable improvement.",
+      "observation": "A concise supporting observation about the current frame.",
+      "consequence": "Why this single improvement matters for the frame."
     },
     "try_this_next": {
-      "kicker": "A short numbered practice category, for example 02 / FRAMING.",
       "title": "A short exercise title.",
-      "text": "A concise practical instruction.",
+      "instruction": "A concise practical instruction.",
       "supporting": "One constraint that keeps the exercise focused.",
-      "steps": [
-        {"label": "A short step label.", "text": "A concrete step."},
-        {"label": "A second short label.", "text": "A second concrete step."},
-        {"label": "A third short label.", "text": "A third concrete step."}
+      "variations": [
+        {"label": "A short variation label.", "instruction": "A concrete, image-specific variation."},
+        {"label": "A second short label.", "instruction": "A second concrete variation."},
+        {"label": "A third short label.", "instruction": "A third concrete variation."}
       ],
       "closing": "What to compare or notice after the exercise."
     }
