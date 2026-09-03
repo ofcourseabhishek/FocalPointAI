@@ -371,17 +371,18 @@ export function getResultReadModel(result = {}) {
   const advancedCv = result.advanced_cv || {};
   const apiDiagnosticModes = Array.isArray(result.visual_breakdown?.diagnostic_modes) ? result.visual_breakdown.diagnostic_modes : [];
   
-  const diagnosticModes = apiDiagnosticModes.map((mode, index) => {
+  const diagnosticModes = apiDiagnosticModes.map((mode) => {
+    const isAvailable = mode.available !== undefined ? Boolean(mode.available) : Boolean(mode.supported !== false);
     return {
       id: String(mode.id || ''),
-      label: String(mode.label || ''),
+      label: String(mode.label || mode.id || ''),
       category: String(mode.category || ''),
-      supported: Boolean(mode.supported),
-      available: Boolean(mode.available),
+      supported: Boolean(mode.supported !== false),
+      available: isAvailable,
       selected: Boolean(mode.selected),
       representation: String(mode.representation || ''),
       fallbackRepresentations: Array.isArray(mode.fallback_representations) ? mode.fallback_representations.map(String) : (Array.isArray(mode.fallbackRepresentations) ? mode.fallbackRepresentations.map(String) : []),
-      loadState: mode.available ? 'idle' : 'unavailable',
+      loadState: isAvailable ? 'idle' : 'unavailable',
       unavailableReason: String(mode.unavailable_reason || mode.unavailableReason || '')
     };
   });

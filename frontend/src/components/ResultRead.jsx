@@ -14,7 +14,6 @@ import { Button } from './ui/button';
 import { Skeleton } from './ui/skeleton';
 import { ResultPhotoViewport } from './result/ResultPhotoViewport';
 import { PhotoMetaStrip } from './result/PhotoMetaStrip';
-import { ResultDiagnosticSelector } from './result/ResultDiagnosticSelector';
 import { DiagnosticPanel } from './result/DiagnosticPanel';
 import { MetricEvidenceRow as SharedMetricEvidenceRow } from './result/MetricEvidenceRow';
 
@@ -473,7 +472,7 @@ function OverviewActions({ actions, onAnalyzeAnother }) {
   const sections = [
     keep.length > 0 && <section className="result-read__action-section result-read__action-section--keep" key="keep" aria-labelledby="overview-keep-title"><div className="result-read__action-heading"><h2 className="result-read__eyebrow" id="overview-keep-title">Keep</h2><p>What deserves to stay.</p></div><ol>{keep.map((item, index) => <li key={`${item.label || 'keep'}-${index}`}><span>{String(index + 1).padStart(2, '0')}</span><div>{item.text && item.label && <h3>{item.label}</h3>}<p>{item.text || item.label}</p></div></li>)}</ol></section>,
     actions?.change && <section className="result-read__action-section result-read__action-section--change" key="change" aria-labelledby="overview-change-title"><div className="result-read__change-layout"><h2 className="result-read__eyebrow" id="overview-change-title">Change one thing</h2><div className="result-read__change-content"><p className="result-read__change-priority"><strong>{actions.change.category} / {actions.change.action}:</strong> {actions.change.observation}</p>{actions.change.consequence && <div className="result-read__change-why"><h3>Why this matters</h3><p>{actions.change.consequence}</p></div>}</div></div></section>,
-    actions?.tryThisNext && <section className="result-read__action-section result-read__action-section--next" key="next" aria-labelledby="overview-next-title"><div className="result-read__action-heading"><h2 className="result-read__eyebrow" id="overview-next-title">Try this next</h2></div><div className="result-read__next-content"><ol className="result-read__next-steps">{(actions.tryThisNext.variations || []).map((variation, index) => <li key={`variation-${index}`}><span>{String(index + 1).padStart(2, '0')}</span><div><h3>{variation.approach}</h3><p>{variation.outcome}</p></div></li>)}</ol></div></section>,
+    actions?.tryThisNext && <section className="result-read__action-section result-read__action-section--next" key="next" aria-labelledby="overview-next-title"><div className="result-read__action-heading"><h2 className="result-read__eyebrow" id="overview-next-title">Try this next</h2></div><div className="result-read__next-content"><ol className="result-read__next-steps">{(actions.tryThisNext.variations || []).map((variation, index) => <li key={`variation-${index}`}><span>{String(index + 1).padStart(2, '0')}</span><div><h3>{variation.label || variation.approach || `Variation ${index + 1}`}</h3><p>{variation.instruction || variation.outcome || variation.text}</p></div></li>)}</ol></div></section>,
   ].filter(Boolean);
   if (sections.length === 0 && !onAnalyzeAnother) return null;
   return <div className="result-read__overview-actions">{sections}{onAnalyzeAnother && <section className="result-read__overview-cta" aria-labelledby="overview-cta-title"><div><h2 className="result-read__eyebrow" id="overview-cta-title">Ready for another frame?</h2><p>Put the feedback into practice.</p><small>Your current analysis will be replaced.</small></div><button className="result-read__analyze-another" type="button" onClick={onAnalyzeAnother}>Analyze another photograph <span aria-hidden="true">→</span></button></section>}</div>;
@@ -481,6 +480,7 @@ function OverviewActions({ actions, onAnalyzeAnother }) {
 
 export function ResultRead({ analysis, file, previewUrl, imageDimensions, onDownloadReport, onAnalyzeAnother, isDownloadingReport = false, downloadError = '' }) {
   const model = useMemo(() => getResultReadModel(analysis), [analysis]);
+  const photoAlt = file?.name ? `Analyzed photograph: ${file.name}` : 'Analyzed photograph';
   const initialView = useRef(viewFromLocation());
   const [activeTab, setActiveTab] = useState('image');
   const [motionMode, setMotionMode] = useState('pointer');
@@ -502,6 +502,13 @@ export function ResultRead({ analysis, file, previewUrl, imageDimensions, onDown
   const curtainChapterLabelRef = useRef(null);
   const curtainChapterTitleRef = useRef(null);
   const available = Object.fromEntries(TAB_ORDER.map((tab) => [tab, tab === 'image' || Boolean(model.evidence.layers[tab]?.asset || model.evidence.layers[tab]?.shapes.length || model.evidence.layers[tab]?.geometry?.horizon || model.evidence.layers[tab]?.geometry?.centroid || model.evidence.layers[tab]?.geometry?.leadingLines.length)]));
+  const overviewModes = useMemo(() => [
+    { id: 'image', label: 'Image', loadState: 'idle' },
+    { id: 'attention', label: 'Attention', loadState: available.attention ? 'idle' : 'unavailable', unavailableReason: available.attention ? undefined : 'No spatial evidence is available for this layer.' },
+    { id: 'light', label: 'Light', loadState: available.light ? 'idle' : 'unavailable', unavailableReason: available.light ? undefined : 'No spatial evidence is available for this layer.' },
+    { id: 'focus', label: 'Focus', loadState: available.focus ? 'idle' : 'unavailable', unavailableReason: available.focus ? undefined : 'No spatial evidence is available for this layer.' },
+    { id: 'composition', label: 'Composition', loadState: available.composition ? 'idle' : 'unavailable', unavailableReason: available.composition ? undefined : 'No spatial evidence is available for this layer.' },
+  ], [available]);
   const selectTab = (tab, input = 'pointer') => { if (available[tab]) { setMotionMode(input); setActiveTab(tab); } };
   const moveFocus = (event, currentIndex) => { const nextTab = __testables.nextAvailableTab(TAB_ORDER, available, TAB_ORDER[currentIndex], event.key); if (!nextTab) return; event.preventDefault(); selectTab(nextTab, 'keyboard'); tabsRef.current[nextTab]?.focus(); };
   const analysisId = previewResultLocation() ? 'preview' : analysis?.analysis_id || analysis?.id || 'current';
@@ -631,7 +638,7 @@ export function ResultRead({ analysis, file, previewUrl, imageDimensions, onDown
           <div className="result-read__grid">
             <section className="result-read__image-column" aria-label="Photograph and visual evidence">
               <DiagnosticPanel 
-                modes={model.diagnosticModes} 
+                modes={overviewModes} 
                 activeModeId={activeTab} 
                 onModeChange={(id) => selectTab(id, 'pointer')}
               >
