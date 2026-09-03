@@ -376,18 +376,11 @@ test('keeps legacy overview action strings compatible while leaving structured f
   });
   assert.deepEqual(model.overviewActions, {
     keep: [{ label: 'Color restraint', text: 'The palette stays controlled.' }, { label: 'Tonal separation', text: '' }],
-    change: 'Give the illuminated edge more room.',
-    changeDetail: '',
-    changeWhy: '',
-    nextKicker: '',
-    nextTitle: '',
-    next: 'Make three variations using the same light.',
-    nextSupporting: '',
-    nextSteps: [],
-    nextClosing: '',
+    change: { action: 'Give the illuminated edge more room.', category: 'General', observation: '', consequence: '' },
+      tryThisNext: { status: 'unavailable', title: 'Practice Session', instruction: 'Make three variations using the same light.', supporting: '', variations: [], closing: '' },
   });
   assert.deepEqual(getResultReadModel({}).overviewActions, {
-    keep: [], change: '', changeDetail: '', changeWhy: '', nextKicker: '', nextTitle: '', next: '', nextSupporting: '', nextSteps: [], nextClosing: '',
+    keep: [], change: { category: 'General', action: '', observation: '', consequence: '' }, tryThisNext: { status: 'unavailable', title: 'Practice Session', instruction: '', supporting: '', variations: [], closing: '' },
   });
 });
 
@@ -408,15 +401,8 @@ test('normalizes structured overview actions into the presentation contract', ()
   });
   assert.deepEqual(model.overviewActions, {
     keep: [{ label: 'Color restraint', text: 'The palette stays controlled.' }, { label: 'Tonal structure', text: 'Light remains contained.' }],
-    change: 'Give the illuminated edge more room.',
-    changeDetail: 'The current crop creates useful tension.',
-    changeWhy: 'More space keeps the asymmetry intentional.',
-    nextKicker: '02 / FRAMING',
-    nextTitle: 'CONTROL THE EDGE',
-    next: 'Make three versions of the same photograph.',
-    nextSupporting: 'Change only the relationship between the bright edge and the frame.',
-    nextSteps: [{ label: 'TIGHT', text: 'Crop closer to the edge.' }, { label: '', text: 'Keep the current tension.' }, { label: 'OPEN', text: 'Give the light more room.' }],
-    nextClosing: 'Compare which version creates the strongest visual tension.',
+    change: { category: 'General', action: 'Give the illuminated edge more room.', observation: 'The current crop creates useful tension.', consequence: 'More space keeps the asymmetry intentional.' },
+      tryThisNext: { status: 'ready', title: 'CONTROL THE EDGE', instruction: 'Make three versions of the same photograph.', supporting: 'Change only the relationship between the bright edge and the frame.', variations: [{ label: 'TIGHT', instruction: 'Crop closer to the edge.' }, { label: '', instruction: 'Keep the current tension.' }, { label: 'OPEN', instruction: 'Give the light more room.' }], closing: 'Compare which version creates the strongest visual tension.' },
   });
 });
 
@@ -430,7 +416,8 @@ test('ignores malformed structured overview fields without inventing action cont
   });
   assert.deepEqual(model.overviewActions, {
     keep: [{ label: '', text: 'No visible label.' }],
-    change: '', changeDetail: '', changeWhy: '', nextKicker: '', nextTitle: '', next: '', nextSupporting: '', nextSteps: [], nextClosing: '',
+    change: { category: 'General', action: '', observation: '', consequence: '' },
+    tryThisNext: { status: 'unavailable', title: 'Practice Session', instruction: '', supporting: '', variations: [], closing: '' },
   });
 });
 
@@ -447,8 +434,8 @@ test('grounds overview fallbacks in aspect strengths and distinct suggested edit
     { label: 'Color', text: 'The palette is cohesive.' },
     { label: 'Composition', text: 'The edge balance holds.' },
   ]);
-  assert.equal(model.overviewActions.change, 'Move the bright edge inward.');
-  assert.equal(model.overviewActions.next, 'Try a lower viewpoint.');
+  assert.equal(model.overviewActions.change.action, 'Move the bright edge inward.');
+  assert.equal(model.overviewActions.tryThisNext.instruction, 'Try a lower viewpoint.');
 });
 
 test('makes canonical contract fields first-class while preserving tutorial metadata', () => {
@@ -529,8 +516,66 @@ test('adapts array categories and canonical mask and region evidence from the ba
   assert.deepEqual(model.measuredEvidence.palette, [{ hex: '#123456', percentage: 60 }, { hex: '#abcdef', percentage: 40 }]);
   assert.deepEqual(model.measuredEvidence.tonal.histogram, Array(24).fill(25));
   assert.deepEqual(frameWork(model, 'visualHierarchy').evidence.shapes, [{ kind: 'bbox', x: 0.2, y: 0.1, width: 0.4, height: 0.5 }]);
-  assert.equal(model.overviewActions.change, 'Rule of Thirds');
-  assert.equal(model.overviewActions.next, 'Place the subject nearer an intersection.');
+  assert.equal(model.overviewActions.change.action, 'Rule of Thirds');
+  assert.equal(model.overviewActions.tryThisNext.instruction, 'Place the subject nearer an intersection.');
+});
+
+test('enforces that a metric maps its observation over legacy detail', () => {
+  const model = getResultReadModel({
+    analysis: {
+      categories: [
+        {
+          id: 'composition',
+          metrics: [
+            {
+              label: 'Subject centered',
+              value: 'Yes',
+              observation: 'New explicit observation',
+              detail: 'Legacy detail'
+            }
+          ]
+        }
+      ]
+    }
+  });
+  const comp = frameWork(model, 'composition');
+  assert.equal(comp.metrics[0].observation, 'New explicit observation');
+});
+
+test('asserts that tryThisNext yields either an array of 3 variations or unavailable', () => {
+  const modelUnready = getResultReadModel({
+    overview: {
+      try_this_next: {
+        variations: [{ label: '1', instruction: 'a' }, { label: '2', instruction: 'b' }]
+      }
+    }
+  });
+  assert.equal(modelUnready.overviewActions.tryThisNext.status, 'unavailable');
+
+  const modelReady = getResultReadModel({
+    overview: {
+      try_this_next: {
+        variations: [{ label: '1', instruction: 'a' }, { label: '2', instruction: 'b' }, { label: '3', instruction: 'c' }]
+      }
+    }
+  });
+  assert.equal(modelReady.overviewActions.tryThisNext.status, 'ready');
+});
+
+test('normalizes explicit diagnostic modes', () => {
+  const model = getResultReadModel({
+    visual_breakdown: {
+      diagnostic_modes: [
+        { id: '1', category: 'focus', supported: true, available: true, representation: 'asset', fallback_representations: ['geometry'] },
+        { id: '2', category: 'color', supported: true, available: false, unavailable_reason: 'No color' }
+      ]
+    }
+  });
+  assert.equal(model.diagnosticModes.length, 2);
+  assert.equal(model.diagnosticModes[0].loadState, 'idle');
+  assert.deepEqual(model.diagnosticModes[0].fallbackRepresentations, ['geometry']);
+  assert.equal(model.diagnosticModes[1].loadState, 'unavailable');
+  assert.equal(model.diagnosticModes[1].unavailableReason, 'No color');
 });
 
 test('ignores out-of-range evidence and maps contained image coordinates without letterboxing drift', () => {

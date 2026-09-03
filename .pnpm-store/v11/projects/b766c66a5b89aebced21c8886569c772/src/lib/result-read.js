@@ -100,7 +100,7 @@ function numericValue(value) { if (value === null || value === undefined || type
 function validScore(value) { const score = numericValue(value); return score === null ? null : Math.round(Math.min(MAX_SCORE, Math.max(0, score))); }
 function categoryScore(category, scoreCategories, id) { const status = String(category?.status || '').toLowerCase(); if (category?.not_applicable === true || status === 'not_applicable' || status === 'intentional_absence') return null; const explicit = validScore(category?.score ?? category?.rating); if (explicit !== null) return explicit; return CATEGORY_CONFIG[id].scoreKeys.map((key) => validScore(scoreCategories?.[key])).find((score) => score !== null) ?? null; }
 function metricValue(value) { if (typeof value === 'boolean') return value ? 'Yes' : 'No'; if (typeof value === 'number' && Number.isFinite(value)) return Number.isInteger(value) ? String(value) : value.toFixed(2).replace(/0+$/, '').replace(/\.$/, ''); return typeof value === 'string' && value.trim() ? value.trim() : ''; }
-function categoryMetrics(category, result, id) { const direct = Array.isArray(category?.metrics) ? category.metrics : []; const canonical = direct.map((metric) => ({ id: firstText(metric?.id), label: firstText(metric?.label, metric?.name), value: metricValue(metric?.value ?? metric?.level), assessment: firstText(metric?.assessment, metric?.rating, metric?.level), score: numericValue(metric?.score), saw: firstText(metric?.saw, metric?.what_snapgrade_saw, metric?.what_snapgrade_found, metric?.summary), matters: firstText(metric?.matters, metric?.why_it_matters, metric?.detail), try: firstText(metric?.try, metric?.try_this, metric?.recommendation), learn: metric?.learn ?? metric?.lesson, works: firstText(metric?.works, metric?.what_works), improve: firstText(metric?.improve, metric?.what_would_improve_it) })).filter((metric) => metric.label && (metric.value || metric.assessment || metric.score !== null || metric.saw || metric.matters || metric.try)); if (canonical.length) return canonical; const source = result?.image_statistics || result?.advanced_cv?.image_statistics || {}; const metricFields = { composition: [['Subject centered', result?.advanced_cv?.subject_centering?.is_centered ?? result?.advanced_cv?.subject_centering?.centered]], light: [['Highlight clipping', source.highlight_clipping], ['Shadow clipping', source.shadow_clipping], ['Brightness', source.brightness]], color: [['Saturation', source.saturation], ['Warmth', source.warmth]], focus: [['Detail level', result?.advanced_cv?.details?.level ?? result?.details?.level]], visualHierarchy: [], postProcessing: [] }; return metricFields[id].map(([label, value]) => ({ label, value: metricValue(value), assessment: metricValue(value), score: null })).filter((metric) => metric.value).slice(0, 3); }
+function categoryMetrics(category, result, id) { const direct = Array.isArray(category?.metrics) ? category.metrics : []; const canonical = direct.map((metric) => ({ id: firstText(metric?.id), label: firstText(metric?.label, metric?.name), value: metricValue(metric?.value ?? metric?.level), assessment: firstText(metric?.assessment, metric?.rating, metric?.level), score: numericValue(metric?.score), saw: firstText(metric?.saw, metric?.what_snapgrade_saw, metric?.what_snapgrade_found, metric?.summary), matters: firstText(metric?.matters, metric?.why_it_matters, metric?.detail), try: firstText(metric?.try, metric?.try_this, metric?.recommendation), learn: metric?.learn ?? metric?.lesson, works: firstText(metric?.works, metric?.what_works), improve: firstText(metric?.improve, metric?.what_would_improve_it), observation: firstText(metric?.observation, metric?.detail), evidenceIds: Array.isArray(metric?.evidence_ids) ? metric.evidence_ids : [], source: metric?.source || '' })).filter((metric) => metric.label && (metric.value || metric.assessment || metric.score !== null || metric.saw || metric.matters || metric.try)); if (canonical.length) return canonical; const source = result?.image_statistics || result?.advanced_cv?.image_statistics || {}; const metricFields = { composition: [['Subject centered', result?.advanced_cv?.subject_centering?.is_centered ?? result?.advanced_cv?.subject_centering?.centered]], light: [['Highlight clipping', source.highlight_clipping], ['Shadow clipping', source.shadow_clipping], ['Brightness', source.brightness]], color: [['Saturation', source.saturation], ['Warmth', source.warmth]], focus: [['Detail level', result?.advanced_cv?.details?.level ?? result?.details?.level]], visualHierarchy: [], postProcessing: [] }; return metricFields[id].map(([label, value]) => ({ label, value: metricValue(value), assessment: metricValue(value), score: null })).filter((metric) => metric.value).slice(0, 3); }
 function normalizePalette(value) { const colors = Array.isArray(value) ? value : value?.colors || value?.palette || []; return colors.map((color) => typeof color === 'string' ? color.trim() : firstText(color?.hex, color?.color)).filter((color) => /^#[0-9a-f]{3,8}$/i.test(color)).slice(0, 5); }
 function annotationFromEntry(entry) {
   const shape = normalizedShape(entry);
@@ -242,10 +242,8 @@ function normalizeNextSteps(value) {
   }).filter(Boolean).slice(0, 3);
 }
 function overviewActions(result) {
-  const canonical = result?.overview || result?.overview_actions || result?.overviewActions || {};
-  const lesson = result?.next_frame_lesson || result?.nextFrameLesson || {};
-  const canonicalNext = Array.isArray(canonical.try_this_next) ? canonical.try_this_next[0] : canonical.try_this_next;
-  let keep = normalizeKeep(canonical.keep || lesson.keep || result?.keep);
+  const overview = result?.overview || {};
+  let keep = normalizeKeep(overview.keep || result?.keep);
   if (!keep.length && result?.aspects && typeof result.aspects === 'object') {
     const preferred = ['colour', 'color', 'composition', 'crop', 'brightness', 'contrast', 'details', 'focus', 'ambiance'];
     const ordered = [...preferred, ...Object.keys(result.aspects).filter((key) => !preferred.includes(key))];
@@ -257,17 +255,37 @@ function overviewActions(result) {
       return text ? { label: humanizeKey(key), text } : null;
     }).filter(Boolean).slice(0, 2);
   }
+
   const edits = suggestedEditTexts(result?.suggested_edits);
-  const change = firstText(actionText(canonical.change_one_thing), canonical.change, lesson.change, result?.change_one_thing, edits[0]);
-  const next = firstText(actionText(canonicalNext), canonical.next, lesson.try_this_next, lesson.watch_for, result?.try_this_next, edits.find((edit) => edit !== change));
-  const changeDetail = firstText(canonical.change_one_thing?.detail, canonical.change_detail, canonical.changeDetail, lesson.change_one_thing?.detail, lesson.change_detail, lesson.changeDetail, result?.change_one_thing?.detail, result?.change_detail, result?.changeDetail);
-  const changeWhy = firstText(canonical.change_one_thing?.why, canonical.change_one_thing?.rationale, canonical.change_why, canonical.changeWhy, lesson.change_one_thing?.why, lesson.change_one_thing?.rationale, lesson.change_why, lesson.changeWhy, result?.change_one_thing?.why, result?.change_one_thing?.rationale, result?.change_why, result?.changeWhy);
-  const nextKicker = firstText(canonical.try_this_next?.kicker, canonical.next_kicker, canonical.nextKicker, lesson.try_this_next?.kicker, lesson.next_kicker, lesson.nextKicker, result?.try_this_next?.kicker, result?.next_kicker, result?.nextKicker);
-  const nextTitle = firstText(canonical.try_this_next?.title, canonical.next_title, canonical.nextTitle, lesson.try_this_next?.title, lesson.next_title, lesson.nextTitle, result?.try_this_next?.title, result?.next_title, result?.nextTitle);
-  const nextSupporting = firstText(canonical.try_this_next?.supporting, canonical.next_supporting, canonical.nextSupporting, lesson.try_this_next?.supporting, lesson.next_supporting, lesson.nextSupporting, result?.try_this_next?.supporting, result?.next_supporting, result?.nextSupporting);
-  const nextSteps = normalizeNextSteps(canonical.try_this_next?.steps || canonical.next_steps || canonical.nextSteps || lesson.try_this_next?.steps || lesson.next_steps || lesson.nextSteps || result?.try_this_next?.steps || result?.next_steps || result?.nextSteps);
-  const nextClosing = firstText(canonical.try_this_next?.closing, canonical.next_closing, canonical.nextClosing, lesson.try_this_next?.closing, lesson.next_closing, lesson.nextClosing, result?.try_this_next?.closing, result?.next_closing, result?.nextClosing);
-  return { keep, change, changeDetail, changeWhy, nextKicker, nextTitle, next, nextSupporting, nextSteps, nextClosing };
+  const cot = overview.change_one_thing || {};
+  const changeObj = {
+    category: firstText(cot.category, result?.change_one_thing?.category) || 'General',
+    action: firstText(cot.action, cot.text, cot.label, cot, result?.change_one_thing?.text, result?.change_one_thing?.action, result?.change_one_thing, edits[0]),
+    observation: firstText(cot.observation, cot.detail, result?.change_one_thing?.detail, result?.change_detail, result?.changeDetail),
+    consequence: firstText(cot.consequence, cot.why, result?.change_one_thing?.why, result?.change_why, result?.changeWhy)
+  };
+
+  const ttn = overview.try_this_next || {};
+  const rawVariations = Array.isArray(ttn) ? ttn : (Array.isArray(ttn.variations) ? ttn.variations : (Array.isArray(ttn.steps) ? ttn.steps : []));
+  const normalizedVariations = rawVariations.map(v => ({
+    label: firstText(v.label),
+    instruction: firstText(v.instruction, v.text, v.description, v)
+  })).filter(v => v.instruction).slice(0, 3);
+
+  const fallbackNextInstruction = firstText(result?.try_this_next?.text, result?.try_this_next?.instruction, result?.try_this_next, edits.find((edit) => edit !== changeObj.action));
+
+  const ttnInstruction = Array.isArray(ttn) ? ttn[0] : ttn;
+
+  const tryThisNext = {
+    status: firstText(ttn.status, result?.try_this_next?.status) || (normalizedVariations.length === 3 ? 'ready' : 'unavailable'),
+    title: firstText(ttn.title, result?.try_this_next?.title) || 'Practice Session',
+    instruction: firstText(ttnInstruction.instruction, ttnInstruction.text, ttnInstruction, fallbackNextInstruction),
+    supporting: firstText(ttn.supporting, result?.try_this_next?.supporting),
+    variations: normalizedVariations,
+    closing: firstText(ttn.closing, result?.try_this_next?.closing)
+  };
+
+  return { keep, change: changeObj, tryThisNext };
 }
 
 const LESSON_TIER_LABELS = ['START HERE', 'THEN EXPLORE', 'OPTIONAL DEEPER DIVE', 'OPTIONAL DEEPER DIVE'];
@@ -350,7 +368,26 @@ export function adaptAnalysisResult(result = {}) {
 
 export function getResultReadModel(result = {}) {
   result = adaptAnalysisResult(result);
-  const advancedCv = result.advanced_cv || {}; const overlays = result.overlays || {}; const canonicalScore = validScore(result?.score_engine?.overall); const legacyRating = numericValue(result?.overall_rating); const score = canonicalScore ?? (legacyRating === null ? null : validScore(legacyRating * 10)); const genre = firstText(result?.context?.primary_genre, result?.primary_genre, result?.intent_profile?.genre) || 'Photograph'; const readParts = splitRead(firstText(result?.read, result?.read_summary, result?.first_impression)); const geometry = normalizedGeometry(advancedCv);
+  const advancedCv = result.advanced_cv || {};
+  const apiDiagnosticModes = Array.isArray(result.visual_breakdown?.diagnostic_modes) ? result.visual_breakdown.diagnostic_modes : [];
+  
+  const diagnosticModes = apiDiagnosticModes.map((mode) => {
+    const isAvailable = mode.available !== undefined ? Boolean(mode.available) : Boolean(mode.supported !== false);
+    return {
+      id: String(mode.id || ''),
+      label: String(mode.label || mode.id || ''),
+      category: String(mode.category || ''),
+      supported: Boolean(mode.supported !== false),
+      available: isAvailable,
+      selected: Boolean(mode.selected),
+      representation: String(mode.representation || ''),
+      fallbackRepresentations: Array.isArray(mode.fallback_representations) ? mode.fallback_representations.map(String) : (Array.isArray(mode.fallbackRepresentations) ? mode.fallbackRepresentations.map(String) : []),
+      loadState: isAvailable ? 'idle' : 'unavailable',
+      unavailableReason: String(mode.unavailable_reason || mode.unavailableReason || '')
+    };
+  });
+
+  const overlays = result.overlays || {}; const canonicalScore = validScore(result?.score_engine?.overall); const legacyRating = numericValue(result?.overall_rating); const score = canonicalScore ?? (legacyRating === null ? null : validScore(legacyRating * 10)); const genre = firstText(result?.context?.primary_genre, result?.primary_genre, result?.intent_profile?.genre) || 'Photograph'; const readParts = splitRead(firstText(result?.read, result?.read_summary, result?.first_impression)); const geometry = normalizedGeometry(advancedCv);
   const mainLayers = { attention: layerFromEntries(overlayEntries(overlays, ['attention', 'saliency', 'heatmap', 'subject']), emptyGeometry()), light: layerFromEntries(overlayEntries(overlays, CATEGORY_CONFIG.light.overlayNames), emptyGeometry()), focus: layerFromEntries(overlayEntries(overlays, CATEGORY_CONFIG.focus.overlayNames), emptyGeometry()), composition: layerFromEntries(overlayEntries(overlays, ['composition']), geometry) };
   if (!mainLayers.attention.asset) mainLayers.attention.asset = assetUrl(advancedCv.saliency_map_b64); if (!mainLayers.focus.asset) mainLayers.focus.asset = assetUrl(advancedCv.focus_map_b64);
   const entries = categoryEntries(result); const scoreCategories = result?.score_engine?.categories || {}; const palette = normalizePalette(advancedCv.color_palette || result?.color_palette);
@@ -435,6 +472,6 @@ export function getResultReadModel(result = {}) {
   if (!measured.focus.map) measured.focus.map = frameWorks.find((item) => item.id === 'focus')?.evidence.asset || '';
   measured.whatToLearnNext = whatToLearnNext;
 
-  return { score, genre, read: { primary: readParts.statement, supporting: readParts.remainder || supportingRead(result.aspects) }, evidence: { layers: mainLayers, geometry, attention: mainLayers.attention.asset, focus: mainLayers.focus.asset, light: mainLayers.light.asset, composition: mainLayers.composition.asset, shapes: Object.fromEntries(Object.entries(mainLayers).map(([key, layer]) => [key, layer.shapes])) }, frameWorks, measuredEvidence: measured, overviewActions: overviewActions(result) };
+  return { score, genre, read: { primary: readParts.statement, supporting: readParts.remainder || supportingRead(result.aspects) }, evidence: { layers: mainLayers, geometry, attention: mainLayers.attention.asset, focus: mainLayers.focus.asset, light: mainLayers.light.asset, composition: mainLayers.composition.asset, shapes: Object.fromEntries(Object.entries(mainLayers).map(([key, layer]) => [key, layer.shapes])) }, diagnosticModes, frameWorks, measuredEvidence: measured, overviewActions: overviewActions(result) };
 }
 export const __testables = { assetUrl, line, point, supportingRead, normalizedShape, normalizedRuleOfThirds, splitRead, normalizePalette, normalizeHistogram, normalizeMeasuredPalette, measuredEvidence, overviewActions, overlayEntriesByIds, centeredCategory, readingZoneCategory, nextAvailableTab, validScore, normalizeNextSteps, normalizeLearningPath, canonicalEvidence, getContainTransform };

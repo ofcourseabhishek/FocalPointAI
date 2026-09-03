@@ -12,6 +12,11 @@ import {
 import { MorphicNavbar } from './ui/morphic-navbar';
 import { Button } from './ui/button';
 import { Skeleton } from './ui/skeleton';
+import { ResultPhotoViewport } from './result/ResultPhotoViewport';
+import { PhotoMetaStrip } from './result/PhotoMetaStrip';
+import { DiagnosticPanel } from './result/DiagnosticPanel';
+import { MetricEvidenceRow as SharedMetricEvidenceRow } from './result/MetricEvidenceRow';
+
 import { DownloadIcon } from './icons/snapgrade-icons';
 
 const TAB_ORDER = ['image', 'attention', 'light', 'focus', 'composition'];
@@ -160,16 +165,18 @@ function FramePaletteRail({ categories, activeCategory }) {
   </div>;
 }
 
-function FramePhoto({ previewUrl, file, imageDimensions, category, categories, activeCategory, lazy, motionMode }) {
+function FramePhoto({ previewUrl, file, imageDimensions, category, categories, activeCategory, lazy, motionMode, analysis }) {
   const visibleCategory = category || categories?.find((item) => item.id === activeCategory) || categories?.[0];
   const visibleCategories = categories || [visibleCategory];
   const visibleCategoryId = activeCategory || visibleCategory.id;
   const photoAlt = file?.name ? `Analyzed photograph: ${file.name}` : 'Analyzed photograph';
-  return <div className="result-read__frame-visual">
-    <figure className="result-read__frame-photo-frame">
-      <img className="result-read__frame-photo" src={previewUrl} alt={photoAlt} width={imageDimensions?.width || undefined} height={imageDimensions?.height || undefined} loading={lazy ? "lazy" : undefined} decoding="async" />
-      <VisualEvidenceOverlay categories={visibleCategories} activeCategory={visibleCategoryId} motionMode={motionMode} />
-    </figure>
+  return <div className="result-read__frame-visual flex flex-col h-full">
+    <DiagnosticPanel modes={[]} activeModeId={visibleCategoryId} onModeChange={() => {}}>
+      <ResultPhotoViewport src={previewUrl} alt={photoAlt} className="w-full h-full">
+        <VisualEvidenceOverlay categories={visibleCategories} activeCategory={visibleCategoryId} motionMode={motionMode} />
+      </ResultPhotoViewport>
+      {analysis?.exif_analysis?.camera_settings && <PhotoMetaStrip {...analysis.exif_analysis.camera_settings} />}
+    </DiagnosticPanel>
     <OverlayDiagnostics category={visibleCategory} />
     <FramePaletteRail categories={visibleCategories} activeCategory={visibleCategoryId} />
   </div>;
@@ -178,7 +185,7 @@ function FramePhoto({ previewUrl, file, imageDimensions, category, categories, a
 
 
 
-function FrameWorkSection({ categories, previewUrl, file, imageDimensions }) {
+function FrameWorkSection({ categories, previewUrl, file, imageDimensions, analysis }) {
   const [activeCategory, setActiveCategory] = useState(categories[0]?.id || 'composition');
   const [motionMode, setMotionMode] = useState('scroll');
   const blocks = useRef({});
@@ -220,20 +227,14 @@ function FrameWorkSection({ categories, previewUrl, file, imageDimensions }) {
       
     <div className="result-read__chapter-body result-read__frame-body result-read__frame-works-grid">
       <aside className="result-read__frame-sticky">
-        <FramePhoto previewUrl={previewUrl} file={file} imageDimensions={imageDimensions} categories={categories} activeCategory={activeCategory} motionMode={motionMode} />
-        <nav className="result-read__frame-category-nav" data-motion={motionMode} aria-label="Visual Breakdown categories">
-          {categories.map((category) => <button className="result-read__frame-category-button" data-active={activeCategory === category.id} key={category.id} type="button" aria-current={activeCategory === category.id ? 'true' : undefined} onClick={(event) => selectCategory(category.id, event.detail === 0 ? 'keyboard' : 'pointer')}>
-            <span>{category.sequence.split('/')[0]}</span>
-            {category.label}
-          </button>)}
-        </nav>
+        <FramePhoto previewUrl={previewUrl} file={file} imageDimensions={imageDimensions} categories={categories} activeCategory={activeCategory} motionMode={motionMode} analysis={analysis} />
       </aside>
       <div className="result-read__frame-analysis">{categories.map((category) => <article className="result-read__frame-block" data-category={category.id} data-has-score={category.score != null} key={category.id} ref={(element) => { blocks.current[category.id] = element; }}>
         <div className="result-read__frame-block-top"><span>{category.sequence}</span><h3>{category.label}</h3></div>
         {category.score != null && <div className="result-read__frame-score" aria-label={`${category.label} score ${category.score}`}>{category.score}</div>}
         <p className="result-read__frame-interpretation">{category.interpretation}</p>
         {category.supporting && <p className="result-read__frame-supporting">{category.supporting}</p>}
-        <div className="result-read__frame-mobile-photo"><FramePhoto previewUrl={previewUrl} file={file} imageDimensions={imageDimensions} category={category} lazy={true} motionMode="keyboard" /></div>
+        <div className="result-read__frame-mobile-photo"><FramePhoto previewUrl={previewUrl} file={file} imageDimensions={imageDimensions} category={category} lazy={true} motionMode="keyboard" analysis={analysis} /></div>
         {category.metrics.length > 0 && <dl className="result-read__metrics">{category.metrics.map((metric) => <div key={metric.label}><dt>{metric.label}</dt><dd>{metric.value}</dd></div>)}</dl>}
       </article>)}</div>
     </div>
@@ -242,97 +243,13 @@ function FrameWorkSection({ categories, previewUrl, file, imageDimensions }) {
 }
 
 
-function EvidenceMetricRow({ metric, isExpanded, onToggle }) {
-  const assessmentNorm = metric.assessment ? String(metric.assessment).toLowerCase().replace(/\s+/g, '-') : '';
-  const isEligibleForLearn = assessmentNorm === 'needs-work' || assessmentNorm === 'developing';
-  
-  return (
-    <article className="result-read__metric-row" data-expanded={isExpanded}>
-      <button type="button" className="result-read__metric-button" onClick={onToggle} aria-expanded={isExpanded}>
-        <span className="result-read__metric-name">{metric.label}</span>
-        <span className="result-read__metric-assessment" data-assessment={assessmentNorm || 'none'}>
-          {metric.assessment || ''}
-        </span>
-        <span className="result-read__metric-score">
-          {metric.score !== null ? metric.score : ''}
-        </span>
-        <span className="result-read__metric-toggle" aria-hidden="true" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 18, height: 18 }}>
-          <MorphIcon icon={isExpanded ? Minus : Plus} spring="snappy" strokeWidth={2} size={18} color="currentColor" />
-        </span>
-      </button>
-      <div className="result-read__metric-content-wrapper" aria-hidden={!isExpanded}>
-        <div className="result-read__metric-content">
-          {metric.saw && (
-            <div className="result-read__metric-block">
-              <h4 className="result-read__metric-eyebrow">WHAT SNAPGRADE SAW</h4>
-              <p>{metric.saw}</p>
-            </div>
-          )}
-          {metric.matters && (
-            <div className="result-read__metric-block">
-              <h4 className="result-read__metric-eyebrow">WHY IT MATTERS</h4>
-              <p>{metric.matters}</p>
-            </div>
-          )}
-          {metric.works && (
-            <div className="result-read__metric-block">
-              <h4 className="result-read__metric-eyebrow">WHAT'S WORKING</h4>
-              <p>{metric.works}</p>
-            </div>
-          )}
-          {metric.improve && (
-            <div className="result-read__metric-block">
-              <h4 className="result-read__metric-eyebrow">WHAT WOULD IMPROVE IT</h4>
-              <p>{metric.improve}</p>
-            </div>
-          )}
-          {metric.try && (
-            <div className="result-read__metric-block">
-              <h4 className="result-read__metric-eyebrow">TRY THIS</h4>
-              <p>{metric.try}</p>
-            </div>
-          )}
-            {metric.learn && (metric.learn.url || metric.learn.youtube_url || metric.learn.youtube_link) && isEligibleForLearn && (
-              <div className="result-read__metric-block result-read__metric-lesson">
-                <h4 className="result-read__metric-eyebrow">LEARN THIS</h4>
-                <a href={metric.learn.url || metric.learn.youtube_url || metric.learn.youtube_link} target="_blank" rel="noreferrer" className="result-read__lesson-card">
-                  {metric.learn.thumbnail && <div className="result-read__lesson-thumbnail-wrapper">
-                    <img src={metric.learn.thumbnail} alt="" className="result-read__lesson-thumbnail" onError={(event) => { if (metric.learn.thumbnail_fallback_url && event.currentTarget.src !== metric.learn.thumbnail_fallback_url) event.currentTarget.src = metric.learn.thumbnail_fallback_url; }} />
-                    {metric.learn.duration && <span className="result-read__lesson-duration">{metric.learn.duration}</span>}
-                  </div>}
-                  <div className="result-read__lesson-content">
-                    <strong className="result-read__lesson-title">{metric.learn.learning_goal || metric.learn.title}</strong>
-                    {(metric.learn.creator || metric.learn.channel) && <div className="result-read__lesson-meta">
-                      <span className="result-read__lesson-creator">{metric.learn.creator || metric.learn.channel}</span>
-                      {metric.learn.duration && <span className="result-read__lesson-meta-duration">{metric.learn.duration}</span>}
-                    </div>}
-                    {(metric.learn.reason || metric.improve || metric.works) && (
-                      <div className="result-read__lesson-reason-wrapper">
-                        <span className="result-read__lesson-reason-context">Recommended for · {metric.label}</span>
-                        <p className="result-read__lesson-reason">{metric.learn.reason || metric.improve || metric.works}</p>
-                      </div>
-                    )}
-                    <span className="result-read__lesson-cta">
-                      WATCH ON YOUTUBE <MorphIcon icon={ArrowUpRight} size={14} strokeWidth={2} style={{ marginLeft: 2 }} aria-hidden="true" />
-                    </span>
-                  </div>
-                </a>
-              </div>
-            )}
-        </div>
-      </div>
-    </article>
-  );
-}
 
-function MeasuredEvidenceSection({ evidence, frameWorks, previewUrl, file, imageDimensions }) {
+
+function MeasuredEvidenceSection({ evidence, frameWorks, previewUrl, file, imageDimensions, analysis }) {
   const [activeCategory, setActiveCategory] = useState(frameWorks[0]?.id || 'composition');
   const [expandedMetrics, setExpandedMetrics] = useState(() => new Set());
   const [isCaptureOpen, setIsCaptureOpen] = useState(false);
   const blocks = useRef({});
-  const imageStageRef = useRef(null);
-  const containedRect = useContainedImageRect(imageStageRef, imageDimensions);
-  const overlayStyle = containedRect ? { left: `${containedRect.left}px`, top: `${containedRect.top}px`, width: `${containedRect.width}px`, height: `${containedRect.height}px`, right: 'auto', bottom: 'auto' } : undefined;
 
   useEffect(() => {
     if (!('IntersectionObserver' in window)) return undefined;
@@ -413,7 +330,7 @@ function MeasuredEvidenceSection({ evidence, frameWorks, previewUrl, file, image
                 
                 <div className="result-read__metric-list">
                   {category.metrics.map((metric) => (
-                    <EvidenceMetricRow 
+                    <SharedMetricEvidenceRow 
                       key={metric.id || metric.label} 
                       metric={metric} 
                       isExpanded={expandedMetrics.has(`${category.id}-${metric.label}`)} 
@@ -427,63 +344,64 @@ function MeasuredEvidenceSection({ evidence, frameWorks, previewUrl, file, image
         </div>
         
         <aside className="result-read__evidence-viewer-sticky">
-          <div className="result-read__evidence-viewer">
-            <div className="result-read__evidence-image-stage" ref={imageStageRef}>
-              <img className="result-read__evidence-photo-base" src={previewUrl} alt={photoAlt} />
+          <div className="result-read__evidence-viewer h-full flex flex-col">
+            <DiagnosticPanel
+              modes={[]} // No modes in Analysis tab for now
+            >
+              <ResultPhotoViewport src={previewUrl} alt={photoAlt} className="w-full h-full min-h-[400px]">
+                  <EvidenceLayer activeTab={activeCategory} layers={layers} motionMode="pointer" />
+                  {evidence.focus?.map && (
+                    <img 
+                      className="result-read__evidence-focus-map absolute inset-0 w-full h-full object-contain pointer-events-none transition-opacity duration-500" 
+                      src={evidence.focus.map} 
+                      alt="Focus map" 
+                      style={{ opacity: activeCategory === 'focus' ? 1 : 0 }}
+                    />
+                  )}
+              </ResultPhotoViewport>
+              {analysis?.exif_analysis?.camera_settings && <PhotoMetaStrip {...analysis.exif_analysis.camera_settings} />}
               
-              <div className="result-read__evidence-overlay-container" data-active={isAnalysis} style={overlayStyle}>
-                <EvidenceLayer activeTab={activeCategory} layers={layers} motionMode="pointer" />
-                {evidence.focus?.map && (
-                  <img 
-                    className="result-read__evidence-focus-map" 
-                    src={evidence.focus.map} 
-                    alt="Focus map" 
-                    data-active={activeCategory === 'focus'}
-                  />
+              <div className="absolute bottom-4 left-4 right-4 pointer-events-none">
+                {activeCategory === 'light' && evidence.tonal?.histogram?.length > 0 && (
+                  <div className="result-read__evidence-technical-region bg-white/90 dark:bg-zinc-950/90 backdrop-blur-md p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 pointer-events-auto shadow-lg" data-region="histogram">
+                    <h4 className="result-read__evidence-eyebrow text-xs font-bold tracking-widest text-zinc-500 mb-2">ANALYSIS / TONAL DISTRIBUTION</h4>
+                    <div className="result-read__histogram-chart-mini" aria-hidden="true">
+                      <Suspense fallback={<Skeleton className="result-read__histogram-skeleton h-24" />}>
+                        <MeasuredHistogramChart data={evidence.tonal.histogram.map((value, index) => ({ bin: index + 1, value }))} />
+                      </Suspense>
+                    </div>
+                    <div className="result-read__histogram-labels flex justify-between text-[10px] font-bold text-zinc-400 mt-2">
+                      <span>SHADOWS</span>
+                      <span>MIDTONES</span>
+                      <span>HIGHLIGHTS</span>
+                    </div>
+                  </div>
+                )}
+                
+                {activeCategory === 'color' && activeCategoryData.palette && activeCategoryData.palette.length > 0 && (
+                  <div className="result-read__evidence-technical-region bg-white/90 dark:bg-zinc-950/90 backdrop-blur-md p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 pointer-events-auto shadow-lg" data-region="palette">
+                    <h4 className="result-read__evidence-eyebrow text-xs font-bold tracking-widest text-zinc-500 mb-2">ANALYSIS / COLOUR PROFILE</h4>
+                    <div className="result-read__measured-palette-mini flex gap-1 h-12">
+                      {activeCategoryData.palette.map((c, i) => (
+                        <div key={i} className="result-read__palette-swatch-mini flex-1 rounded-sm relative overflow-hidden group">
+                          <span className="absolute inset-0" style={{ backgroundColor: c.hex || c }} aria-hidden="true" />
+                          {c.percentage != null && <small className="absolute bottom-1 left-1 bg-black/50 text-white text-[10px] px-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">{c.percentage.toFixed(0)}%</small>}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                
+                {activeCategory === 'focus' && evidence.focus?.metrics && evidence.focus.metrics.length > 0 && (
+                  <div className="result-read__evidence-technical-region bg-white/90 dark:bg-zinc-950/90 backdrop-blur-md p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 pointer-events-auto shadow-lg inline-block" data-region="focus">
+                    <h4 className="result-read__evidence-eyebrow text-xs font-bold tracking-widest text-zinc-500 mb-2">PRIMARY FOCUS</h4>
+                    <div className="result-read__focus-metrics-mini font-mono text-sm text-zinc-800 dark:text-zinc-200">
+                      {evidence.focus.metrics.map(m => m.value).join(' · ')}
+                    </div>
+                  </div>
                 )}
               </div>
-            </div>
-            
-            <div className="result-read__evidence-technical-stage" data-category={activeCategory}>
-              {activeCategory === 'light' && evidence.tonal?.histogram?.length > 0 && (
-                <div className="result-read__evidence-technical-region" data-region="histogram">
-                  <h4 className="result-read__evidence-eyebrow">ANALYSIS / TONAL DISTRIBUTION</h4>
-                  <div className="result-read__histogram-chart-mini" aria-hidden="true">
-                    <Suspense fallback={<Skeleton className="result-read__histogram-skeleton" />}>
-                      <MeasuredHistogramChart data={evidence.tonal.histogram.map((value, index) => ({ bin: index + 1, value }))} />
-                    </Suspense>
-                  </div>
-                  <div className="result-read__histogram-labels">
-                    <span>SHADOWS</span>
-                    <span>MIDTONES</span>
-                    <span>HIGHLIGHTS</span>
-                  </div>
-                </div>
-              )}
-              
-              {activeCategory === 'color' && activeCategoryData.palette && activeCategoryData.palette.length > 0 && (
-                <div className="result-read__evidence-technical-region" data-region="palette">
-                  <h4 className="result-read__evidence-eyebrow">ANALYSIS / COLOUR PROFILE</h4>
-                  <div className="result-read__measured-palette-mini">
-                    {activeCategoryData.palette.map((c, i) => (
-                      <div key={i} className="result-read__palette-swatch-mini">
-                        <span style={{ backgroundColor: c.hex || c }} aria-hidden="true" />
-                        {c.percentage != null && <small>{c.percentage.toFixed(0)}%</small>}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-              
-              {activeCategory === 'focus' && evidence.focus?.metrics && evidence.focus.metrics.length > 0 && (
-                <div className="result-read__evidence-technical-region" data-region="focus">
-                  <h4 className="result-read__evidence-eyebrow">PRIMARY FOCUS</h4>
-                  <div className="result-read__focus-metrics-mini" style={{ fontSize: '13px', color: 'var(--rr-ink)' }}>
-                    {evidence.focus.metrics.map(m => m.value).join(' · ')}
-                  </div>
-                </div>
-              )}
-            </div>
+            </DiagnosticPanel>
             
           </div>
         </aside>
@@ -550,17 +468,11 @@ function previewResultLocation() {
 
 function OverviewActions({ actions, onAnalyzeAnother }) {
   const keep = actions?.keep?.filter((item) => item?.label || item?.text).slice(0, 2) || [];
-  const nextSteps = Array.isArray(actions?.nextSteps) ? actions.nextSteps.map((step) => {
-    if (typeof step === 'string') return { label: '', text: step.trim() };
-    const label = [step?.label, step?.title, step?.name].find((value) => typeof value === 'string' && value.trim())?.trim() || '';
-    const text = [step?.text, step?.description, step?.detail, step?.body].find((value) => typeof value === 'string' && value.trim())?.trim() || '';
-    return { label: text === label ? '' : label, text: text || label };
-  }).filter((step) => step.text).slice(0, 3) : [];
-  const hasNext = Boolean(actions?.next || actions?.nextKicker || actions?.nextTitle || actions?.nextSupporting || nextSteps.length || actions?.nextClosing);
+  
   const sections = [
     keep.length > 0 && <section className="result-read__action-section result-read__action-section--keep" key="keep" aria-labelledby="overview-keep-title"><div className="result-read__action-heading"><h2 className="result-read__eyebrow" id="overview-keep-title">Keep</h2><p>What deserves to stay.</p></div><ol>{keep.map((item, index) => <li key={`${item.label || 'keep'}-${index}`}><span>{String(index + 1).padStart(2, '0')}</span><div>{item.text && item.label && <h3>{item.label}</h3>}<p>{item.text || item.label}</p></div></li>)}</ol></section>,
-    actions?.change && <section className="result-read__action-section result-read__action-section--change" key="change" aria-labelledby="overview-change-title"><div className="result-read__change-layout"><h2 className="result-read__eyebrow" id="overview-change-title">Change one thing</h2><div className="result-read__change-content"><p className="result-read__change-priority">{actions.change}</p>{actions.changeDetail && <p className="result-read__change-detail">{actions.changeDetail}</p>}{actions.changeWhy && <div className="result-read__change-why"><h3>Why this matters</h3><p>{actions.changeWhy}</p></div>}</div></div></section>,
-    hasNext && <section className="result-read__action-section result-read__action-section--next" key="next" aria-labelledby="overview-next-title"><div className="result-read__action-heading"><h2 className="result-read__eyebrow" id="overview-next-title">Try this next</h2></div><div className="result-read__next-content">{actions?.nextKicker && <p className="result-read__next-kicker">{actions.nextKicker}</p>}{actions?.nextTitle && <h3 className="result-read__next-title">{actions.nextTitle}</h3>}{actions?.next && <p className="result-read__next-instruction">{actions.next}</p>}{actions?.nextSupporting && <p className="result-read__next-supporting">{actions.nextSupporting}</p>}{nextSteps.length > 0 && <ol className="result-read__next-steps">{nextSteps.map((step, index) => <li key={`${step.label || step.text}-${index}`}><span>{String(index + 1).padStart(2, '0')}</span><div>{step.label && <h3>{step.label}</h3>}<p>{step.text}</p></div></li>)}</ol>}{actions?.nextClosing && <p className="result-read__next-closing">{actions.nextClosing}</p>}</div></section>,
+    actions?.change && <section className="result-read__action-section result-read__action-section--change" key="change" aria-labelledby="overview-change-title"><div className="result-read__change-layout"><h2 className="result-read__eyebrow" id="overview-change-title">Change one thing</h2><div className="result-read__change-content"><p className="result-read__change-priority"><strong>{actions.change.category} / {actions.change.action}:</strong> {actions.change.observation}</p>{actions.change.consequence && <div className="result-read__change-why"><h3>Why this matters</h3><p>{actions.change.consequence}</p></div>}</div></div></section>,
+    actions?.tryThisNext && <section className="result-read__action-section result-read__action-section--next" key="next" aria-labelledby="overview-next-title"><div className="result-read__action-heading"><h2 className="result-read__eyebrow" id="overview-next-title">Try this next</h2></div><div className="result-read__next-content"><ol className="result-read__next-steps">{(actions.tryThisNext.variations || []).map((variation, index) => <li key={`variation-${index}`}><span>{String(index + 1).padStart(2, '0')}</span><div><h3>{variation.label || variation.approach || `Variation ${index + 1}`}</h3><p>{variation.instruction || variation.outcome || variation.text}</p></div></li>)}</ol></div></section>,
   ].filter(Boolean);
   if (sections.length === 0 && !onAnalyzeAnother) return null;
   return <div className="result-read__overview-actions">{sections}{onAnalyzeAnother && <section className="result-read__overview-cta" aria-labelledby="overview-cta-title"><div><h2 className="result-read__eyebrow" id="overview-cta-title">Ready for another frame?</h2><p>Put the feedback into practice.</p><small>Your current analysis will be replaced.</small></div><button className="result-read__analyze-another" type="button" onClick={onAnalyzeAnother}>Analyze another photograph <span aria-hidden="true">→</span></button></section>}</div>;
@@ -568,6 +480,7 @@ function OverviewActions({ actions, onAnalyzeAnother }) {
 
 export function ResultRead({ analysis, file, previewUrl, imageDimensions, onDownloadReport, onAnalyzeAnother, isDownloadingReport = false, downloadError = '' }) {
   const model = useMemo(() => getResultReadModel(analysis), [analysis]);
+  const photoAlt = file?.name ? `Analyzed photograph: ${file.name}` : 'Analyzed photograph';
   const initialView = useRef(viewFromLocation());
   const [activeTab, setActiveTab] = useState('image');
   const [motionMode, setMotionMode] = useState('pointer');
@@ -589,6 +502,13 @@ export function ResultRead({ analysis, file, previewUrl, imageDimensions, onDown
   const curtainChapterLabelRef = useRef(null);
   const curtainChapterTitleRef = useRef(null);
   const available = Object.fromEntries(TAB_ORDER.map((tab) => [tab, tab === 'image' || Boolean(model.evidence.layers[tab]?.asset || model.evidence.layers[tab]?.shapes.length || model.evidence.layers[tab]?.geometry?.horizon || model.evidence.layers[tab]?.geometry?.centroid || model.evidence.layers[tab]?.geometry?.leadingLines.length)]));
+  const overviewModes = useMemo(() => [
+    { id: 'image', label: 'Image', loadState: 'idle' },
+    { id: 'attention', label: 'Attention', loadState: available.attention ? 'idle' : 'unavailable', unavailableReason: available.attention ? undefined : 'No spatial evidence is available for this layer.' },
+    { id: 'light', label: 'Light', loadState: available.light ? 'idle' : 'unavailable', unavailableReason: available.light ? undefined : 'No spatial evidence is available for this layer.' },
+    { id: 'focus', label: 'Focus', loadState: available.focus ? 'idle' : 'unavailable', unavailableReason: available.focus ? undefined : 'No spatial evidence is available for this layer.' },
+    { id: 'composition', label: 'Composition', loadState: available.composition ? 'idle' : 'unavailable', unavailableReason: available.composition ? undefined : 'No spatial evidence is available for this layer.' },
+  ], [available]);
   const selectTab = (tab, input = 'pointer') => { if (available[tab]) { setMotionMode(input); setActiveTab(tab); } };
   const moveFocus = (event, currentIndex) => { const nextTab = __testables.nextAvailableTab(TAB_ORDER, available, TAB_ORDER[currentIndex], event.key); if (!nextTab) return; event.preventDefault(); selectTab(nextTab, 'keyboard'); tabsRef.current[nextTab]?.focus(); };
   const analysisId = previewResultLocation() ? 'preview' : analysis?.analysis_id || analysis?.id || 'current';
@@ -716,15 +636,24 @@ export function ResultRead({ analysis, file, previewUrl, imageDimensions, onDown
       <div className="result-read__view-content" aria-busy={isTransitioning} inert={isTransitioning}>
         <section className="result-read__view-panel result-read__view-panel--overview result-read__chapter-page" data-active={activeView === 'overview'} id="result-read-view-panel-overview" ref={(element) => { viewPanelRefs.current.overview = element; }} role="tabpanel" aria-labelledby="result-read-view-tab-overview" hidden={activeView !== 'overview'}>
           <div className="result-read__grid">
-            <section className="result-read__image-column" aria-label="Photograph and visual evidence"><div className="result-read__photo-stage" id="result-read-stage" role="tabpanel" aria-labelledby={`result-read-tab-${activeTab}`}><div className="result-read__photo-frame"><img className="result-read__photo" src={previewUrl} alt={file?.name ? `Analyzed photograph: ${file.name}` : 'Analyzed photograph'} /><EvidenceLayer activeTab={activeTab} layers={model.evidence.layers} motionMode={motionMode} />
-<div className="result-read__tablist" role="tablist" aria-label="Visual evidence layers">{TAB_ORDER.map((tab, index) => { const enabled = available[tab]; return <button className="result-read__tab" data-active={activeTab === tab} disabled={!enabled} key={tab} id={`result-read-tab-${tab}`} ref={(element) => { tabsRef.current[tab] = element; }} role="tab" type="button" aria-controls="result-read-stage" aria-selected={activeTab === tab} aria-label={enabled ? `${TAB_LABELS[tab]} evidence` : `${TAB_LABELS[tab]} evidence unavailable`} tabIndex={activeTab === tab ? 0 : -1} title={enabled ? undefined : 'No spatial evidence is available for this layer.'} onPointerDown={() => setMotionMode('pointer')} onClick={(event) => selectTab(tab, event.detail === 0 ? 'keyboard' : 'pointer')} onKeyDown={(event) => moveFocus(event, index)}>{TAB_LABELS[tab]}</button>; })}</div>
-</div></div></section>
+            <section className="result-read__image-column" aria-label="Photograph and visual evidence">
+              <DiagnosticPanel 
+                modes={overviewModes} 
+                activeModeId={activeTab} 
+                onModeChange={(id) => selectTab(id, 'pointer')}
+              >
+                <ResultPhotoViewport src={previewUrl} alt={photoAlt} className="w-full h-full">
+                  <EvidenceLayer activeTab={activeTab} layers={model.evidence.layers} motionMode={motionMode} />
+                </ResultPhotoViewport>
+                {analysis?.exif_analysis?.camera_settings && <PhotoMetaStrip {...analysis.exif_analysis.camera_settings} />}
+              </DiagnosticPanel>
+            </section>
             <aside className="result-read__read" aria-label="Overview"><h2 className="result-read__eyebrow">What matters most.</h2>{model.read.primary && <p className="result-read__statement">{model.read.primary}</p>}{model.read.supporting && <p className="result-read__supporting">{model.read.supporting}</p>}{!model.read.primary && !model.read.supporting && <p className="result-read__supporting">No written read was returned for this photograph.</p>}{model.score != null && <div className="result-read__score" aria-label={`Overall score: ${model.score} out of 100`}><span>Overall</span><strong>{model.score}</strong><small>/100</small></div>}</aside>
           </div>
           <OverviewActions actions={model.overviewActions} onAnalyzeAnother={onAnalyzeAnother} />
         </section>
-        <section className="result-read__view-panel result-read__view-panel--frame" data-active={activeView === 'frame'} id="result-read-view-panel-frame" ref={(element) => { viewPanelRefs.current.frame = element; }} role="tabpanel" aria-labelledby="result-read-view-tab-frame" hidden={activeView !== 'frame'}>{visitedViews.has('frame') && <FrameWorkSection categories={model.frameWorks} previewUrl={previewUrl} file={file} imageDimensions={imageDimensions} />}</section>
-        <section className="result-read__view-panel result-read__view-panel--evidence" data-active={activeView === 'evidence'} id="result-read-view-panel-evidence" ref={(element) => { viewPanelRefs.current.evidence = element; }} role="tabpanel" aria-labelledby="result-read-view-tab-evidence" hidden={activeView !== 'evidence'}>{visitedViews.has('evidence') && <MeasuredEvidenceSection evidence={model.measuredEvidence} frameWorks={model.frameWorks} previewUrl={previewUrl} file={file} imageDimensions={imageDimensions} />}</section>
+        <section className="result-read__view-panel result-read__view-panel--frame" data-active={activeView === 'frame'} id="result-read-view-panel-frame" ref={(element) => { viewPanelRefs.current.frame = element; }} role="tabpanel" aria-labelledby="result-read-view-tab-frame" hidden={activeView !== 'frame'}>{visitedViews.has('frame') && <FrameWorkSection categories={model.frameWorks} previewUrl={previewUrl} file={file} imageDimensions={imageDimensions} analysis={analysis} />}</section>
+        <section className="result-read__view-panel result-read__view-panel--evidence" data-active={activeView === 'evidence'} id="result-read-view-panel-evidence" ref={(element) => { viewPanelRefs.current.evidence = element; }} role="tabpanel" aria-labelledby="result-read-view-tab-evidence" hidden={activeView !== 'evidence'}>{visitedViews.has('evidence') && <MeasuredEvidenceSection evidence={model.measuredEvidence} frameWorks={model.frameWorks} previewUrl={previewUrl} file={file} imageDimensions={imageDimensions} analysis={analysis} />}</section>
       </div>
     </section>
     
@@ -736,3 +665,4 @@ export function ResultRead({ analysis, file, previewUrl, imageDimensions, onDown
       </div>
   </main>;
 }
+
