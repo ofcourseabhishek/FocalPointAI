@@ -62,7 +62,7 @@ These smooth animated clips are taken from the [full recorded walkthrough](docs/
   </a>
 </p>
 
-Start with one of the demonstration photographs, or drag and drop your own JPEG, PNG, or WebP image into the upload area. For a local file, confirm the preview and available metadata before selecting **Get Feedback**. The current interface accepts files up to 15 MB.
+Start with one of the demonstration photographs, or drag and drop your own JPEG, PNG, or WebP image into the upload area. For a local file, confirm the preview and available metadata before selecting **Get Feedback**. The current interface and API accept files up to 20 MiB.
 
 ### 2. Run the critique
 
@@ -161,7 +161,7 @@ Unlike a generic AI image critic, FocalPointAI continues to provide structured f
 
 - Responsive React critique workspace with visual evidence and category details
 - Multi-page PDF report containing the photograph, scores, recommendations, metadata, and tutorial links
-- JPEG, PNG, and WebP uploads up to 15 MB in the current web interface
+- JPEG, PNG, and WebP uploads up to 20 MiB in the current web interface and API
 
 ## Example Critique
 
@@ -283,10 +283,12 @@ Use the [public Swagger UI](https://focalpointai.onrender.com/docs), or `http://
 
 ## Development and Verification
 
-Run backend tests from the repository root:
+Run backend tests from `backend`:
 
 ```powershell
-.\.venv\Scripts\python.exe -m unittest discover -s backend -p "test_*.py" -v
+pytest -q
+python -m pytest -q
+python tests/real_image_matrix.py
 ```
 
 Run frontend quality checks:
@@ -295,24 +297,24 @@ Run frontend quality checks:
 cd frontend
 npm run lint
 npm run build
+npm test
 ```
 
-The locally verified baseline on July 18, 2026 was 19 passing backend tests, a clean frontend lint run, and a successful production build. This is a dated baseline, not a continuously updated CI badge.
+The integration baseline and final verification are recorded in [docs/INTEGRATION-BASELINE.md](docs/INTEGRATION-BASELINE.md). On September 3, 2026, 34 backend tests and 55 frontend tests passed, together with frontend lint and the production build. This is a dated baseline, not a continuously updated CI badge.
 
 ## Project Structure
 
 ```text
 FocalPointAI/
 |-- backend/
-|   |-- main.py                         # FastAPI routes and orchestration
-|   |-- local_cv_engine.py              # OpenCV and NumPy measurements
-|   |-- score_engine.py                 # Deterministic scores and AI guardrails
-|   |-- intent_engine.py                # Intent-aware technique evaluation
-|   |-- gemini_analysis.py              # Optional Gemini request handling
-|   |-- pdf_engine.py                   # PDF critique generation
-|   |-- tutorial_recommendation_engine.py
-|   |-- tutorials_catalog.json
-|   `-- test_*.py
+|   |-- main.py                         # Stable ASGI entrypoint
+|   |-- app/
+|   |   |-- api/routes/analysis.py      # FastAPI routes and orchestration
+|   |   |-- schemas/analysis.py         # Canonical response contract
+|   |   |-- services/                   # CV, scoring, intent, AI, export, recommendations
+|   |   |-- prompts/analysis.txt
+|   |   `-- data/                       # Tutorial catalog and CV cascades
+|   `-- tests/
 |-- frontend/
 |   |-- public/                         # Fonts, brand assets, and quote data
 |   `-- src/                            # React interface and styles
@@ -339,8 +341,8 @@ FocalPointAI/
 
 ### Release hardening
 
-- Enforce upload and decoded-image limits consistently on every API route
-- Restrict production CORS and validate deployment configuration
+- Add browser-level integration coverage and validate deployment configuration
+- Measure and tune CPU concurrency under production load
 - Pin backend dependencies and add continuous integration
 - Validate Gemini behavior with a live key and representative image set
 - Add licensed local demo images, screenshots, and browser-level tests
@@ -369,8 +371,8 @@ Before actively accepting external contributions, the project should add a `CONT
 
 - There is no authentication, database, analysis history, or cloud image storage.
 - RAW camera formats are not supported; the current UI accepts JPEG, PNG, and WebP.
-- The `/analyze` route does not yet enforce the same 15 MB server-side limit used by the UI and selected auxiliary routes.
-- Production CORS is not restricted, backend dependencies are not pinned, and CI is not configured.
+- The API enforces a 20 MiB upload limit and a 40-megapixel decoded-image limit; production rate limiting is not yet configured.
+- Production origins are allow-listed, but backend dependencies are not pinned and CI is not configured.
 - Gemini model access, quota, and response behavior must be verified with a live key before deployment.
 - The included demo photographs load from Unsplash and require internet access.
 

@@ -3,7 +3,7 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.application import MIMEApplication
 from email.mime.image import MIMEImage
-from gemini_analysis import *
+from app.services.analysis.gemini_analysis import *
 
 def generate_email_content(email_to: str, analysis_results: dict, image_bytes: bytes = None,
                            is_simulation: bool = False) -> tuple[str, str]:
