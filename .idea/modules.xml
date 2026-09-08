@@ -2,7 +2,7 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/.idea/FocalPointAI.iml" filepath="$PROJECT_DIR$/.idea/FocalPointAI.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/Snapgrade.iml" filepath="$PROJECT_DIR$/.idea/Snapgrade.iml" />
     </modules>
   </component>
 </project>

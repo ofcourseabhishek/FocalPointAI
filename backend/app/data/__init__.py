@@ -1,0 +1,1 @@
+"""Bundled application data assets."""

@@ -1,385 +1,261 @@
 <p align="center">
-  <img src="frontend/public/focalpoint-logo-round.png" alt="FocalPointAI circular logo" width="180">
+  <img src="apps/web-page/public/snapgrade-mark.svg" alt="Snapgrade mark" width="88">
 </p>
 
-<h1 align="center">FocalPointAI</h1>
+<h1 align="center">Snapgrade</h1>
 
 <p align="center">
-  <strong>An AI-assisted photography coach that turns every photograph into a personalized learning experience.</strong>
-</p>
-
-<p align="center">
-  Upload a photo &rarr; measure visual evidence &rarr; understand the critique &rarr; practice the right skills
+  <strong>Photography feedback you can see, understand, and act on.</strong>
 </p>
 
 <p align="center">
-  <img alt="Project status: functional MVP" src="https://img.shields.io/badge/status-functional_MVP-7c3aed">
+  Snapgrade reads a photograph with local computer vision, turns the evidence into a structured critique, and recommends what to practice next.
+</p>
+
+<p align="center">
+  <a href="https://snapgradebyark.vercel.app">Landing page</a> ·
+  <a href="https://snapgrade-app.vercel.app">Open the analyzer</a> ·
+  <a href="https://snapgrade-api.onrender.com/docs">API docs</a>
+</p>
+
+<p align="center">
+  <img alt="Project status: MVP" src="https://img.shields.io/badge/status-MVP-D7B56D">
   <img alt="Python 3.10 or newer" src="https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white">
-  <img alt="FastAPI" src="https://img.shields.io/badge/FastAPI-backend-009688?logo=fastapi&logoColor=white">
-  <img alt="React 19" src="https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=1f2937">
-  <a href="https://focalpoint-ai.vercel.app"><img alt="Live demo" src="https://img.shields.io/badge/demo-live-brightgreen"></a>
-  <a href="LICENSE"><img alt="Apache License 2.0" src="https://img.shields.io/badge/license-Apache%202.0-green"></a>
+  <img alt="FastAPI backend" src="https://img.shields.io/badge/FastAPI-backend-009688?logo=fastapi&logoColor=white">
+  <img alt="React 19" src="https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=20232A">
+  <img alt="MIT License" src="https://img.shields.io/badge/license-MIT-4C8BF5">
 </p>
 
 <p align="center">
-  <a href="#live-demo">Live demo</a> &middot;
-  <a href="#product-walkthrough">Walkthrough</a> &middot;
-  <a href="#quick-start">Quick start</a> &middot;
-  <a href="#how-it-works">How it works</a> &middot;
-  <a href="#api-reference">API</a> &middot;
-  <a href="#roadmap">Roadmap</a>
+  <img src="docs/media/03-review-results.webp" alt="Snapgrade critique workspace showing the result of a photograph analysis" width="760">
 </p>
 
-<p align="center">
-  <a href="https://focalpoint-ai.vercel.app">
-    <img src="docs/focalpointai_demo/banner.png" alt="FocalPointAI critique workspace showing a photograph, overall score, professional assessment, strengths, and improvement opportunities" width="100%">
-  </a>
-</p>
+## What Snapgrade does
 
-FocalPointAI analyzes a photograph with deterministic computer-vision measurements, explains the findings in practical photography language, recommends focused learning material, and produces a downloadable critique report. Gemini can improve the narrative, but the application-owned evidence and scores remain authoritative.
+Most photo critiques stop at taste: *the composition feels weak* or *the light could be better*. Snapgrade connects that feedback to measurable evidence and a useful next step.
 
-> [!NOTE]
-> This repository is a functional MVP. The public deployment may take a moment to respond when the Render backend is waking from an idle state.
+- Reads JPEG, PNG, and WebP photographs, including available EXIF metadata.
+- Measures exposure, contrast, colour, sharpness, saliency, subject placement, geometry, and other visual signals with OpenCV.
+- Produces deterministic overall and category scores owned by the application—not by a language model.
+- Explains strengths, competing elements, quick wins, and practice directions in plain photography language.
+- Ranks lessons from a curated local tutorial catalog.
+- Exports the critique, metadata, recommendations, and photograph as a multi-page PDF.
+- Optionally uses Gemini to improve the narrative while preserving locally computed scores and falling back cleanly when Gemini is unavailable.
 
-## Live Demo
+The current MVP is stateless: it has no accounts, database, saved analysis history, or cloud image library.
 
-| Service | URL |
-| --- | --- |
-| Web application | [focalpoint-ai.vercel.app](https://focalpoint-ai.vercel.app) |
-| Backend API | [focalpointai.onrender.com](https://focalpointai.onrender.com) |
-| Interactive API documentation | [focalpointai.onrender.com/docs](https://focalpointai.onrender.com/docs) |
-| Full recorded walkthrough | [Watch `demo_video.mp4`](docs/focalpointai_demo/demo_video.mp4) |
-
-## Product Walkthrough
-
-These smooth animated clips are taken from the [full recorded walkthrough](docs/focalpointai_demo/demo_video.mp4). They shorten waiting time and use gentle pans and zooms to keep the active part of the interface readable.
-
-### 1. Choose a photograph
-
-<p align="center">
-  <a href="https://focalpoint-ai.vercel.app">
-    <img src="docs/media/01-choose-photo.webp" alt="FocalPointAI home screen panning from the demo photographs toward the upload area" width="720">
-  </a>
-</p>
-
-Start with one of the demonstration photographs, or drag and drop your own JPEG, PNG, or WebP image into the upload area. For a local file, confirm the preview and available metadata before selecting **Get Feedback**. The current interface accepts files up to 15 MB.
-
-### 2. Run the critique
-
-<p align="center">
-  <a href="https://focalpoint-ai.vercel.app">
-    <img src="docs/media/02-run-analysis.webp" alt="FocalPointAI validating a photograph, progressing through analysis stages, and opening the completed critique" width="720">
-  </a>
-</p>
-
-Keep the page open while FocalPointAI validates the image, extracts metadata, measures visual evidence, builds scores, and prepares recommendations. The public Render service may need a short warm-up after being idle; the progress panel shows which analysis stages have completed.
-
-### 3. Read the result from top to bottom
-
-<p align="center">
-  <a href="https://focalpoint-ai.vercel.app">
-    <img src="docs/media/03-review-results.webp" alt="FocalPointAI results workspace moving from the overall score through priority feedback, improvements, and measured evidence" width="720">
-  </a>
-</p>
-
-Begin with the overall score and summary, then review the strongest technique, quick wins, and image-specific evidence. Continue down the page for editing opportunities, camera metadata, and tutorials matched to the weakest relevant areas.
-
-### 4. Explore category details
-
-<p align="center">
-  <a href="https://focalpoint-ai.vercel.app">
-    <img src="docs/media/04-explore-details.webp" alt="FocalPointAI switching among critique categories and comparing their detailed scores and suggestions" width="720">
-  </a>
-</p>
-
-Use the category tabs to compare composition, lighting, focus, color, subject and story, and post-processing. Expand the supporting evidence when you want to understand the measurements and suggestions behind a score.
-
-### 5. Continue with a lesson or practice action
-
-<p align="center">
-  <a href="https://focalpoint-ai.vercel.app">
-    <img src="docs/media/05-learning-actions.webp" alt="FocalPointAI moving through recommended tutorials, exercises, practice checklists, and next actions" width="720">
-  </a>
-</p>
-
-Open a recommended lesson for focused practice, follow the exercises and checklist, or compare the example images to plan your next shoot. Use **Download PDF** when you want a portable copy of the critique and learning plan.
-
-## Interface Highlights
+## Product flow
 
 <table>
   <tr>
-    <td width="50%" valign="top">
-      <strong>Composition analysis</strong><br>
-      <img src="docs/focalpointai_demo/composition_page.png" alt="Composition category showing its score, technique breakdown, and priority fixes" width="100%">
-    </td>
-    <td width="50%" valign="top">
-      <strong>Lighting and exposure</strong><br>
-      <img src="docs/focalpointai_demo/lightinging page.png" alt="Lighting and exposure category showing tonal measurements and suggested adjustments" width="100%">
-    </td>
-  </tr>
-  <tr>
-    <td width="50%" valign="top">
-      <strong>Apply the feedback</strong><br>
-      <img src="docs/focalpointai_demo/apply the feed back.png" alt="Actionable feedback with priority fixes, explanations, exercises, a practice checklist, and before-and-after examples" width="100%">
-    </td>
-    <td width="50%" valign="top">
-      <strong>Learning recommendations</strong><br>
-      <img src="docs/focalpointai_demo/learning_page.png" alt="Personalized tutorial, next actions, skill progress, histogram, EXIF evidence, and focus map" width="100%">
-    </td>
+    <td width="20%" valign="top"><strong>1. Choose</strong><br>Drop a photograph or select it from the file picker.</td>
+    <td width="20%" valign="top"><strong>2. Measure</strong><br>Validate the image, read EXIF, and extract visual evidence.</td>
+    <td width="20%" valign="top"><strong>3. Interpret</strong><br>Build guarded scores and an intent-aware critique.</td>
+    <td width="20%" valign="top"><strong>4. Learn</strong><br>Review evidence, fixes, and matched tutorials.</td>
+    <td width="20%" valign="top"><strong>5. Export</strong><br>Download the result as a portable PDF.</td>
   </tr>
 </table>
 
-## Why FocalPointAI?
+The walkthrough below uses animated WebP captures rather than GIFs: they play inline on GitHub while keeping the repository considerably smaller.
 
-Photography feedback is often subjective: a comment may say that an image feels weak without explaining why or how to improve it.
+<details>
+  <summary>See the walkthrough</summary>
+  <br>
+  <p align="center">
+    <img src="docs/media/01-choose-photo.webp" alt="Choosing a photograph in Snapgrade" width="720"><br><br>
+    <img src="docs/media/02-run-analysis.webp" alt="Running a photograph analysis in Snapgrade" width="720"><br><br>
+    <img src="docs/media/04-explore-details.webp" alt="Exploring detailed critique categories in Snapgrade" width="720"><br><br>
+    <img src="docs/media/05-learning-actions.webp" alt="Reviewing learning actions in Snapgrade" width="720">
+  </p>
+</details>
 
-FocalPointAI combines measurable image evidence, established photography principles, and optional AI-written explanations to answer three useful questions:
+## Architecture
 
-- Why does this image work, or fail to work?
-- What is the most valuable improvement to make next?
-- Which technique should the photographer practice?
-
-Unlike a generic AI image critic, FocalPointAI continues to provide structured feedback without a cloud model and prevents provider-generated text from replacing its locally computed scores.
-
-## Features
-
-### Image intelligence
-
-- Exposure, contrast, saturation, sharpness, clutter, and color-palette analysis
-- Subject placement, saliency, horizon, face, eye, sky, and composition signals
-- EXIF extraction for camera, lens, shutter speed, aperture, ISO, and focal length
-- Intent-aware evaluation for styles such as minimalism, monochrome, and atmospheric photography
-
-### Actionable learning
-
-- Overall and category-level scores backed by local evidence
-- Plain-language strengths, quick wins, and improvement guidance
-- Personalized tutorials ranked from a curated local catalog
-- Optional Gemini narrative critique with automatic local fallback
-
-### Shareable results
-
-- Responsive React critique workspace with visual evidence and category details
-- Multi-page PDF report containing the photograph, scores, recommendations, metadata, and tutorial links
-- JPEG, PNG, and WebP uploads up to 15 MB in the current web interface
-
-## Example Critique
-
-An analysis connects an observation to a concrete action instead of returning only a score. A representative result looks like this:
-
-> **Observation:** The subject has strong separation, but the bright background competes for attention.
->
-> **Next step:** Reduce the background highlights and use a tighter crop to strengthen the visual hierarchy.
->
-> **Practice:** Review subject isolation and background-control techniques.
-
-The exact categories, evidence, and recommendations depend on the uploaded photograph and its available metadata.
-
-## How It Works
+Snapgrade is three independently runnable applications in one repository.
 
 ```mermaid
 flowchart LR
-    A["Upload photograph"] --> B["Read image and EXIF"]
-    B --> C["Run local OpenCV analysis"]
-    C --> D["Build authoritative scores"]
-    D --> E{"Gemini key configured?"}
-    E -- No --> F["Use local critique"]
-    E -- Yes --> G["Generate narrative explanation"]
-    G --> H["Reapply authoritative scores"]
-    F --> I["Recommend tutorials"]
-    H --> I
-    I --> J["Display results or export PDF"]
+    L["Next.js landing page<br/>apps/landing-page"] --> W["React + Vite analyzer<br/>apps/web-page"]
+    W -->|"multipart image"| A["FastAPI API<br/>backend"]
+    A --> C["OpenCV + scoring<br/>authoritative evidence"]
+    A -. "optional narrative" .-> G["Gemini"]
+    C --> R["Critique + tutorials + PDF"]
+    G --> R
+    R --> W
 ```
 
-| Layer | Responsibility |
-| --- | --- |
-| React + Vite | Upload workflow, progress states, evidence dashboard, tutorials, and PDF download |
-| FastAPI | Image validation, route orchestration, metadata, analysis, and report responses |
-| OpenCV + NumPy + Pillow | Local measurements, image preparation, saliency, composition signals, and EXIF handling |
-| Score and intent engines | Deterministic scoring, interpretation guardrails, and intent-aware feedback |
-| Gemini adapter | Optional narrative explanation; it does not own numeric scores |
-| ReportLab | Branded multi-page PDF critique generation |
+| Part | Stack | Responsibility |
+| --- | --- | --- |
+| Landing page | Next.js 16, React 19, TypeScript, Tailwind CSS, Motion | Product story and entry into the analyzer |
+| Analyzer | React 19, Vite 8, Tailwind CSS, Recharts, Base UI | Upload, analysis state, evidence explorer, recommendations, and PDF download |
+| API | FastAPI, Pillow, OpenCV, NumPy, ReportLab | Validation, EXIF, local vision, scoring, optional Gemini narrative, tutorials, and PDF generation |
 
-## Quick Start
+The browser normalizes the canonical API response in `apps/web-page/src/lib/result-read.js`. On the server, the score and intent engines remain authoritative even when Gemini is configured.
 
-### Backend
+## Quick start
+
+### Prerequisites
+
+- Python 3.10+
+- Node.js `^20.19.0` or `>=22.12.0`
+- npm
+
+Clone the repository:
+
+```powershell
+git clone https://github.com/ofcourseabhishek/FocalPointAI.git Snapgrade
+cd Snapgrade
+```
+
+### 1. Start the API
+
+From the repository root:
 
 ```powershell
 py -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -r backend\requirements.txt
 cd backend
-uvicorn main:app --reload --host 127.0.0.1 --port 8000
+python -m uvicorn main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-### Frontend
+On macOS or Linux, create the environment with `python3 -m venv .venv`, activate it with `source .venv/bin/activate`, and use forward slashes in the remaining commands.
+
+The health endpoint is `http://127.0.0.1:8000/`; Swagger UI is available at `http://127.0.0.1:8000/docs`.
+
+### 2. Start the analyzer
 
 In a second terminal:
 
 ```powershell
-cd frontend
+cd apps\web-page
 npm ci
 npm run dev
 ```
 
-Open the URL printed by Vite, normally `http://localhost:5173`. The API health response is at `http://127.0.0.1:8000/`, and interactive API documentation is at `http://127.0.0.1:8000/docs`.
+Open `http://localhost:5173`. The analyzer uses the local API at `http://127.0.0.1:8000` by default.
 
-## Installation and Configuration
+### 3. Start the landing page (optional)
 
-### Prerequisites
-
-- Python 3.10 or newer
-- Node.js `^20.19.0` or `>=22.12.0`
-- npm
-- A Gemini API key only when AI-written narrative feedback is wanted
-
-Clone the project and enter the repository:
+In a third terminal:
 
 ```powershell
-git clone <repository-url>
-cd FocalPointAI
+cd apps\landing-page
+npm ci
+npm run dev
 ```
 
-On macOS or Linux, create the environment with `python3 -m venv .venv`, activate it with `source .venv/bin/activate`, and use forward slashes in commands.
-
-### Optional Gemini analysis
-
-Create `backend/.env` only when Gemini feedback is wanted:
+Open `http://localhost:3000`. To make its call-to-action open your local analyzer, add this to `apps/landing-page/.env.local` before starting Next.js:
 
 ```dotenv
-GEMINI_API_KEY=your_api_key_here
+NEXT_PUBLIC_ANALYZER_URL=http://localhost:5173
 ```
 
-Do not commit this file. It is excluded by `.gitignore`. When the key is absent or the provider request fails, the application uses its local computer-vision critique.
+## Configuration
 
-### Environment variables
+All cloud-backed analysis is optional. Never commit real credentials or `.env` files.
 
-| Variable | Location | Required | Purpose |
+| Variable | Used by | Required | Default / purpose |
 | --- | --- | --- | --- |
-| `GEMINI_API_KEY` | `backend/.env` or process environment | No | Enables Gemini narrative analysis; local CV remains the fallback and score authority. |
-| `VITE_BACKEND_URL` | `frontend/.env.local` or build environment | No for local use | Overrides `http://127.0.0.1:8000`; set it for deployment. |
-| `VITE_SHOW_LEGACY_SCANNER` | `frontend/.env.local` | No | Enables the legacy scanner visualization. |
+| `GEMINI_API_KEY` | FastAPI | No | Enables Gemini-written narrative; local CV remains the fallback and score authority |
+| `VITE_BACKEND_URL` | Analyzer | No | `http://127.0.0.1:8000` |
+| `VITE_LANDING_URL` | Analyzer | No | `https://snapgrade.com` |
+| `NEXT_PUBLIC_ANALYZER_URL` | Landing page | No | Configured public analyzer deployment |
 
-Example frontend configuration:
+For example, `backend/.env` may contain:
 
 ```dotenv
-VITE_BACKEND_URL=https://focalpointai.onrender.com
+GEMINI_API_KEY=your_key_here
 ```
 
-Vite reads environment variables at startup, so restart the frontend after changing them.
+And `apps/web-page/.env.local` may contain:
 
-## API Reference
+```dotenv
+VITE_BACKEND_URL=http://127.0.0.1:8000
+VITE_LANDING_URL=http://localhost:3000
+```
 
-| Method | Endpoint | Description |
+Restart the corresponding development server after changing a frontend environment variable.
+
+## API
+
+| Method | Endpoint | Purpose |
 | --- | --- | --- |
-| `GET` | `/` | Returns backend health and application status |
-| `POST` | `/image-metadata` | Returns lightweight camera metadata for an uploaded image |
-| `POST` | `/analyze` | Runs the complete critique pipeline for an uploaded image |
-| `POST` | `/critique-pdf` | Builds a PDF from an existing analysis payload and optional image |
-| `GET` | `/tutorials` | Returns the curated tutorial catalog |
-| `POST` | `/tutorial-recommendations` | Ranks tutorials for an existing analysis payload |
+| `GET` | `/` | Health and application status |
+| `POST` | `/image-metadata` | Validate an upload and return camera metadata |
+| `POST` | `/analyze` | Run the complete critique pipeline |
+| `POST` | `/critique-pdf` | Build a PDF from an analysis payload and optional image |
+| `GET` | `/tutorials` | Return the curated tutorial catalog |
+| `POST` | `/tutorial-recommendations` | Rank tutorials for an analysis payload |
 
-Use the [public Swagger UI](https://focalpointai.onrender.com/docs), or `http://127.0.0.1:8000/docs` while the backend is running locally, for request schemas and interactive testing.
+Image endpoints accept a multipart field named `file`. Uploads are limited to JPEG, PNG, or WebP files no larger than 20 MiB and 40 decoded megapixels. See the [backend contract](backend/README.md) for response details or use the [public Swagger UI](https://snapgrade-api.onrender.com/docs).
 
-## Development and Verification
+## Verification
 
-Run backend tests from the repository root:
-
-```powershell
-.\.venv\Scripts\python.exe -m unittest discover -s backend -p "test_*.py" -v
-```
-
-Run frontend quality checks:
+Run each suite from its own application directory.
 
 ```powershell
-cd frontend
+# Backend
+cd backend
+python -m pytest -q
+python tests/real_image_matrix.py
+
+# Analyzer
+cd apps\web-page
+npm run lint
+npm test
+npm run build
+
+# Landing page
+cd apps\landing-page
 npm run lint
 npm run build
+node --test src\components\landing\*.test.mjs
 ```
 
-The locally verified baseline on July 18, 2026 was 19 passing backend tests, a clean frontend lint run, and a successful production build. This is a dated baseline, not a continuously updated CI badge.
+The real-image matrix exercises orientation, exposure, focus, colour changes, canonical categories, tutorial integrity, and normalized geometry. Browser visual coverage lives in `apps/web-page/tests/visual.spec.js` and requires a separately configured Playwright environment.
 
-## Project Structure
+## Repository map
 
 ```text
-FocalPointAI/
-|-- backend/
-|   |-- main.py                         # FastAPI routes and orchestration
-|   |-- local_cv_engine.py              # OpenCV and NumPy measurements
-|   |-- score_engine.py                 # Deterministic scores and AI guardrails
-|   |-- intent_engine.py                # Intent-aware technique evaluation
-|   |-- gemini_analysis.py              # Optional Gemini request handling
-|   |-- pdf_engine.py                   # PDF critique generation
-|   |-- tutorial_recommendation_engine.py
-|   |-- tutorials_catalog.json
-|   `-- test_*.py
-|-- frontend/
-|   |-- public/                         # Fonts, brand assets, and quote data
-|   `-- src/                            # React interface and styles
-|-- docs/
-|   |-- assets/                         # README and report artwork
-|   |-- focalpointai_demo/              # Screenshots and full walkthrough video
-|   |-- media/                          # Animated product walkthrough clips
-|   `-- PROJECT_REPORT.md               # Technical and product assessment
-|-- fonts/                              # Google Sans files used by reports
-|-- scripts/
-|   `-- readme_media.py                 # Regenerates walkthrough media
-|-- roadmap.md                          # Long-term product roadmap
-`-- README.md
+Snapgrade/
+├── apps/
+│   ├── landing-page/             # Next.js marketing site
+│   └── web-page/                 # React + Vite analyzer
+├── backend/
+│   ├── main.py                   # Stable ASGI entrypoint
+│   ├── app/
+│   │   ├── api/routes/           # HTTP endpoints
+│   │   ├── data/                 # Tutorial catalog and CV cascades
+│   │   ├── schemas/              # Canonical response contract
+│   │   └── services/             # Vision, scoring, AI, export, and recommendations
+│   └── tests/
+├── docs/                         # Product, flow, technical, and design documents
+├── fonts/                        # Fonts used by generated reports
+└── scripts/                      # Documentation media tooling
 ```
 
-## Roadmap
+Useful references:
 
-### Shipped in the MVP
+- [App flow](docs/APP-FLOW.md) — intended end-to-end experience and interaction states
+- [Product requirements](docs/PRD.md) — product goals, users, and release criteria
+- [Technical requirements](docs/TRD.md) — target architecture and engineering constraints
+- [Backend schema](docs/BACKEND-SCHEMA.md) — proposed persistence model, not the current stateless implementation
+- [Integration baseline](docs/INTEGRATION-BASELINE.md) — historical reorganization and contract baseline
 
-- Local image analysis and deterministic scoring
-- Optional Gemini explanations with score guardrails
-- EXIF extraction and intent-aware feedback
-- Tutorial recommendations and PDF reports
+## Current boundaries
 
-### Release hardening
-
-- Enforce upload and decoded-image limits consistently on every API route
-- Restrict production CORS and validate deployment configuration
-- Pin backend dependencies and add continuous integration
-- Validate Gemini behavior with a live key and representative image set
-- Add licensed local demo images, screenshots, and browser-level tests
-
-### Planned product work
-
-- RAW decoding and richer camera-setting intelligence
-- Concrete crop overlays and structured Lightroom adjustment guidance
-- Accounts, saved analyses, progress tracking, and personalized coaching
-- Learning challenges, portfolio review, and community critique features
-
-See the [full roadmap](roadmap.md) and [project report](docs/PROJECT_REPORT.md) for detailed status and priorities.
+- There is no authentication, persistence, analysis history, or cloud image storage.
+- RAW camera formats are not supported.
+- Image analysis is CPU-bound and currently serialized inside each API process.
+- Production rate limiting and CI are not configured in this repository.
+- Without `GEMINI_API_KEY`, analysis stays inside the FastAPI process. When Gemini is enabled, the uploaded image and analysis context are sent to Google's API.
+- The documents under `docs/` mix implemented behavior with forward-looking product and architecture plans; the source code and tests define the current contract.
 
 ## Contributing
 
-Feedback and focused improvements are welcome while the project is in MVP development:
-
-1. Fork the repository and create a descriptive feature branch.
-2. Keep changes scoped and add or update tests where behavior changes.
-3. Run the backend tests, frontend lint, and production build.
-4. Open a pull request explaining the problem, approach, and verification performed.
-
-Before actively accepting external contributions, the project should add a `CONTRIBUTING.md`, a code of conduct, and CI checks.
-
-## Current Limitations
-
-- There is no authentication, database, analysis history, or cloud image storage.
-- RAW camera formats are not supported; the current UI accepts JPEG, PNG, and WebP.
-- The `/analyze` route does not yet enforce the same 15 MB server-side limit used by the UI and selected auxiliary routes.
-- Production CORS is not restricted, backend dependencies are not pinned, and CI is not configured.
-- Gemini model access, quota, and response behavior must be verified with a live key before deployment.
-- The included demo photographs load from Unsplash and require internet access.
-
-## Privacy
-
-Without `GEMINI_API_KEY`, image critique runs locally inside the backend process. When Gemini is enabled, the uploaded image and computed analysis context are sent to Google's Gemini API.
-
-The public deployment should provide clear in-product consent and define image retention, deletion, provider disclosure, and logging policies. The active API does not intentionally persist uploaded images or analysis results.
+Keep changes focused and include tests when behavior changes. Before opening a pull request, run the backend tests plus the lint, test, and production-build commands for every frontend you touched.
 
 ## License
 
-FocalPointAI source code is available under the [Apache License 2.0](LICENSE). The Focalpoint AI name and logo are not covered by this license. See [NOTICE](NOTICE) for details.
+The source code is available under the [MIT License](LICENSE). The Snapgrade name and logo are excluded; see [NOTICE](NOTICE).

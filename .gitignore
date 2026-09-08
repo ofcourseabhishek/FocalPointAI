@@ -1,126 +1,78 @@
-# ==========================
+# ============================
 # Dependencies
-# ==========================
+# ============================
 node_modules/
-**/node_modules/
+.pnpm-store/
 
-# Python dependencies
+# ============================
+# Frontend build output (Vite/React)
+# ============================
+dist/
+dist-ssr/
+build/
+.vite/
+*.local
+
+# ============================
+# Python / FastAPI backend
+# ============================
 __pycache__/
+**/__pycache__/
 *.py[cod]
 *$py.class
-
-# Virtual environments
-venv/
 .venv/
+venv/
 env/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
 
-
-# ==========================
-# Environment variables
-# ==========================
+# ============================
+# Environment variables / secrets
+# (GEMINI_API_KEY, SMTP_*, VITE_BACKEND_URL, etc.)
+# ============================
 .env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
+.env.*
+!.env.example
+backend/.env
+backend/.env.*
+!backend/.env.example
 
-# Backend secrets
-*.pem
-*.key
+# ============================
+# Generated / runtime output
+# (e.g. exported critique PDFs from /critique-pdf)
+# ============================
+output/
+*.pdf
 
-
-# ==========================
-# Next.js
-# ==========================
-.next/
-out/
-
-# Vercel
-.vercel/
-
-
-# ==========================
-# Build files
-# ==========================
-dist/
-build/
-
-
-# ==========================
+# ============================
 # Logs
-# ==========================
+# ============================
 *.log
 npm-debug.log*
 yarn-debug.log*
+yarn-error.log*
 pnpm-debug.log*
 
+# ============================
+# IDE / Editor
+# ============================
+.idea/
+.vscode/
+*.swp
+*.swo
 
-# ==========================
+# ============================
 # OS files
-# ==========================
+# ============================
 .DS_Store
 Thumbs.db
 
-
-# ==========================
-# IDE settings
-# ==========================
-.vscode/
-.idea/
-
-# Keep workspace settings if needed
-!.vscode/extensions.json
-
-
-# ==========================
-# Testing / Coverage
-# ==========================
-coverage/
-.nyc_output/
-
-
-# ==========================
-# Python ML / CV files
-# ==========================
-
-# Jupyter
-.ipynb_checkpoints/
-
-# Model weights (important for Snapgrade)
-*.pt
-*.pth
-*.onnx
-*.h5
-*.keras
-
-# Large datasets
-data/
-datasets/
-uploads/
-processed/
-
-
-# ==========================
-# Generated media
-# ==========================
-
-# User uploaded images
-public/uploads/
-
-# Generated analysis images
-generated/
-tmp/
-
-
-# ==========================
-# Local database files
-# ==========================
-*.sqlite
-*.db
-
-
-# ==========================
-# Cache
-# ==========================
+# ============================
+# Misc caches
+# ============================
 .cache/
-.parquet
+*.tsbuildinfo

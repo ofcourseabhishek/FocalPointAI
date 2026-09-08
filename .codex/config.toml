@@ -1,0 +1,34 @@
+# Codex multi-model orchestration
+# Root: GPT-5.6 Sol
+# Workers: role-specific Luna / Terra / Sol
+#
+# Multi-Agent V2 concurrency includes the root agent.
+# 6 = 1 root orchestrator + up to 5 concurrent child threads.
+
+model = "gpt-5.6-sol"
+model_reasoning_effort = "high"
+
+[features.multi_agent_v2]
+enabled = true
+max_concurrent_threads_per_session = 6
+
+[agents]
+default_subagent_model = "gpt-5.6-terra"
+default_subagent_reasoning_effort = "medium"
+interrupt_message = true
+
+[agents.scout]
+description = "Fast read-only repository explorer. Locate files, symbols, dependencies, existing patterns, and risks. Do not modify code."
+config_file = "agents/scout.toml"
+
+[agents.builder]
+description = "Implementation worker for bounded feature, bug-fix, and refactor tasks. May edit workspace files and run targeted verification."
+config_file = "agents/builder.toml"
+
+[agents.tester]
+description = "Verification worker. Run tests, builds, type checks, lint, and reproduce failures. Avoid feature implementation unless explicitly assigned."
+config_file = "agents/tester.toml"
+
+[agents.reviewer]
+description = "Senior read-only reviewer for correctness, architecture, regressions, security, concurrency, error handling, and missing tests."
+config_file = "agents/reviewer.toml"
