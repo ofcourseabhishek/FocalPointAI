@@ -18,7 +18,21 @@ NON-NEGOTIABLE RULES
 8. Never describe a technique as missing or badly used unless its state is absent_but_applicable
    and the evidence supports that claim. Do not infer leading lines from a horizontal horizon.
 9. Return valid JSON only. Do not wrap the response in Markdown.
-10. In overview, return at most two keep strengths, exactly one prioritized change, and one
+10. For every aspect, also return a short "assessment" (2-4 words, e.g. "Overexposed",
+    "Properly Exposed", "Rule of Thirds", "Flat", "Blown-out Highlights") that a photographer
+    could read at a glance instead of the number. For composition and crop specifically, also
+    return "value": the actual technique used (e.g. "Rule of Thirds", "Leading Lines",
+    "Centered Composition") or the detected crop ratio (e.g. "3:4", "16:9"), not a score.
+11. For every aspect, return "improve": one concrete, specific post-processing action --
+    but ONLY if the problem is genuinely recoverable after the shot was taken. If the issue
+    is something post-processing cannot fix (e.g. real motion blur or camera shake, a missed
+    focus point, a subject that has already left the frame), set "improve" to an empty
+    string instead of inventing a fix that would not actually work.
+12. For every aspect, also return "try_this": one concrete change the photographer could make
+    at capture time on their next shot to avoid the same issue (a camera setting, a framing or
+    positioning choice, a lighting choice, or equipment like a tripod) -- grounded in what the
+    evidence actually shows, not a generic tip.
+13. In overview, return at most two keep strengths, exactly one prioritized change, and one
     practical next exercise. Keep every item grounded in the supplied evidence.
 
 Return this structure:
@@ -51,81 +65,107 @@ Return this structure:
     "feel": {
       "wow_factor": {
         "rating": 0,
-        "what_works": "...",
-        "what_could_be_improved": "..."
+        "explanation": "..."
       },
       "angle_and_viewpoint": {
         "rating": 0,
-        "what_works": "...",
-        "what_could_be_improved": "..."
+        "explanation": "..."
       },
       "emotional_impact": {
         "rating": 0,
-        "what_works": "...",
-        "what_could_be_improved": "..."
+        "explanation": "..."
       }
     },
     "colour": {
       "rating": 0,
-      "what_works": "...",
-      "what_could_be_improved": "..."
+      "explanation": "...",
+      "assessment": "...",
+      "improve": "...",
+      "try_this": "..."
     },
     "details": {
       "rating": 0,
-      "what_works": "...",
-      "what_could_be_improved": "..."
+      "explanation": "...",
+      "assessment": "...",
+      "improve": "...",
+      "try_this": "..."
     },
     "brightness": {
       "rating": 0,
-      "what_works": "...",
-      "what_could_be_improved": "..."
+      "explanation": "...",
+      "assessment": "...",
+      "improve": "...",
+      "try_this": "..."
     },
     "contrast": {
       "rating": 0,
-      "what_works": "...",
-      "what_could_be_improved": "..."
+      "explanation": "...",
+      "assessment": "...",
+      "improve": "...",
+      "try_this": "..."
     },
     "saturation": {
       "rating": 0,
-      "what_works": "...",
-      "what_could_be_improved": "..."
+      "explanation": "...",
+      "assessment": "...",
+      "improve": "...",
+      "try_this": "..."
     },
     "ambiance": {
       "rating": 0,
-      "what_works": "...",
-      "what_could_be_improved": "..."
+      "explanation": "...",
+      "assessment": "...",
+      "improve": "...",
+      "try_this": "..."
     },
     "highlights": {
       "rating": 0,
-      "what_works": "...",
-      "what_could_be_improved": "..."
+      "explanation": "...",
+      "assessment": "...",
+      "improve": "...",
+      "try_this": "..."
     },
     "shadows": {
       "rating": 0,
-      "what_works": "...",
-      "what_could_be_improved": "..."
+      "explanation": "...",
+      "assessment": "...",
+      "improve": "...",
+      "try_this": "..."
     },
     "warmth": {
       "rating": 0,
-      "what_works": "...",
-      "what_could_be_improved": "..."
+      "explanation": "...",
+      "assessment": "...",
+      "improve": "...",
+      "try_this": "..."
     },
     "crop": {
       "rating": 0,
-      "what_works": "...",
-      "what_could_be_improved": "..."
+      "explanation": "...",
+      "assessment": "...",
+      "value": "...",
+      "improve": "...",
+      "try_this": "..."
     },
     "composition": {
       "rating": 0,
-      "what_works": "...",
-      "what_could_be_improved": "..."
+      "explanation": "...",
+      "assessment": "...",
+      "value": "...",
+      "improve": "...",
+      "try_this": "..."
     }
   },
   "exif_analysis": null,
-  "suggested_edits": [
-    {"key": "brightness", "text": "A specific evidence-based edit."}
-  ]
+  "technical": {
+    "summary": "Technical characteristics of the image.",
+    "evidence": [
+      "A specific evidence-based observation about technical quality."
+    ]
+  }
 }
 
 The application will enforce all scores and camera facts after your response. Focus on
-clear mentoring language and practical edits that match the measured evidence.
+clear mentoring language in the overview, and provide measurable evidence explaining
+why each category received its score in the aspects.
+

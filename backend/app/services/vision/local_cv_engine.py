@@ -3,6 +3,7 @@ import numpy as np
 import base64
 import os
 import urllib.request
+from math import gcd
 from pathlib import Path
 
 
@@ -11,6 +12,30 @@ from pathlib import Path
 # Keep enough resolution for the heuristics while staying within hosted-service
 # memory limits.
 MAX_ANALYSIS_DIMENSION = 1600
+
+
+def simplified_aspect_ratio(width: int, height: int) -> str:
+    """Reduce pixel dimensions to a friendly ratio string, e.g. 6000x4000 -> '3:2'."""
+    if not width or not height:
+        return ""
+    divisor = gcd(int(width), int(height)) or 1
+    return f"{int(width) // divisor}:{int(height) // divisor}"
+
+
+def dominant_composition_technique(composition: dict, is_centered: bool) -> str:
+    """Name the strongest detected composition technique for display, favoring a
+    clearly centered subject over a marginal technique score."""
+    candidates = {
+        "Rule of Thirds": (composition.get("rule_of_thirds") or {}).get("score", 0),
+        "Leading Lines": (composition.get("leading_lines") or {}).get("score", 0),
+        "Symmetry": (composition.get("symmetry_patterns") or {}).get("score", 0),
+        "Framing": (composition.get("framing") or {}).get("score", 0),
+        "Golden Ratio": (composition.get("golden_ratio") or {}).get("score", 0),
+    }
+    label, score = max(candidates.items(), key=lambda item: item[1]) if candidates else (None, 0)
+    if is_centered and score < 70:
+        return "Centered Composition"
+    return label if score >= 60 else "Off-Center Placement"
 
 
 def resize_for_analysis(img_bgr, max_dimension: int = MAX_ANALYSIS_DIMENSION):
@@ -517,11 +542,15 @@ def analyze_cv_heuristics(oriented_rgb: np.ndarray, exif_summary: dict = None) -
         b_works = "Captures a moody, low-key lighting scheme, keeping the brightest spots detailed."
         b_imp = "The image is underexposed, resulting in dark shadow areas losing critical details. A slight boost in exposure could bring out hidden elements."
         b_edit = "Increase exposure by +0.5 to +1.0 EV."
+        b_assess = "Underexposed"
+        b_next = "Add positive exposure compensation (around +1/3 to +1 stop) before you shoot, or widen the aperture / slow the shutter a touch so the sensor captures more light to begin with."
     elif mean_brightness > 160:
         brightness_score = int(max(0, ((255 - mean_brightness) / 95) * 70))
         b_works = "Generates a bright, airy, high-key feel that conveys a clean, modern aesthetic."
         b_imp = "The image is overexposed, leading to blown-out highlights where details are permanently lost (e.g., in skies or white shirts)."
         b_edit = "Reduce exposure by -0.4 to -0.8 EV and pull down highlights."
+        b_assess = "Overexposed"
+        b_next = "Dial in negative exposure compensation (try -1 stop) before you shoot, or meter for the brightest part of the scene instead of the midtones."
     else:
         diff = abs(mean_brightness - 125)
         # Optimal brightness range. We use a stricter baseline of 75 (down from 85).
@@ -530,6 +559,8 @@ def analyze_cv_heuristics(oriented_rgb: np.ndarray, exif_summary: dict = None) -
         b_works = "Well-balanced exposure that keeps the image looking natural and captures a full range of tones."
         b_imp = "Exposure is solid, though you could experiment with localized dodge and burn to create more depth."
         b_edit = "Apply minor contrast adjustments to enhance depth."
+        b_assess = "Properly Exposed"
+        b_next = "Keep metering the same way for this kind of light -- it's landing in the right range."
 
     # 2. Contrast
     std_contrast = float(np.std(img_gray))
@@ -539,11 +570,15 @@ def analyze_cv_heuristics(oriented_rgb: np.ndarray, exif_summary: dict = None) -
         c_works = "Low contrast gives a soft, vintage, or misty atmosphere that works well for dreamy portraits or foggy scenes."
         c_imp = "The image looks a bit flat and lacks punch. Increasing contrast would help separate the subject from the background."
         c_edit = "Increase contrast by +15 or adjust the black point to deepen shadows."
+        c_assess = "Flat"
+        c_next = "Shoot with more directional light (side light or golden hour) instead of flat, even lighting -- it naturally builds contrast into the frame."
     elif std_contrast > 75:
         contrast_score = int(max(0, (1 - (std_contrast - 75) / 52) * 70))
         c_works = "High contrast creates dramatic impact, bold silhouettes, and strong graphic shapes."
         c_imp = "The contrast is very harsh, which can make transition zones look abrupt and clip the highlights/shadows."
         c_edit = "Decrease contrast by -10, or soften the shadows."
+        c_assess = "High Contrast"
+        c_next = "If this wasn't the look you wanted, shoot in softer or more diffused light (open shade, overcast, or a reflector/diffuser) to tame the harsh transitions."
     else:
         diff = abs(std_contrast - 58)
         # Stricter baseline of 75 (down from 85)
@@ -552,6 +587,8 @@ def analyze_cv_heuristics(oriented_rgb: np.ndarray, exif_summary: dict = None) -
         c_works = "Excellent tonal separation. The subject pops nicely from the background without losing fine detail in shadows and highlights."
         c_imp = "Contrast is well managed. You can add a vignette to draw more focus to the center."
         c_edit = "Add a subtle post-crop vignette (-5 to -10)."
+        c_assess = "Balanced Contrast"
+        c_next = "This tonal range is working well -- keep shooting in similar light."
 
     # 3. Saturation
     img_hsv = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2HSV)
@@ -562,11 +599,15 @@ def analyze_cv_heuristics(oriented_rgb: np.ndarray, exif_summary: dict = None) -
         s_works = "A muted, pastel-like, or documentary feel that looks realistic and sophisticated."
         s_imp = "Colors feel a bit lifeless. A slight boost in saturation or vibrance could make the key colors more engaging."
         s_edit = "Increase vibrance by +15 and saturation by +5."
+        s_assess = "Undersaturated"
+        s_next = "If more color punch is the goal, shoot in richer light (golden hour, or a scene with naturally saturated colors) rather than flat midday light, which tends to wash colors out."
     elif mean_sat > 150:
         sat_score = int(max(0, ((255 - mean_sat) / 105) * 70))
         s_works = "Vibrant and eye-catching palette with high visual energy."
         s_imp = "Colors are oversaturated, which looks artificial and causes color clipping in highly saturated regions."
         s_edit = "Reduce overall saturation by -12 and use vibrance instead."
+        s_assess = "Oversaturated"
+        s_next = "If your camera's picture profile is set to \"vivid\" or similar, switch to a neutral/standard profile so color intensity is easier to control later."
     else:
         diff = abs(mean_sat - 90)
         # Stricter baseline of 75 (down from 85)
@@ -575,6 +616,8 @@ def analyze_cv_heuristics(oriented_rgb: np.ndarray, exif_summary: dict = None) -
         s_works = "Colors are vivid yet realistic, rendering a pleasing and lifelike representation."
         s_imp = "Saturation is well balanced. Consider target-adjusting specific hues to create better color harmony."
         s_edit = "Use HSL adjustments to slightly shift greens toward teal or warm up yellows."
+        s_assess = "Balanced Saturation"
+        s_next = "Color intensity is landing well here -- no change needed for this kind of scene."
 
     # 4. Warmth (White Balance heuristic based on R-B difference)
     r_mean = float(np.mean(img_rgb[:, :, 0]))
@@ -586,18 +629,24 @@ def analyze_cv_heuristics(oriented_rgb: np.ndarray, exif_summary: dict = None) -
         w_works = "A cool color temperature that emphasizes a clean, clinical, modern, or wintery atmosphere."
         w_imp = "The image has a noticeable blue cast, which can make skin tones look pale and landscapes look cold."
         w_edit = "Increase temperature slider by +8 (warm it up) to restore natural tones."
+        w_assess = "Cool Cast"
+        w_next = "Set a custom white balance for the light you're shooting in (or use a gray card) instead of relying on auto white balance, which can drift cool under some lighting."
     elif warmth_val > 25:
         # Stricter baseline of 60 (down from 75)
         warmth_score = int(min(100, max(0, 60 + (30 - abs(warmth_val - 40) / 40 * 30))))
         w_works = "A warm, golden-hour tone that creates feelings of nostalgia, comfort, and intimacy."
         w_imp = "The image is overly warm or has a heavy yellow cast. Neutral white surfaces appear yellow."
         w_edit = "Decrease temperature slider by -5 to -10, or adjust the tint slightly toward green/magenta."
+        w_assess = "Warm Cast"
+        w_next = "Set a custom white balance for the light source (tungsten/fluorescent presets, or a gray card) instead of leaving it on auto."
     else:
         # Stricter baseline of 80 (down from 90)
         warmth_score = int(min(100, max(0, 80 + (20 - abs(warmth_val) / 20 * 20))))
         w_works = "Color temperature is technically correct and whites appear clean."
         w_imp = "White balance looks highly accurate. You could creatively shift it warmer/cooler for stylistic effect."
         w_edit = "Add a warm gradient map or golden filter in post-processing for creative effect."
+        w_assess = "Neutral White Balance"
+        w_next = "Whatever white balance approach you used here is working -- keep it for this kind of light."
 
     # 5. Details (Structure & Sharpening based on Laplacian variance)
     laplacian = cv2.Laplacian(img_gray, cv2.CV_64F)
@@ -608,18 +657,34 @@ def analyze_cv_heuristics(oriented_rgb: np.ndarray, exif_summary: dict = None) -
         d_works = "A soft focus that works well for dreamy portraiture or creative motion blur."
         d_imp = "The image lacks critical sharpness, possibly due to motion blur, missed focus, or lens diffraction. Add structural clarity or sharpening."
         d_edit = "Increase sharpening by +20 and add +10 structure/clarity."
+        d_assess = "Blurry"
+        # Pure diagnosis, deliberately without a fix suggestion baked in --
+        # real blur/shake can't be recovered by sharpening after the fact, so
+        # no post-processing tip is offered for this branch, only capture-time
+        # guidance (see d_next below).
+        d_saw = "This looks soft rather than crisp, most likely from camera shake or a missed focus point rather than the lens itself."
+        d_can_fix_in_post = False
+        d_next = "Raise your shutter speed to at least 1/(focal length) of a second to freeze handheld shake, or use a tripod. If light is limited, open the aperture before raising ISO, and double-check focus landed on the subject rather than the background."
     elif variance_sharp > 500:
         # Stricter cap of 88 (down from 95)
         details_score = 88
         d_works = "Incredibly crisp details, showing fine textures and sharp edges."
         d_imp = "Detail retention is excellent. Ensure sharpening artifacts (halo effects around edges) are not visible."
         d_edit = "Apply a masking slider to sharpening so it only affects high-contrast edges, leaving flat areas smooth."
+        d_assess = "Very Sharp"
+        d_saw = d_imp
+        d_can_fix_in_post = True
+        d_next = "Whatever combination of shutter speed, focus technique, and stability got you this result is working -- keep it up."
     else:
         # Stricter range of 70 to 95 (down from 80 to 100)
         details_score = int(min(95, max(0, 70 + (25 * (variance_sharp - 80) / 420))))
         d_works = "Natural and clean detail rendering without harsh artificial sharpening outlines."
         d_imp = "Good sharpness. You could enhance local contrast (micro-contrast) in key areas to draw focus."
         d_edit = "Use a local brush to add +15 clarity to the main subject."
+        d_assess = "Sharp"
+        d_saw = d_imp
+        d_can_fix_in_post = True
+        d_next = "Focus and stability are solid here -- no change needed for this kind of shot."
 
     # 6. Highlights
     high_pixels = float(np.sum(img_gray > 230)) / img_gray.size
@@ -629,12 +694,16 @@ def analyze_cv_heuristics(oriented_rgb: np.ndarray, exif_summary: dict = None) -
         h_works = "Bright highlights create a high-contrast, glowing feel."
         h_imp = "Large areas of highlights are clipped (blown out), losing detail in skies or bright surfaces."
         h_edit = "Pull down highlights slider by -30 to -50."
+        h_assess = "Blown-out Highlights"
+        h_next = "Dial in negative exposure compensation before you shoot, or meter for the brightest area of the scene (like the sky) instead of the overall frame."
     else:
         # Stricter default score of 85 (down from 92)
         high_score = 85
         h_works = "Highlights are well controlled, retaining full texture in bright areas (like clouds or snow)."
         h_imp = "Highlights are well within bounds. You could boost them slightly to create specular highlights for metallic or wet surfaces."
         h_edit = "Boost whites by +5 for extra sparkle."
+        h_assess = "Highlights Controlled"
+        h_next = "Highlight exposure is landing well -- keep metering the same way in similar light."
 
     # 7. Shadows
     shadow_pixels = float(np.sum(img_gray < 25)) / img_gray.size
@@ -644,12 +713,16 @@ def analyze_cv_heuristics(oriented_rgb: np.ndarray, exif_summary: dict = None) -
         sh_works = "Rich, deep blacks create a sense of mystery, weight, and silhouette."
         sh_imp = "Shadow details are crushed, hiding texture in dark clothing, foliage, or nighttime scenes."
         sh_edit = "Lift shadows slider by +20 to +40."
+        sh_assess = "Crushed Shadows"
+        sh_next = "Add a touch of positive exposure compensation, or use fill light/a reflector on the shadow side of the subject while shooting."
     else:
         # Stricter default score of 86 (down from 94)
         shadow_score = 86
         sh_works = "Excellent shadow detail recovery. Textures are clearly visible in the dark portions of the frame."
         sh_imp = "Shadow depth is good. You can slightly drop the black point to give a cleaner black level if needed."
         sh_edit = "Slightly drop black levels by -3 to add a solid anchor."
+        sh_assess = "Shadow Detail Preserved"
+        sh_next = "Shadow detail is holding up well -- no change needed for this kind of light."
 
     # 8. Ambiance
     # Estimated by standard deviation of midtones (50 to 200)
@@ -661,12 +734,16 @@ def analyze_cv_heuristics(oriented_rgb: np.ndarray, exif_summary: dict = None) -
         amb_works = "Even, diffuse lighting that creates a flat, predictable atmosphere."
         amb_imp = "Lacks dimensional lighting or ambient glow. Adding localized exposure adjustments can simulate ambient lighting."
         amb_edit = "Use radial filters to simulate light direction or add a soft glow."
+        amb_assess = "Flat Ambient Light"
+        amb_next = "Look for more directional or layered light sources on location -- window light, a single lamp, or backlighting -- instead of flat, even ambient light."
     else:
         # Stricter default score of 80 (down from 88)
         amb_score = 80
         amb_works = "Rich light interactions with strong presence of ambient light, giving depth."
         amb_imp = "The ambiance is strong. Watch out for distracting highlights in the background."
         amb_edit = "Keep ambient details high while vignetting slightly."
+        amb_assess = "Rich Ambient Light"
+        amb_next = "This light source and direction are working well -- worth returning to for similar shots."
 
     # 9. Colour harmony / palette
     # Standard deviation across RGB channels
@@ -680,35 +757,47 @@ def analyze_cv_heuristics(oriented_rgb: np.ndarray, exif_summary: dict = None) -
         col_works = "A diverse range of hues that makes the image energetic."
         col_imp = "The color palette is somewhat chaotic. Restricting the color palette to a complementary or triadic harmony will make it more professional."
         col_edit = "Use color grading (split toning) to add teal in shadows and orange in highlights."
+        col_assess = "Clashing Palette"
+        col_next = "Before you shoot, scan the frame for stray bright or saturated colors near the edges and reposition or remove them from the composition."
     else:
         # Stricter default score of 82 (down from 90)
         col_score = 82
         col_works = "Pleasing and unified color palette that is easy on the eyes."
         col_imp = "Good color harmony. You can shift individual colors to enhance the mood."
         col_edit = "Slightly desaturate non-essential colors to make the main color pop."
+        col_assess = "Harmonious Palette"
+        col_next = "The color relationships in this frame are working well -- keep an eye out for similarly coordinated scenes."
 
     # 10. Crop & Composition
     # Aspect ratios
     ratio = w / h
     aspect_str = f"{w}x{h}"
-    
+    crop_ratio_value = simplified_aspect_ratio(original_w, original_h)
+
     thirds_score = advanced_cv["composition"]["rule_of_thirds"]["score"]
     centering_info = advanced_cv["subject_centering"]
-    
+    composition_value = dominant_composition_technique(advanced_cv["composition"], centering_info["is_centered"])
+
     if centering_info["is_centered"]:
         crop_works = "Subject is well-centered in the frame, creating a strong focal anchor."
         crop_imp = "Centering works, but try placing the subject on a third-line intersection for a more dynamic feel."
         crop_score = int(80 + (100 - thirds_score) * 0.1)
+        crop_assess = "Centered Composition"
+        crop_next = "Centering reads as deliberate here. If you want more dynamic tension in similar shots, try the rule-of-thirds grid on your camera's live view and place the subject on an intersection instead."
     else:
         if thirds_score > 70:
             crop_works = "Excellent off-center subject placement adhering to the Rule of Thirds."
             crop_imp = "The crop is well balanced. Ensure there is enough negative space in front of the subject's gaze."
             crop_score = int(thirds_score)
+            crop_assess = "Rule of Thirds"
+            crop_next = "This placement is working well -- keep using your grid overlay to repeat it."
         else:
             crop_works = "The subject is positioned off-center."
             crop_imp = "The subject is slightly off-grid but not centered. Try aligning them with a vertical grid line."
             crop_score = int(60 + thirds_score * 0.2)
-            
+            crop_assess = "Off-Center Crop"
+            crop_next = "Turn on your camera's rule-of-thirds gridlines and place the subject deliberately on a line or intersection rather than leaving it to chance."
+
     crop_score = min(100, max(0, crop_score))
     crop_edit = "Crop slightly to shift subject placement closer to a thirds grid line."
 
@@ -845,6 +934,17 @@ def analyze_cv_heuristics(oriented_rgb: np.ndarray, exif_summary: dict = None) -
             }
         }
 
+        # When the camera settings themselves point to shake, diffraction, or a
+        # depth-of-field miss, prefer that specific, evidence-backed capture-time
+        # diagnosis over the generic sharpness read -- and don't suggest a
+        # post-processing fix, since this kind of blur can't be rescued after
+        # the fact.
+        if status != "ok" and details_score < 70 and any(word in issue.lower() for word in ("shake", "diffraction", "depth of field", "focus accuracy")):
+            d_assess = "Blurry"
+            d_can_fix_in_post = False
+            d_next = suggestion
+            d_saw = issue
+
     # Synthesize first impression
     fi_parts = []
     if col_score >= 80:
@@ -926,52 +1026,103 @@ def analyze_cv_heuristics(oriented_rgb: np.ndarray, exif_summary: dict = None) -
             "colour": {
                 "rating": col_score,
                 "what_works": col_works,
-                "what_could_be_improved": col_imp
+                "what_could_be_improved": col_imp,
+                "assessment": col_assess,
+                "saw": col_imp,
+                "improve": col_edit,
+                "try_this": col_next,
             },
             "details": {
                 "rating": details_score,
                 "what_works": d_works,
-                "what_could_be_improved": d_imp
+                "what_could_be_improved": d_imp,
+                "assessment": d_assess,
+                "saw": d_saw,
+                "improve": d_edit if d_can_fix_in_post else None,
+                "try_this": d_next,
             },
             "brightness": {
                 "rating": brightness_score,
                 "what_works": b_works,
-                "what_could_be_improved": b_imp
+                "what_could_be_improved": b_imp,
+                "assessment": b_assess,
+                "saw": b_imp,
+                "improve": b_edit,
+                "try_this": b_next,
             },
             "contrast": {
                 "rating": contrast_score,
                 "what_works": c_works,
-                "what_could_be_improved": c_imp
+                "what_could_be_improved": c_imp,
+                "assessment": c_assess,
+                "saw": c_imp,
+                "improve": c_edit,
+                "try_this": c_next,
             },
             "saturation": {
                 "rating": sat_score,
                 "what_works": s_works,
-                "what_could_be_improved": s_imp
+                "what_could_be_improved": s_imp,
+                "assessment": s_assess,
+                "saw": s_imp,
+                "improve": s_edit,
+                "try_this": s_next,
             },
             "ambiance": {
                 "rating": amb_score,
                 "what_works": amb_works,
-                "what_could_be_improved": amb_imp
+                "what_could_be_improved": amb_imp,
+                "assessment": amb_assess,
+                "saw": amb_imp,
+                "improve": amb_edit,
+                "try_this": amb_next,
             },
             "highlights": {
                 "rating": high_score,
                 "what_works": h_works,
-                "what_could_be_improved": h_imp
+                "what_could_be_improved": h_imp,
+                "assessment": h_assess,
+                "saw": h_imp,
+                "improve": h_edit,
+                "try_this": h_next,
             },
             "shadows": {
                 "rating": shadow_score,
                 "what_works": sh_works,
-                "what_could_be_improved": sh_imp
+                "what_could_be_improved": sh_imp,
+                "assessment": sh_assess,
+                "saw": sh_imp,
+                "improve": sh_edit,
+                "try_this": sh_next,
             },
             "warmth": {
                 "rating": warmth_score,
                 "what_works": w_works,
-                "what_could_be_improved": w_imp
+                "what_could_be_improved": w_imp,
+                "assessment": w_assess,
+                "saw": w_imp,
+                "improve": w_edit,
+                "try_this": w_next,
             },
             "crop": {
                 "rating": crop_score,
                 "what_works": crop_works,
-                "what_could_be_improved": crop_imp
+                "what_could_be_improved": crop_imp,
+                "assessment": crop_assess,
+                "value": crop_ratio_value,
+                "saw": crop_imp,
+                "improve": crop_edit,
+                "try_this": crop_next,
+            },
+            "composition": {
+                "rating": None,
+                "what_works": crop_works,
+                "what_could_be_improved": crop_imp,
+                "assessment": composition_value,
+                "value": composition_value,
+                "saw": crop_imp,
+                "improve": crop_edit,
+                "try_this": crop_next,
             }
         },
         "suggested_edits": suggested_edits,

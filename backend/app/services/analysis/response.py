@@ -13,7 +13,7 @@ CATEGORIES = (
     ("focus", "Focus", ("details",), "focus"),
     ("color", "Color", ("colour", "saturation", "warmth"), "color"),
     ("subject", "Subject", ("wow_factor", "emotional_impact", "angle_and_viewpoint"), "subject"),
-    ("post_processing", "Post-Processing", ("noise",), "post_processing"),
+    ("technical", "Technical", (), "technical"),
 )
 
 TUTORIAL_METRIC_ALIASES = {
@@ -101,11 +101,37 @@ def build_canonical_response(raw: dict, metadata: dict, recommended: list[dict])
             source = (aspects.get("feel") or {}).get(metric_id, {}) if metric_id in {"wow_factor", "emotional_impact", "angle_and_viewpoint"} else aspects.get(metric_id, {})
             rating = engine_categories.get("noise") if metric_id == "noise" else authority.get(metric_id, source.get("rating") if isinstance(source, dict) else None)
             if rating is None: continue
-            metric = {"id": metric_id, "label": metric_id.replace("_", " ").title(), "rating": _score(rating), "score": _score(rating), "summary": source.get("what_works") if isinstance(source, dict) else None, "detail": source.get("what_could_be_improved") if isinstance(source, dict) else None, "recommendation": next((edit.get("text") for edit in raw.get("suggested_edits") or [] if edit.get("key") == metric_id), None), "evidence": evidence_ids[category_id], "observation": source.get("what_could_be_improved") if isinstance(source, dict) else None, "evidence_ids": evidence_ids[category_id], "source": "gemini" if "gemini" in raw.get("mode", "") else "local_cv"}
+            metric = {
+                "id": metric_id,
+                "label": metric_id.replace("_", " ").title(),
+                "rating": _score(rating),
+                "score": _score(rating),
+                "summary": (source.get("explanation") or source.get("what_could_be_improved")) if isinstance(source, dict) else None,
+                "detail": (source.get("explanation") or source.get("what_could_be_improved")) if isinstance(source, dict) else None,
+                "recommendation": source.get("try_this") if isinstance(source, dict) else None,
+                "evidence": evidence_ids[category_id],
+                "observation": (source.get("explanation") or source.get("saw")) if isinstance(source, dict) else None,
+                "evidence_ids": evidence_ids[category_id],
+                "source": "gemini" if "gemini" in raw.get("mode", "") else "local_cv",
+                # A short categorical read (e.g. "Overexposed", "Rule of Thirds")
+                # for display without a number, plus what-went-wrong / how-to-fix
+                # guidance a photographer can act on -- see the Learn page.
+                "assessment": source.get("assessment") if isinstance(source, dict) else None,
+                "value": source.get("value") if isinstance(source, dict) else None,
+                "what_works": source.get("what_works") if isinstance(source, dict) else None,
+                "saw": source.get("saw") if isinstance(source, dict) else None,
+                "improve": source.get("improve") if isinstance(source, dict) else None,
+                "try_this": source.get("try_this") if isinstance(source, dict) else None,
+            }
             metrics.append(metric); metric_map[metric_id] = (category_id, metric)
-        category_score = authority.get("feel", {}).get("emotional_impact") if engine_id == "subject" else engine_categories.get("noise") if engine_id == "post_processing" else engine_categories.get(engine_id)
+        if category_id == "technical":
+            technical = raw.get("technical") or {}
+            for index, ev in enumerate(technical.get("evidence") or []):
+                metric = {"id": f"technical_{index}", "label": "Characteristic", "rating": None, "score": None, "summary": None, "detail": None, "recommendation": None, "evidence": [], "observation": ev, "evidence_ids": [], "source": "gemini"}
+                metrics.append(metric)
+        category_score = authority.get("feel", {}).get("emotional_impact") if engine_id == "subject" else engine_categories.get("noise") if engine_id == "technical" else engine_categories.get(engine_id)
         normalized_category_score = _score(category_score) if category_score is not None else (metrics[0]["score"] if metrics else None)
-        categories.append({"id": category_id, "label": label, "score": normalized_category_score, "summary": metrics[0].get("summary") if metrics else None, "detail": metrics[0].get("detail") if metrics else None, "evidence_ids": evidence_ids[category_id], "metrics": metrics})
+        categories.append({"id": category_id, "label": label, "score": normalized_category_score, "summary": (raw.get("technical") or {}).get("summary") if category_id == "technical" else (metrics[0].get("summary") if metrics else None), "detail": metrics[0].get("detail") if metrics else None, "evidence_ids": evidence_ids[category_id], "metrics": metrics})
     weakest = sorted((value[1] for value in metric_map.values()), key=lambda metric: metric["score"])[:3]
     learning = [{"metric_id": metric["id"], "label": metric["label"], "category": metric_map[metric["id"]][0], "score": metric["score"], "priority": index + 1} for index, metric in enumerate(weakest)]
     tutorials = []
@@ -200,8 +226,8 @@ def build_canonical_response(raw: dict, metadata: dict, recommended: list[dict])
     diagnostic_modes.append({"id": "focus", "category": "focus", "supported": True, "representations": ["asset", "text"], "unavailable_reason": None})
     diagnostic_modes.append({"id": "color", "category": "color", "supported": True, "representations": ["palette", "text"], "unavailable_reason": None})
     diagnostic_modes.append({"id": "visualHierarchy", "category": "subject", "supported": True, "representations": ["asset", "text"], "unavailable_reason": None})
-    diagnostic_modes.append({"id": "postProcessing", "category": "post_processing", "supported": True, "representations": ["text"], "unavailable_reason": None})
+    diagnostic_modes.append({"id": "technical", "category": "technical", "supported": True, "representations": ["text"], "unavailable_reason": None})
     
-    canonical = {"metadata": metadata, "overview": overview, "analysis": {"overall_score": _score(engine.get("overall"), _score(raw.get("overall_rating")) * 10), "categories": categories}, "visual_breakdown": {"evidence": evidence, "diagnostic_modes": diagnostic_modes, "composition": composition if (composition := (raw.get("advanced_cv") or {}).get("composition", {})) else {}, "lighting": (raw.get("image_statistics") or {}).get("brightness", {}), "focus": (raw.get("advanced_cv") or {}).get("blur", {}), "color": {"palette": (raw.get("advanced_cv") or {}).get("color_palette", [])}, "subject": (raw.get("advanced_cv") or {}).get("subject_centering", {}), "post_processing": {"suggested_edits": raw.get("suggested_edits", [])}}, "learning_next": learning, "tutorials": tutorials, "diagnostics": {"analysis_id": "SG-" + hashlib.sha1((metadata.get("filename") or "image").encode()).hexdigest()[:10], "mode": raw.get("mode", "computer_vision"), "ai_status": raw.get("ai_status", "not_configured"), "score_source": engine.get("source", "application"), "coordinate_space": "normalized"}}
+    canonical = {"metadata": metadata, "overview": overview, "analysis": {"overall_score": _score(engine.get("overall"), _score(raw.get("overall_rating")) * 10), "categories": categories}, "visual_breakdown": {"evidence": evidence, "diagnostic_modes": diagnostic_modes, "composition": composition if (composition := (raw.get("advanced_cv") or {}).get("composition", {})) else {}, "lighting": (raw.get("image_statistics") or {}).get("brightness", {}), "focus": (raw.get("advanced_cv") or {}).get("blur", {}), "color": {"palette": (raw.get("advanced_cv") or {}).get("color_palette", [])}, "subject": (raw.get("advanced_cv") or {}).get("subject_centering", {}), "technical": raw.get("technical", {"suggested_edits": raw.get("suggested_edits", [])})}, "learning_next": learning, "tutorials": tutorials, "diagnostics": {"analysis_id": "SG-" + hashlib.sha1((metadata.get("filename") or "image").encode()).hexdigest()[:10], "mode": raw.get("mode", "computer_vision"), "ai_status": raw.get("ai_status", "not_configured"), "score_source": engine.get("source", "application"), "coordinate_space": "normalized"}}
     validator = getattr(AnalysisResponse, "model_validate", AnalysisResponse.parse_obj); model = validator(canonical)
     return getattr(model, "model_dump", model.dict)(exclude_none=True)

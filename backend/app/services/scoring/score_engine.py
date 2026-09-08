@@ -159,6 +159,14 @@ def enforce_authoritative_scores(
             "what_could_be_improved",
             local_aspect.get("what_could_be_improved", ""),
         )
+        # A short categorical read (e.g. "Overexposed", "Rule of Thirds") for
+        # display without a number, plus the specific fix-in-post and
+        # next-time-you-shoot guidance a photographer can actually act on.
+        target.setdefault("assessment", local_aspect.get("assessment"))
+        target.setdefault("value", local_aspect.get("value"))
+        target.setdefault("saw", local_aspect.get("saw", local_aspect.get("what_could_be_improved", "")))
+        target.setdefault("improve", local_aspect.get("improve"))
+        target.setdefault("try_this", local_aspect.get("try_this"))
 
     composition_score = score_engine["aspects"]["composition"]
     composition = gemini_aspects.setdefault("composition", {})
@@ -171,6 +179,11 @@ def enforce_authoritative_scores(
         "what_could_be_improved",
         "Refine subject placement and the visual path through the frame.",
     )
+    composition.setdefault("assessment", None)
+    composition.setdefault("value", None)
+    composition.setdefault("saw", composition.get("what_could_be_improved"))
+    composition.setdefault("improve", None)
+    composition.setdefault("try_this", None)
 
     feel = gemini_aspects.setdefault("feel", {})
     for key, rating in score_engine["aspects"]["feel"].items():

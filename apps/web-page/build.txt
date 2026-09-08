@@ -1,0 +1,4 @@
+[36mvite v8.1.4 [32mbuilding client environment for production...[36m[39m
+[2Ktransforming...✓ 1161 modules transformed.
+rendering chunks...
+[31m✗[39m Build failed in 1.39s

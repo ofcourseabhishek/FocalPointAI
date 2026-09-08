@@ -30,7 +30,7 @@ class AnalysisContractTests(unittest.TestCase):
         self.assertEqual(self.data["metadata"]["filename"], "plain.jpg")
         self.assertNotIn("exif", self.data["metadata"])
         post_processing = next(
-            item for item in self.data["analysis"]["categories"] if item["id"] == "post_processing"
+            item for item in self.data["analysis"]["categories"] if item["id"] == "technical"
         )
         self.assertNotIn("score", post_processing)
         self.assertEqual(post_processing["metrics"], [])

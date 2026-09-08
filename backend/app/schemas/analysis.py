@@ -21,6 +21,15 @@ class Metric(_Model):
     observation: str | None = None
     evidence_ids: list[str] = Field(default_factory=list)
     source: str | None = None
+    # A short categorical read (e.g. "Overexposed", "Rule of Thirds") for
+    # display without a number, and the what-went-wrong / how-to-fix guidance
+    # that powers the Learn page.
+    assessment: str | None = None
+    value: str | None = None
+    what_works: str | None = None
+    saw: str | None = None
+    improve: str | None = None
+    try_this: str | None = None
 
 
 class Category(_Model):
@@ -132,7 +141,7 @@ class VisualBreakdown(_Model):
     focus: dict[str, Any] = Field(default_factory=dict)
     color: dict[str, Any] = Field(default_factory=dict)
     subject: dict[str, Any] = Field(default_factory=dict)
-    post_processing: dict[str, Any] = Field(default_factory=dict)
+    technical: dict[str, Any] = Field(default_factory=dict)
 
 
 class Diagnostics(_Model):
