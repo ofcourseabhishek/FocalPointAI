@@ -73,7 +73,10 @@ async def analyze_gemini(
     }
 
     async with httpx.AsyncClient() as client:
-        response = await client.post(url, json=payload, headers=headers, timeout=30.0)
+        # The structured critique (overview plus per-aspect assessment, improve, try_this)
+        # is long; 30s cut it off and silently fell back to local CV. The frontend waits
+        # up to 120s for the whole analysis.
+        response = await client.post(url, json=payload, headers=headers, timeout=60.0)
 
         if response.status_code != 200:
             raise HTTPException(

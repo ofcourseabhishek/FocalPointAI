@@ -99,9 +99,14 @@ function textIncludesAny(haystack, needles) {
   return needles.some((needle) => haystack.includes(needle));
 }
 
+// Hints must start a word: a plain substring test read "cr-ok-ed horizon" as "ok" and
+// "un-even" as "even", hiding real problems. Suffixes stay allowed ("properly", "well-placed").
+// The hints are plain words, so they need no regex escaping.
+const POSITIVE_PATTERN = new RegExp(`\\b(?:${POSITIVE_HINTS.join('|')})`);
+
 export function isLikelyPositive(text) {
   if (!text) return false;
-  return textIncludesAny(text.toLowerCase(), POSITIVE_HINTS);
+  return POSITIVE_PATTERN.test(text.toLowerCase());
 }
 
 export function matchGuidance(text) {

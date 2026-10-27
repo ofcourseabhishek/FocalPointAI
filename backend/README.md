@@ -37,7 +37,8 @@ URL and the metric IDs it helps address.
 - `GEMINI_API_KEY` enables Gemini analysis. If absent, the existing local-CV
   fallback remains operational.
 - `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, and
-  `SMTP_SENDER` are used by the separate email helper.
+  `SMTP_SENDER` are used by the separate email helper
+  (`app/services/export/emailing_engine.py`, not wired to any route yet).
 
 Do not commit environment files or credential values.
 
@@ -52,3 +53,21 @@ python tests/real_image_matrix.py
 The real-image matrix uses repository photographs and temporary derived
 variants to verify the canonical category set, tutorial integrity, and
 normalized geometry across orientation, exposure, focus, and colour changes.
+
+## Layout
+
+```text
+main.py                     stable ASGI entrypoint (main:app)
+app/api/                    FastAPI app factory and routes
+app/schemas/                canonical response models
+app/services/analysis/      Gemini call and canonical response builder
+app/services/scoring/       application-owned scores
+app/services/vision/        local computer-vision evidence
+app/services/intent/        artistic-intent profile
+app/services/recommendations/  tutorial ranking
+app/services/export/        PDF report and email helper
+app/services/metadata.py    EXIF and upload validation
+app/prompts/analysis.txt    Gemini prompt
+app/data/                   tutorial catalog and Haar cascades
+tests/                      unit and contract tests
+```
