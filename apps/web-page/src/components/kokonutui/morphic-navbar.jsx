@@ -151,7 +151,8 @@ const KEY_MOVES = {
   End: (_, n) => n - 1,
 };
 
-const SURFACE = "bg-zinc-900 dark:bg-zinc-100";
+// Snapgrade: always off-white, whatever the theme.
+const SURFACE = "bg-zinc-100";
 const FOCUS_RING =
   "outline-none focus-visible:ring-2 focus-visible:ring-[#b8924a] focus-visible:ring-inset";
 
@@ -240,8 +241,8 @@ function Segment({
           SURFACE,
           FOCUS_RING,
           highlighted
-            ? "text-white dark:text-zinc-950"
-            : "text-zinc-400 hover:text-zinc-100 dark:text-zinc-500 dark:hover:text-zinc-800"
+            ? "text-zinc-950"
+            : "text-zinc-500 hover:text-zinc-800"
         )}
         draggable={false}
         href={href}
@@ -650,7 +651,7 @@ export function MorphicNavbar({
             aria-hidden={!folded}
             aria-label="Show all links"
             className={cn(
-              "absolute top-0 left-0 flex size-9 items-center justify-center rounded-xl text-zinc-400 transition-colors duration-150 hover:text-zinc-100 dark:text-zinc-500 dark:hover:text-zinc-800",
+              "absolute top-0 left-0 flex size-9 items-center justify-center rounded-xl text-zinc-500 transition-colors duration-150 hover:text-zinc-800",
               SURFACE,
               FOCUS_RING,
               folded ? "z-30" : "pointer-events-none z-0"
