@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import PullCord from './components/kokonutui/pull-cord';
 import { ResultRead } from './components/ResultRead';
 import { UploadWorkspace } from './components/UploadWorkspace';
 import {
@@ -180,154 +181,117 @@ function reportFilename(response) {
   try { return decodeURIComponent(candidate); } catch { return candidate; }
 }
 
+const THEME_KEY = 'snapgrade:theme';
+
+function readTheme() {
+  try {
+    return window.localStorage.getItem(THEME_KEY) === 'light' ? 'light' : 'dark';
+  } catch {
+    return 'dark';
+  }
+}
+
+/** Lamp on = light theme. Fixed top right so it carries across the upload and result pages. */
+function ThemeCord() {
+  const [theme, setTheme] = useState(readTheme);
+
+  useLayoutEffect(() => {
+    document.documentElement.classList.toggle('dark', theme === 'dark');
+    try {
+      window.localStorage.setItem(THEME_KEY, theme);
+    } catch {
+      // Storage can be blocked; the theme still applies for this visit.
+    }
+  }, [theme]);
+
+  return (
+    // Tablet and up only; the mobile version is still to be decided.
+    <div className="pointer-events-none fixed top-0 right-6 z-50 hidden h-[270px] w-[216px] md:block">
+      <PullCord
+        className="origin-top-left scale-75 rounded-none border-0 bg-transparent dark:bg-transparent [&>div]:hidden [&_g]:pointer-events-auto [&_path]:pointer-events-auto"
+        checked={theme === 'light'}
+        onCheckedChange={(on) => setTheme(on ? 'light' : 'dark')}
+        label="Light theme"
+      />
+    </div>
+  );
+}
+
 export default function App() {
   const [persistedResult] = useState(readPersistedResult);
   const [appLocation, setAppLocation] = useState(() => window.location.href);
   const [file, setFile] = useState(() => persistedResult ? { name: persistedResult.fileName } : null);
   const [previewUrl, setPreviewUrl] = useState(() => persistedResult?.previewUrl || '');
-  const [isPreparing, setIsPreparing] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
   const [analysisResult, setAnalysisResult] = useState(() => persistedResult?.analysis || null);
-  const [error, setError] = useState('');
   const [fileMetadata, setFileMetadata] = useState(() => persistedResult?.imageDimensions || null);
   const [isDownloadingReport, setIsDownloadingReport] = useState(false);
   const [downloadError, setDownloadError] = useState('');
   const previewUrlRef = useRef('');
   const selectionVersionRef = useRef(0);
-  const analysisAbortRef = useRef(null);
   const reportAbortRef = useRef(null);
   const reportRequestVersionRef = useRef(0);
-  const isPreparingRef = useRef(false);
   const currentLocation = new URL(appLocation);
   const showResultPreview = import.meta.env.DEV
     && (currentLocation.searchParams.get('preview') === 'result' || currentLocation.pathname.startsWith('/analysis/preview'));
 
-  const abortActiveAnalysis = () => {
-    analysisAbortRef.current?.abort();
-    analysisAbortRef.current = null;
-  };
-
   useEffect(() => () => {
     selectionVersionRef.current += 1;
     reportRequestVersionRef.current += 1;
-    abortActiveAnalysis();
     reportAbortRef.current?.abort();
     reportAbortRef.current = null;
     if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
   }, []);
 
-  const handleFiles = async (files) => {
-    if (!Array.isArray(files) || files.length !== 1) {
-      setError('Choose exactly one photograph to continue.');
-      return;
-    }
-
-    const nextFile = files[0];
+  // Upload stage: local checks before a photo counts as added. A failure here belongs on the
+  // FileUpload row (Retry/remove the photo); analysis failures never come through here.
+  const preparePhotograph = async (nextFile) => {
     const validationError = validatePhotograph(nextFile);
-    if (validationError) {
-      setError(validationError);
-      return;
-    }
-
-    const selectionVersion = ++selectionVersionRef.current;
-    abortActiveAnalysis();
-    clearPersistedResult();
-    setIsLoading(false);
-    setIsPreparing(true);
-    isPreparingRef.current = true;
-    setError('');
-
-    const nextPreviewUrl = URL.createObjectURL(nextFile);
+    if (validationError) throw new Error(validationError);
+    const url = URL.createObjectURL(nextFile);
     try {
-      const dimensions = await readImageDimensions(nextPreviewUrl);
-      if (selectionVersion !== selectionVersionRef.current) {
-        URL.revokeObjectURL(nextPreviewUrl);
-        return;
-      }
-
-      const previousPreviewUrl = previewUrlRef.current;
-      previewUrlRef.current = nextPreviewUrl;
-      setFile(nextFile);
-      setPreviewUrl(nextPreviewUrl);
-      setFileMetadata(dimensions);
-      setAnalysisResult(null);
-      if (previousPreviewUrl) URL.revokeObjectURL(previousPreviewUrl);
+      return await readImageDimensions(url);
     } catch {
-      URL.revokeObjectURL(nextPreviewUrl);
-      if (selectionVersion === selectionVersionRef.current) {
-        setError('This image could not be decoded. Choose another JPEG, PNG, or WebP file.');
-      }
+      throw new Error('This image could not be decoded. Choose another JPEG, PNG, or WebP file.');
     } finally {
-      if (selectionVersion === selectionVersionRef.current) {
-        isPreparingRef.current = false;
-        setIsPreparing(false);
-      }
+      URL.revokeObjectURL(url);
     }
   };
 
-  const handleCancel = () => {
-    selectionVersionRef.current += 1;
-    abortActiveAnalysis();
-    isPreparingRef.current = false;
-    setIsPreparing(false);
-    setIsLoading(false);
-    setError('');
-  };
-
-  const handleAnalyze = async () => {
-    if (isPreparingRef.current || isLoading || analysisAbortRef.current) return;
-    if (!file || !previewUrl) {
-      setError('Choose a photograph before starting the analysis.');
-      return;
-    }
-
-    const selectionVersion = selectionVersionRef.current;
-    const controller = new AbortController();
-    let timedOut = false;
-    const timeoutId = window.setTimeout(() => {
-      timedOut = true;
-      controller.abort();
-    }, ANALYSIS_TIMEOUT_MS);
-
-    analysisAbortRef.current = controller;
-    setIsLoading(true);
-    setAnalysisResult(null);
-    setError('');
-
-    const formData = new FormData();
-    formData.append('file', file);
+  // Analysis stage: sends an already-prepared photo. Throws a readable message; the caller keeps
+  // the photo so a retry is just another call.
+  const analyzePhotograph = async (nextFile, dimensions, signal) => {
+    const selectionVersion = ++selectionVersionRef.current;
+    clearPersistedResult();
 
     try {
+      const formData = new FormData();
+      formData.append('file', nextFile);
       const response = await fetch(`${BACKEND_URL}/analyze`, {
         method: 'POST',
         body: formData,
-        signal: controller.signal,
+        signal: AbortSignal.any([signal, AbortSignal.timeout(ANALYSIS_TIMEOUT_MS)]),
       });
       const body = await readResponseBody(response);
-
       if (!response.ok) {
         throw new Error(getResponseErrorMessage(body, 'Failed to analyze the photograph.'));
       }
       if (!isAnalysisPayload(body)) {
         throw new Error('The critique service returned an invalid analysis response. Please try again.');
       }
-      if (selectionVersion === selectionVersionRef.current && !controller.signal.aborted) {
-        setAnalysisResult(body);
-        void persistResultPreview(body, file, fileMetadata, () => selectionVersion === selectionVersionRef.current);
-      }
+      if (signal.aborted || selectionVersion !== selectionVersionRef.current) return;
+
+      const nextPreviewUrl = URL.createObjectURL(nextFile);
+      if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+      previewUrlRef.current = nextPreviewUrl;
+      setFile(nextFile);
+      setPreviewUrl(nextPreviewUrl);
+      setFileMetadata(dimensions);
+      setAnalysisResult(body);
+      void persistResultPreview(body, nextFile, dimensions, () => selectionVersion === selectionVersionRef.current);
     } catch (err) {
-      if (selectionVersion === selectionVersionRef.current && !controller.signal.aborted) {
-        const message = err instanceof TypeError
-          ? 'Could not reach the critique service. Check your connection and try again.'
-          : err.message || 'The critique could not be completed. Please try again.';
-        setError(message);
-      } else if (selectionVersion === selectionVersionRef.current && timedOut) {
-        setError('The critique took longer than two minutes. Your photograph is still ready to retry.');
-      }
-    } finally {
-      window.clearTimeout(timeoutId);
-      if (analysisAbortRef.current === controller) analysisAbortRef.current = null;
-      if (selectionVersion === selectionVersionRef.current) setIsLoading(false);
+      if (err?.name === 'TimeoutError') throw new Error('The critique took longer than two minutes. Try again.');
+      if (err instanceof TypeError) throw new Error('Could not reach the critique service. Check your connection and try again.');
+      throw err;
     }
   };
 
@@ -389,7 +353,6 @@ export default function App() {
   const handleAnalyzeAnother = () => {
     selectionVersionRef.current += 1;
     reportRequestVersionRef.current += 1;
-    abortActiveAnalysis();
     clearPersistedResult();
     reportAbortRef.current?.abort();
     reportAbortRef.current = null;
@@ -399,18 +362,16 @@ export default function App() {
     setPreviewUrl('');
     setFileMetadata(null);
     setAnalysisResult(null);
-    setIsPreparing(false);
-    setIsLoading(false);
     setIsDownloadingReport(false);
-    setError('');
     setDownloadError('');
     window.history.replaceState({}, '', '/');
     setAppLocation(window.location.href);
     window.scrollTo({ top: 0, behavior: 'instant' });
   };
 
+  let page;
   if (showResultPreview) {
-    return (
+    page = (
       <ResultRead
         analysis={RESULT_PREVIEW}
         file={{ name: 'light-study.jpg' }}
@@ -422,23 +383,16 @@ export default function App() {
         onAnalyzeAnother={handleAnalyzeAnother}
       />
     );
-  }
-
-  if (analysisResult) {
-    return <ResultRead analysis={analysisResult} file={file} previewUrl={previewUrl} imageDimensions={fileMetadata} onDownloadReport={() => handleDownloadReport(analysisResult, file)} isDownloadingReport={isDownloadingReport} downloadError={downloadError} onAnalyzeAnother={handleAnalyzeAnother} />;
+  } else if (analysisResult) {
+    page = <ResultRead analysis={analysisResult} file={file} previewUrl={previewUrl} imageDimensions={fileMetadata} onDownloadReport={() => handleDownloadReport(analysisResult, file)} isDownloadingReport={isDownloadingReport} downloadError={downloadError} onAnalyzeAnother={handleAnalyzeAnother} />;
+  } else {
+    page = <UploadWorkspace onPrepare={preparePhotograph} onAnalyze={analyzePhotograph} />;
   }
 
   return (
-    <UploadWorkspace
-      file={file}
-      previewUrl={previewUrl}
-      fileMetadata={fileMetadata}
-      isPreparing={isPreparing}
-      isLoading={isLoading}
-      error={error}
-      onFiles={handleFiles}
-      onAnalyze={handleAnalyze}
-      onCancel={handleCancel}
-    />
+    <>
+      <ThemeCord />
+      {page}
+    </>
   );
 }

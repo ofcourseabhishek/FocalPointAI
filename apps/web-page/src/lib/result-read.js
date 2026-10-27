@@ -6,7 +6,7 @@ const CATEGORY_CONFIG = {
   color: { label: 'Color', scoreKeys: ['color', 'colour'], overlayNames: ['color', 'colour'], aspectKeys: ['colour', 'color', 'saturation', 'warmth'], unavailable: 'No color reading was returned for this photograph.' },
   focus: { label: 'Focus', scoreKeys: ['focus'], overlayNames: ['focus', 'sharpness'], aspectKeys: ['details', 'focus'], unavailable: 'No focus reading was returned for this photograph.' },
   visualHierarchy: { label: 'Subject', scoreKeys: ['visual_hierarchy', 'visualHierarchy', 'hierarchy'], overlayNames: ['visual_hierarchy', 'visualhierarchy', 'hierarchy', 'attention', 'saliency', 'subject'], aspectKeys: [], unavailable: 'No visual-hierarchy reading was returned for this photograph.' },
-  technical: { label: 'Technical', scoreKeys: ['technical', 'post_processing', 'postProcessing'], overlayNames: [], aspectKeys: [], unavailable: 'No technical characteristics reading was returned for this photograph.' },
+  technical: { label: 'Final technical', scoreKeys: ['technical', 'post_processing', 'postProcessing'], overlayNames: [], aspectKeys: [], unavailable: 'No technical characteristics reading was returned for this photograph.' },
 };
 
 function textValue(value) {
@@ -296,6 +296,8 @@ function overviewActions(result) {
 }
 
 const LESSON_TIER_LABELS = ['START HERE', 'THEN EXPLORE', 'OPTIONAL DEEPER DIVE', 'OPTIONAL DEEPER DIVE'];
+// YouTube serves every video's thumbnail at a fixed address, so a lesson URL is enough to show one.
+function youtubeThumbnail(url) { const id = /(?:youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/)|youtu\.be\/)([\w-]{11})/.exec(String(url || ''))?.[1]; return id ? `https://i.ytimg.com/vi/${id}/hqdefault.jpg` : ''; }
 function normalizeLearningPath(value) {
   if (!Array.isArray(value)) return [];
   const seen = new Set();
@@ -315,7 +317,7 @@ function normalizeLearningPath(value) {
       creator: firstText(video.channel, video.creator, lesson.channel, lesson.creator),
       duration: firstText(video.duration, lesson.duration),
       thumbnail: firstText(video.thumbnail_url, video.thumbnail, lesson.thumbnail_url, lesson.thumbnail),
-      thumbnailFallback: firstText(video.thumbnail_fallback_url, lesson.thumbnail_fallback_url),
+      thumbnailFallback: firstText(video.thumbnail_fallback_url, lesson.thumbnail_fallback_url) || youtubeThumbnail(url),
       url,
       category: firstText(lesson.topic, lesson.category, lesson.metric),
       reason: firstText(lesson.reason, lesson.description),
@@ -460,7 +462,7 @@ export function getResultReadModel(result = {}) {
             title: m.learn.title,
             creator: m.learn.creator,
             duration: m.learn.duration,
-            thumbnail: m.learn.thumbnail,
+            thumbnail: m.learn.thumbnail || youtubeThumbnail(m.learn.youtube_url || m.learn.url),
             url: m.learn.youtube_url || m.learn.url,
             category: fw.label,
             reason: m.learn.reason || m.improve || m.works,
@@ -486,4 +488,4 @@ export function getResultReadModel(result = {}) {
 
   return { score, genre, read: { primary: readParts.statement, supporting: readParts.remainder || supportingRead(result.aspects) }, evidence: { layers: mainLayers, geometry, attention: mainLayers.attention.asset, focus: mainLayers.focus.asset, light: mainLayers.light.asset, composition: mainLayers.composition.asset, shapes: Object.fromEntries(Object.entries(mainLayers).map(([key, layer]) => [key, layer.shapes])) }, diagnosticModes, frameWorks, measuredEvidence: measured, overviewActions: overviewActions(result) };
 }
-export const __testables = { assetUrl, line, point, supportingRead, normalizedShape, normalizedRuleOfThirds, splitRead, normalizePalette, normalizeHistogram, normalizeMeasuredPalette, measuredEvidence, overviewActions, overlayEntriesByIds, centeredCategory, readingZoneCategory, nextAvailableTab, validScore, normalizeNextSteps, normalizeLearningPath, canonicalEvidence, getContainTransform };
+export const __testables = { assetUrl, line, point, supportingRead, normalizedShape, normalizedRuleOfThirds, splitRead, normalizePalette, normalizeHistogram, normalizeMeasuredPalette, measuredEvidence, overviewActions, overlayEntriesByIds, centeredCategory, readingZoneCategory, nextAvailableTab, validScore, normalizeNextSteps, normalizeLearningPath, canonicalEvidence, getContainTransform, youtubeThumbnail };

@@ -15,6 +15,22 @@ test('returns the natural media aspect ratio only for positive finite dimensions
   }
 });
 
+test('contains portrait and landscape media without cropping either axis', () => {
+  const portrait = __testables.getContainTransform(600, 520, 1080, 1920);
+  assert.equal(portrait.height, 520);
+  assert.ok(portrait.width < 600);
+  assert.equal(portrait.top, 0);
+  assert.ok(portrait.left > 0);
+  assert.equal(portrait.width / portrait.height, 9 / 16);
+
+  const landscape = __testables.getContainTransform(600, 520, 1920, 1080);
+  assert.equal(landscape.width, 600);
+  assert.ok(landscape.height < 520);
+  assert.equal(landscape.left, 0);
+  assert.ok(landscape.top > 0);
+  assert.equal(landscape.width / landscape.height, 16 / 9);
+});
+
 test('uses canonical score, genre, and written read values', () => {
   const model = getResultReadModel({
     score_engine: { overall: 84.4 },
@@ -599,4 +615,58 @@ test('ignores out-of-range evidence and maps contained image coordinates without
   assert.equal(frameWork(model, 'focus').evidence.annotations[0].source, 'gemini');
   assert.deepEqual(__testables.getContainTransform(1200, 600, 600, 1200), { left: 450, top: 0, width: 300, height: 600, scale: 0.5 });
   assert.deepEqual(__testables.getContainTransform(600, 1200, 1200, 600), { left: 0, top: 450, width: 600, height: 300, scale: 0.5 });
+});
+
+test('youtubeThumbnail derives the public thumbnail from any YouTube URL shape', () => {
+  const thumb = (id) => `https://i.ytimg.com/vi/${id}/hqdefault.jpg`;
+  assert.equal(__testables.youtubeThumbnail('https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=42s'), thumb('dQw4w9WgXcQ'));
+  assert.equal(__testables.youtubeThumbnail('https://youtu.be/dQw4w9WgXcQ?si=abc'), thumb('dQw4w9WgXcQ'));
+  assert.equal(__testables.youtubeThumbnail('https://www.youtube.com/embed/dQw4w9WgXcQ'), thumb('dQw4w9WgXcQ'));
+  assert.equal(__testables.youtubeThumbnail('https://youtube.com/shorts/dQw4w9WgXcQ'), thumb('dQw4w9WgXcQ'));
+  assert.equal(__testables.youtubeThumbnail('https://www.youtube.com/results?search_query=focus'), '');
+  assert.equal(__testables.youtubeThumbnail('https://vimeo.com/123456'), '');
+  assert.equal(__testables.youtubeThumbnail(''), '');
+});
+
+test('lessons without a supplied thumbnail fall back to the YouTube one', () => {
+  const [lesson] = __testables.normalizeLearningPath([{ title: 'Exposure basics', url: 'https://youtu.be/dQw4w9WgXcQ' }]);
+  assert.equal(lesson.thumbnailFallback, 'https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg');
+});
+
+test('a response shaped like backend/prompt.txt fills every result-page section', async () => {
+  const { deriveMistakes } = await import('./mistake-guidance.js');
+  const response = {
+    overall_rating: 7.4,
+    score_engine: { overall: 74, categories: { composition: 70, lighting: 81, color: 77, focus: 72 } },
+    read: 'The frame splits shadow and light with confidence. The bright edge on the right anchors the darker field.',
+    context: { primary_genre: 'Street photography' },
+    overview: {
+      keep: [{ label: 'Color restraint', text: 'The palette stays quiet.' }, { label: 'Tonal separation', text: 'Two clear shapes.' }],
+      change_one_thing: { category: 'Composition', action: 'Level the horizon.', observation: 'The shoreline drops right.', consequence: 'A tilt reads as accidental.' },
+      try_this_next: { title: 'Control the edge', instruction: 'Make three versions.', variations: [{ label: 'Tight', instruction: 'a' }, { label: 'Balanced', instruction: 'b' }, { label: 'Open', instruction: 'c' }] },
+    },
+    frame_work: {
+      composition: { interpretation: 'The edge holds the frame.', supporting: 'The diagonal moves the eye.', metrics: [{ label: 'Horizon', assessment: 'Crooked horizon', saw: 'The shoreline drops right.', matters: 'It feels accidental.', improve: 'Rotate two degrees.', try: 'Use the level.' }] },
+      lighting: { interpretation: 'Soft contained light.', metrics: [{ label: 'Highlight clipping', assessment: 'Clean', saw: 'The brightest edge keeps texture.' }] },
+      visual_hierarchy: { status: 'intentional_absence', interpretation: 'No single subject, by design.' },
+    },
+  };
+
+  const model = getResultReadModel(response);
+  const byId = Object.fromEntries(model.frameWorks.map((category) => [category.id, category]));
+
+  assert.equal(model.genre, 'Street photography');
+  assert.match(model.read.primary, /splits shadow and light/);
+  assert.equal(model.overviewActions.keep.length, 2);
+  assert.equal(model.overviewActions.change.action, 'Level the horizon.');
+  assert.equal(model.overviewActions.tryThisNext.variations.length, 3);
+  assert.equal(byId.composition.interpretation, 'The edge holds the frame.');
+  assert.equal(byId.composition.score, 70, 'category scores come from score_engine');
+  assert.equal(byId.light.metrics[0].saw, 'The brightest edge keeps texture.', 'lighting maps onto the light category');
+  assert.equal(byId.visualHierarchy.score, null, 'intentional absence is not scored');
+
+  const mistakes = deriveMistakes(model.frameWorks);
+  assert.equal(mistakes.length, 1, 'only the problem assessment becomes a fix');
+  assert.equal(mistakes[0].metricLabel, 'Horizon');
+  assert.equal(mistakes[0].postTip, 'Rotate two degrees.');
 });
