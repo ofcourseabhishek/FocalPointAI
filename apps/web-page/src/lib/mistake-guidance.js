@@ -7,7 +7,7 @@
 
 const POSITIVE_HINTS = [
   'proper', 'balanced', 'just right', 'good', 'strong', 'sharp', 'clean',
-  'well-', 'excellent', 'ideal', 'ok', 'ordinary', 'ample', 'correct',
+  'well', 'excellent', 'ideal', 'ok', 'ordinary', 'ample', 'correct',
   'even', 'natural', 'pleasing', 'effective', 'solid', 'clear', 'confident',
 ];
 
@@ -99,9 +99,13 @@ function textIncludesAny(haystack, needles) {
   return needles.some((needle) => haystack.includes(needle));
 }
 
+// Whole words only: a substring test reads "cr-ok-ed horizon" as "ok" and hides a real problem.
+// The hints are plain words, so they need no regex escaping.
+const POSITIVE_PATTERN = new RegExp(`\\b(?:${POSITIVE_HINTS.join('|')})(?![a-z])`);
+
 export function isLikelyPositive(text) {
   if (!text) return false;
-  return textIncludesAny(text.toLowerCase(), POSITIVE_HINTS);
+  return POSITIVE_PATTERN.test(text.toLowerCase());
 }
 
 export function matchGuidance(text) {

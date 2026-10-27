@@ -43,6 +43,14 @@ class TutorialRecommendationEngineTests(unittest.TestCase):
         self.assertIn(results[0]["objective"], exposure_objectives)
         self.assertEqual(results[0]["based_on"]["label"], "exposure")
 
+    def test_results_carry_the_fields_the_result_page_reads(self):
+        results = recommend_tutorials({"overall_rating": 7.0}, limit=3)
+        self.assertTrue(results)
+        for index, item in enumerate(results, start=1):
+            self.assertEqual(item["duration"], item["runtime"])
+            self.assertEqual(item["helps_with"], [item["based_on"]["label"]])
+            self.assertEqual(item["priority"], index)
+
     def test_results_are_bounded_unique_and_explainable(self):
         results = recommend_tutorials({"overall_rating": 7.0}, limit=99)
         self.assertEqual(len(results), 8)

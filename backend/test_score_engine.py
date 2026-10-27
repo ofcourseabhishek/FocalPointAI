@@ -75,6 +75,42 @@ class ScoreEngineTests(unittest.TestCase):
         self.assertEqual(result["exif_analysis"], self.local["exif_analysis"])
         self.assertEqual(result["aspects"]["brightness"]["what_works"], "Gemini explanation.")
 
+    def test_gemini_cannot_put_numbers_in_frame_work(self):
+        engine = build_score_engine(self.local, self.exif)
+        gemini = {
+            "frame_work": {
+                "lighting": {
+                    "score": 99,
+                    "rating": 9.9,
+                    "interpretation": "Soft light shapes the subject.",
+                    "metrics": [
+                        {
+                            "label": "Highlight clipping",
+                            "value": 0.4,
+                            "score": 97,
+                            "assessment": "Clean highlights",
+                            "saw": "The brightest edge keeps its texture.",
+                        },
+                        {"label": "Detail level", "value": "Moderate", "assessment": "Moderate"},
+                    ],
+                },
+                "focus": "not an object",
+            },
+        }
+
+        result = enforce_authoritative_scores(gemini, self.local, engine)
+        lighting = result["frame_work"]["lighting"]
+
+        self.assertNotIn("score", lighting)
+        self.assertNotIn("rating", lighting)
+        self.assertEqual(lighting["interpretation"], "Soft light shapes the subject.")
+        self.assertNotIn("value", lighting["metrics"][0])
+        self.assertNotIn("score", lighting["metrics"][0])
+        self.assertEqual(lighting["metrics"][0]["saw"], "The brightest edge keeps its texture.")
+        # Word values are explanation, not measurement, so they stay.
+        self.assertEqual(lighting["metrics"][1]["value"], "Moderate")
+        self.assertNotIn("focus", result["frame_work"])
+
     def test_context_is_compact_and_contains_authoritative_evidence(self):
         engine = build_score_engine(self.local, self.exif)
         context = build_gemini_context(self.local, self.exif, engine)

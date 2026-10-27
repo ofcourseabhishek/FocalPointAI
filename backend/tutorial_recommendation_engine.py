@@ -346,6 +346,10 @@ def recommend_tutorials(analysis: dict[str, Any], limit: int = 3) -> list[dict[s
                     "visual_validation": visual_validation,
                     "rejected_visual_needs": rejected_visual_needs,
                     "learner_level": learner_level,
+                    # Names the result page's lesson cards read.
+                    "duration": tutorial.get("runtime"),
+                    "helps_with": [need["label"]],
+                    "priority": len(selected) + 1,
                 }
             )
             seen_categories.add(tutorial["category"])

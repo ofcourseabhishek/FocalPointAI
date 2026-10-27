@@ -134,6 +134,46 @@ def build_gemini_context(local_analysis: dict, exif_summary: dict, score_engine:
     }
 
 
+def _is_number(value):
+    if isinstance(value, bool):
+        return False
+    if isinstance(value, (int, float)):
+        return True
+    try:
+        float(str(value).strip().rstrip("%"))
+        return True
+    except ValueError:
+        return False
+
+
+def _strip_frame_work_numbers(frame_work):
+    """Keep Gemini's per-category prose but drop any score or measured number it wrote.
+
+    The result page prefers a category's own score over score_engine, and measured values
+    come from image_statistics, so numbers here could only contradict the application.
+    """
+    if not isinstance(frame_work, dict):
+        return {}
+    cleaned = {}
+    for key, category in frame_work.items():
+        if not isinstance(category, dict):
+            continue
+        category = {k: v for k, v in category.items() if k not in ("score", "rating")}
+        metrics = category.get("metrics")
+        if isinstance(metrics, list):
+            category["metrics"] = [
+                {
+                    k: v
+                    for k, v in metric.items()
+                    if k not in ("score", "rating") and not (k == "value" and _is_number(v))
+                }
+                for metric in metrics
+                if isinstance(metric, dict)
+            ]
+        cleaned[key] = category
+    return cleaned
+
+
 def enforce_authoritative_scores(
     gemini_analysis: dict,
     local_analysis: dict,
@@ -176,6 +216,9 @@ def enforce_authoritative_scores(
         item["rating"] = rating
         item.setdefault("what_works", "The visual choices support the photograph's intent.")
         item.setdefault("what_could_be_improved", "Make the intended visual message more deliberate.")
+
+    if "frame_work" in result:
+        result["frame_work"] = _strip_frame_work_numbers(result["frame_work"])
 
     result["overall_rating"] = round(score_engine["overall"] / 10.0, 1)
     result["score_engine"] = score_engine
