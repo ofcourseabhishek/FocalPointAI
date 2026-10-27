@@ -616,3 +616,19 @@ test('ignores out-of-range evidence and maps contained image coordinates without
   assert.deepEqual(__testables.getContainTransform(1200, 600, 600, 1200), { left: 450, top: 0, width: 300, height: 600, scale: 0.5 });
   assert.deepEqual(__testables.getContainTransform(600, 1200, 1200, 600), { left: 0, top: 450, width: 600, height: 300, scale: 0.5 });
 });
+
+test('youtubeThumbnail derives the public thumbnail from any YouTube URL shape', () => {
+  const thumb = (id) => `https://i.ytimg.com/vi/${id}/hqdefault.jpg`;
+  assert.equal(__testables.youtubeThumbnail('https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=42s'), thumb('dQw4w9WgXcQ'));
+  assert.equal(__testables.youtubeThumbnail('https://youtu.be/dQw4w9WgXcQ?si=abc'), thumb('dQw4w9WgXcQ'));
+  assert.equal(__testables.youtubeThumbnail('https://www.youtube.com/embed/dQw4w9WgXcQ'), thumb('dQw4w9WgXcQ'));
+  assert.equal(__testables.youtubeThumbnail('https://youtube.com/shorts/dQw4w9WgXcQ'), thumb('dQw4w9WgXcQ'));
+  assert.equal(__testables.youtubeThumbnail('https://www.youtube.com/results?search_query=focus'), '');
+  assert.equal(__testables.youtubeThumbnail('https://vimeo.com/123456'), '');
+  assert.equal(__testables.youtubeThumbnail(''), '');
+});
+
+test('lessons without a supplied thumbnail fall back to the YouTube one', () => {
+  const [lesson] = __testables.normalizeLearningPath([{ title: 'Exposure basics', url: 'https://youtu.be/dQw4w9WgXcQ' }]);
+  assert.equal(lesson.thumbnailFallback, 'https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg');
+});

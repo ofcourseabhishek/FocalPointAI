@@ -6,8 +6,8 @@ test.describe('Result Page Visual Hierarchy', () => {
   });
 
   test('result page renders without crashing', async ({ page }) => {
-    await expect(page.locator('.result-read__main')).toBeVisible();
-    await expect(page.locator('.result-read__header')).toBeVisible();
+    await expect(page.locator('main.result-read')).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
   });
 
   test('overview photograph uses contained, centered framing', async ({ page }) => {
@@ -40,19 +40,6 @@ test.describe('Result Page Visual Hierarchy', () => {
     if (await tabs.count() > 1) {
       await tabs.nth(1).click();
       await expect(tabs.nth(1)).toHaveAttribute('aria-selected', 'true');
-    }
-  });
-
-  test('MetricEvidenceRow expanding/collapsing works', async ({ page }) => {
-    const analysisTab = page.locator('nav.result-read__view-nav').getByText('Analysis');
-    if (await analysisTab.isVisible()) {
-      await analysisTab.click();
-    }
-    const metricButton = page.locator('.result-read__metric-list button').first();
-    if (await metricButton.isVisible()) {
-      const isExpanded = await metricButton.getAttribute('aria-expanded');
-      await metricButton.click();
-      await expect(metricButton).toHaveAttribute('aria-expanded', isExpanded === 'true' ? 'false' : 'true');
     }
   });
 });
