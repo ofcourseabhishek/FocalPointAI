@@ -146,7 +146,7 @@ def build_canonical_response(raw: dict, metadata: dict, recommended: list[dict])
             metric_id = metric_id if metric_id in metric_map else TUTORIAL_METRIC_ALIASES.get(metric_id)
             if metric_id in metric_map and metric_id not in matched:
                 matched.append(metric_id)
-        tutorials.append({"id": tutorial["id"], "title": tutorial["title"], "url": url, "topic": tutorial.get("category_label") or tutorial.get("category") or "Photography", "video_id": tutorial.get("video_id"), "thumbnail_url": tutorial.get("thumbnail_url"), "thumbnail_fallback_url": tutorial.get("thumbnail_fallback_url"), "channel": tutorial.get("creator"), "matched_metric_ids": matched, "reason": tutorial.get("reason"), "priority": len(tutorials) + 1, "priority_label": "START HERE" if not tutorials else "THEN EXPLORE" if len(tutorials) < 3 else "OPTIONAL DEEPER DIVE"})
+        tutorials.append({"id": tutorial["id"], "title": tutorial["title"], "url": url, "topic": tutorial.get("category_label") or tutorial.get("category") or "Photography", "video_id": tutorial.get("video_id"), "thumbnail_url": tutorial.get("thumbnail_url"), "thumbnail_fallback_url": tutorial.get("thumbnail_fallback_url"), "channel": tutorial.get("creator"), "duration": tutorial.get("runtime"), "matched_metric_ids": matched, "reason": tutorial.get("reason"), "priority": len(tutorials) + 1, "priority_label": "START HERE" if not tutorials else "THEN EXPLORE" if len(tutorials) < 3 else "OPTIONAL DEEPER DIVE"})
     supplied_overview = raw.get("overview") if isinstance(raw.get("overview"), dict) else {}
     
     change_one_thing = None
