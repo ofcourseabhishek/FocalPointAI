@@ -1,7 +1,9 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import PullCord from './components/kokonutui/pull-cord';
 import { ResultRead } from './components/ResultRead';
 import { UploadWorkspace } from './components/UploadWorkspace';
+
+const DocsPage = lazy(() => import('./components/DocsPage'));
 import {
   getResponseErrorMessage,
   isAnalysisPayload,
@@ -369,7 +371,9 @@ export default function App() {
   };
 
   let page;
-  if (showResultPreview) {
+  if (currentLocation.pathname.replace(/\/$/, '') === '/docs') {
+    page = <Suspense fallback={null}><DocsPage /></Suspense>;
+  } else if (showResultPreview) {
     page = (
       <ResultRead
         analysis={RESULT_PREVIEW}

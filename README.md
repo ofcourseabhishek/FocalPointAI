@@ -159,7 +159,7 @@ All cloud-backed analysis is optional. Never commit real credentials or `.env` f
 | --- | --- | --- | --- |
 | `GEMINI_API_KEY` | FastAPI | No | Enables Gemini-written narrative; local CV remains the fallback and score authority |
 | `VITE_BACKEND_URL` | Analyzer | No | `http://127.0.0.1:8000` |
-| `VITE_LANDING_URL` | Analyzer | No | `https://snapgrade.com` |
+| `VITE_LANDING_URL` | Analyzer | No | `https://snapgradebyark.vercel.app` |
 | `NEXT_PUBLIC_ANALYZER_URL` | Landing page | No | Configured public analyzer deployment |
 
 For example, `backend/.env` may contain:
