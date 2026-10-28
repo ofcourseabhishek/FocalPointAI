@@ -3,7 +3,7 @@ import test from 'node:test';
 
 import { weakAreas } from './weak-areas.js';
 
-const metric = (label, score, text = `${label} note`) => ({ label, score, saw: text, improve: `${label} fix` });
+const metric = (label, score, text = `${label} note`) => ({ label, score, saw: text, improve: `${label} edit`, try: `${label} next shoot` });
 
 test('lists every area under 60, worst first', () => {
   const { areas, hasWeak } = weakAreas([
@@ -25,6 +25,24 @@ test('a strong photograph still shows its three weakest areas', () => {
   const allGood = weakAreas([{ id: 'c', label: 'Composition', metrics: [metric('Crop', 90), metric('Balance', 70), metric('Lines', 85), metric('Space', 95)] }]);
   assert.equal(allGood.hasWeak, false);
   assert.deepEqual(allGood.areas.map((area) => area.score), [70, 85, 90]);
+});
+
+test('gives the shooting tip, never the edit fix, and drops "no change needed" tips', () => {
+  const { areas } = weakAreas([{ id: 'l', label: 'Lighting', metrics: [
+    metric('Brightness', 40),
+    { label: 'Saturation', score: 50, saw: 'Fine colour.', improve: 'Use HSL.', try: 'Color intensity is landing well here -- no change needed.' },
+  ] }]);
+  assert.equal(areas[0].tip, 'Brightness next shoot');
+  assert.equal(areas[1].tip, '');
+  assert.ok(areas.every((area) => !('fix' in area)));
+});
+
+test('always includes areas Actions sends here, even above the cutoff', () => {
+  const metrics = [metric('Crop', 70), metric('Balance', 80), metric('Lines', 85), metric('Focus', 62)];
+  const without = weakAreas([{ id: 'c', label: 'Composition', metrics }]);
+  assert.deepEqual(without.areas.map((area) => area.label), ['Focus', 'Crop', 'Balance']);
+  const { areas } = weakAreas([{ id: 'c', label: 'Composition', metrics }], { include: [{ area: 'Composition', label: 'Lines' }] });
+  assert.deepEqual(areas.map((area) => area.label), ['Focus', 'Crop', 'Balance', 'Lines']);
 });
 
 test('skips areas with nothing to say', () => {

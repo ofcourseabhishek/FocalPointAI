@@ -222,7 +222,7 @@ function ActionsSection({ actions, mistakes }) {
     </div>}
     <div className="mt-12">
       <h3 className="result-read__display text-2xl font-medium tracking-tight text-zinc-900 dark:text-zinc-100">What went wrong, and how to fix it</h3>
-      <p className="mt-2 max-w-2xl text-sm text-zinc-500 dark:text-zinc-400">What pulled this photograph down, whether it's rescuable now, and how to shoot around it next time.</p>
+      <p className="mt-2 max-w-2xl text-sm text-zinc-500 dark:text-zinc-400">What pulled this photograph down, and how to fix it in editing where that's possible.</p>
       {mistakes.length > 0
         ? <div className="result-read__mistake-list mt-6">{mistakes.map((mistake, index) => <MistakeCard key={mistake.id} defaultExpanded={index === 0} {...mistake} />)}</div>
         : <p className="mt-6 text-base text-zinc-600 dark:text-zinc-400">No significant issues were detected. This frame is technically solid.</p>}
@@ -477,14 +477,16 @@ function WeakAreas({ areas, hasWeak, solid }) {
           <span className="result-read__display shrink-0 text-lg tabular-nums lg:text-xl text-zinc-900 dark:text-zinc-100">{area.score}<small className="ml-0.5 text-xs text-zinc-400 lg:text-sm">/100</small></span>
         </div>
         {area.note && <p className="mt-1 text-sm lg:text-[15px] text-zinc-600 dark:text-zinc-400">{area.note}</p>}
-        {area.fix && <p className="mt-2 text-sm lg:text-[15px] text-zinc-600 dark:text-zinc-400"><span className="font-medium text-[#856324] dark:text-[#d2b16e]">How to improve:</span> {area.fix}</p>}
+        {area.tip && <p className="mt-2 text-sm lg:text-[15px] text-zinc-600 dark:text-zinc-400"><span className="font-medium text-[#856324] dark:text-[#d2b16e]">Next time you shoot:</span> {area.tip}</p>}
       </li>)}
     </ol>}
   </div>;
 }
 
 function ImproveSection({ lessons, mistakes, categories }) {
-  const { areas, hasWeak } = weakAreas(categories);
+  // Problems Actions can't fix in post point here, so they are always listed.
+  const unfixable = mistakes.filter((mistake) => !mistake.canFixInPost).map((mistake) => ({ area: mistake.categoryLabel, label: mistake.metricLabel }));
+  const { areas, hasWeak } = weakAreas(categories, { include: unfixable });
   const solid = mistakes.length === 0;
   const supplied = lessons || [];
   // At least four cards, or one per area under the cutoff: real lessons first, then searches.

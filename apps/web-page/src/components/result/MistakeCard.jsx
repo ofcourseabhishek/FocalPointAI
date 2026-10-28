@@ -4,7 +4,8 @@ import { MorphIcon } from "morphicons/react";
 const plusPath = "M12 5v14M5 12h14";
 const minusPath = "M5 12h14";
 
-export function MistakeCard({ categoryLabel, metricLabel, descriptor, diagnosis, canFixInPost, postTip, nextTimeTip, defaultExpanded = false }) {
+// Actions is about this photograph: only edit fixes here. Shooting technique lives in Improve.
+export function MistakeCard({ categoryLabel, metricLabel, descriptor, diagnosis, canFixInPost, postTip, defaultExpanded = false }) {
   const [isExpanded, setIsExpanded] = useState(defaultExpanded);
 
   return (
@@ -35,13 +36,7 @@ export function MistakeCard({ categoryLabel, metricLabel, descriptor, diagnosis,
           {!canFixInPost && (
             <div className="result-read__mistake-tip result-read__mistake-tip--unfixable" data-tip="unfixable">
               <span className="result-read__mistake-tip-label">Can't be fixed in post</span>
-              <p className="result-read__mistake-tip-text">Detail lost this way can't really be rebuilt after the fact — this one's worth getting right in-camera next time.</p>
-            </div>
-          )}
-          {nextTimeTip && (
-            <div className="result-read__mistake-tip" data-tip="next-time">
-              <span className="result-read__mistake-tip-label">Next time you shoot</span>
-              <p className="result-read__mistake-tip-text">{nextTimeTip}</p>
+              <p className="result-read__mistake-tip-text">Detail lost this way can't really be rebuilt after the fact. How to get it right in-camera next time is in <a href="#improve">Improve</a>.</p>
             </div>
           )}
         </div>
