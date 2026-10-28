@@ -14,7 +14,7 @@ from app.services.analysis import analyze_gemini, build_canonical_response, clas
 from app.services.export import generate_critique_pdf, pdf_download_filename
 from app.services.intent import build_intent_profile
 from app.services.metadata import extract_exif_data, get_camera_device_name, get_exif_summary, image_metadata, open_verified_image, read_image_bytes, require_image_upload
-from app.services.recommendations import load_tutorial_catalog, recommend_tutorials
+from app.services.recommendations import MAX_RECOMMENDATIONS, load_tutorial_catalog, recommend_tutorials
 from app.services.scoring import build_gemini_context, build_score_engine, enforce_authoritative_scores
 from app.services.vision import analyze_cv_heuristics
 
@@ -82,7 +82,7 @@ async def analyze_image(file: UploadFile = File(...)):
             result = local
             result["ai_status"] = "not_configured"
         result["filename"] = file.filename
-        result["tutorial_recommendations"] = recommend_tutorials(result, limit=4)
+        result["tutorial_recommendations"] = recommend_tutorials(result, limit=MAX_RECOMMENDATIONS)
         canonical = build_canonical_response(result, metadata, result["tutorial_recommendations"])
         # Existing integrations and PDF generation still consume the legacy payload.
         return {**result, **canonical}

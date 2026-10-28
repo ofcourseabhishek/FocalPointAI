@@ -6,6 +6,7 @@ from typing import Any
 from urllib.parse import urlparse
 
 from app.schemas.analysis import AnalysisResponse
+from app.services.recommendations import MAX_RECOMMENDATIONS
 
 CATEGORIES = (
     ("composition", "Composition", ("composition", "crop"), "composition"),
@@ -136,7 +137,7 @@ def build_canonical_response(raw: dict, metadata: dict, recommended: list[dict])
     learning = [{"metric_id": metric["id"], "label": metric["label"], "category": metric_map[metric["id"]][0], "score": metric["score"], "priority": index + 1} for index, metric in enumerate(weakest)]
     tutorials = []
     for index, tutorial in enumerate(recommended):
-        if len(tutorials) == 4: break
+        if len(tutorials) == MAX_RECOMMENDATIONS: break
         url = tutorial.get("youtube_link") or tutorial.get("url")
         if not isinstance(url, str) or urlparse(url).scheme != "https" or not urlparse(url).netloc or any(x["id"] == tutorial.get("id") for x in tutorials): continue
         based = tutorial.get("based_on") or {}

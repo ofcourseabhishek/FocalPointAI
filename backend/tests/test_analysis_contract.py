@@ -9,7 +9,7 @@ from PIL import Image
 from main import app
 from app.services.analysis.response import _visual_evidence, build_canonical_response
 from app.services.metadata import ensure_safe_image_dimensions
-from app.services.recommendations import load_tutorial_catalog
+from app.services.recommendations import MAX_RECOMMENDATIONS, load_tutorial_catalog
 
 
 class AnalysisContractTests(unittest.TestCase):
@@ -38,7 +38,7 @@ class AnalysisContractTests(unittest.TestCase):
     def test_tutorials_are_catalog_backed_unique_and_https(self):
         tutorials = self.data["tutorials"]
         catalog_ids = {item["id"] for item in load_tutorial_catalog()}
-        self.assertLessEqual(len(tutorials), 4)
+        self.assertLessEqual(len(tutorials), MAX_RECOMMENDATIONS)
         self.assertEqual(len({item["id"] for item in tutorials}), len(tutorials))
         self.assertTrue(all(item["url"].startswith("https://www.youtube.com/") for item in tutorials))
         self.assertTrue(all(item["id"] in catalog_ids for item in tutorials))

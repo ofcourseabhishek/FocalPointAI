@@ -23,6 +23,7 @@ sys.path.insert(0, str(BACKEND_ROOT))
 os.environ["GEMINI_API_KEY"] = ""
 
 from main import app  # noqa: E402
+from app.services.recommendations import MAX_RECOMMENDATIONS  # noqa: E402
 
 EXPECTED_CATEGORIES = {
     "composition", "lighting", "focus", "color", "subject", "technical"
@@ -86,7 +87,7 @@ def main() -> None:
             category_ids = {item["id"] for item in result["analysis"]["categories"]}
             assert category_ids == EXPECTED_CATEGORIES
             assert _geometry_is_normalized(evidence)
-            assert len(result["tutorials"]) <= 4
+            assert len(result["tutorials"]) <= MAX_RECOMMENDATIONS
             assert len({tutorial["url"] for tutorial in result["tutorials"]}) == len(result["tutorials"])
             assert all(tutorial["url"].startswith("https://www.youtube.com/") for tutorial in result["tutorials"])
             advanced = result.get("advanced_cv") or {}
