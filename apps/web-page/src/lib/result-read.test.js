@@ -288,6 +288,23 @@ test('drops a category supporting line that repeats its interpretation', () => {
   assert.equal(frameWork(model, 'composition').supporting, '');
 });
 
+test('reads horizon, subject offset, symmetry and negative space into geometry facts', () => {
+  const model = getResultReadModel({ advanced_cv: {
+    horizon: { detected: true, angle: -2.34 },
+    subject_centering: { offset_x: -0.18, offset_y: 0.04 },
+    composition: { symmetry_patterns: { horizontal_symmetry_score: 61.6, vertical_symmetry_score: 40 }, negative_space: { percentage: 45.2 } },
+  } });
+  assert.deepEqual(model.measuredEvidence.geometry.map((item) => [item.label, item.value]), [
+    ['Horizon tilt', '2.3°'],
+    ['Subject offset', '18% left, 4% down'],
+    ['Left-right symmetry', '62/100'],
+    ['Top-bottom symmetry', '40/100'],
+    ['Negative space', '45.2%'],
+  ]);
+  const noHorizon = getResultReadModel({ advanced_cv: { horizon: { detected: false, angle: null } } });
+  assert.deepEqual(noHorizon.measuredEvidence.geometry, []);
+});
+
 test('keeps absent and null scores unavailable instead of coercing them to zero', () => {
   for (const value of [undefined, null, '', '   ', false]) {
     const model = getResultReadModel({ score_engine: { overall: value, categories: { visual_hierarchy: value } } });

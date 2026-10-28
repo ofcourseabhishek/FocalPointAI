@@ -362,6 +362,7 @@ function MeasurementsSection({ evidence }) {
   const tonal = evidence?.tonal;
   const focus = evidence?.focus;
   const capture = evidence?.capture;
+  const geometry = evidence?.geometry;
   // Start on the simple tonal curve; RGB is opt-in (or the only view, if that is all there is).
   const [rgbView, setRgbView] = useState(() => !(tonal?.histogram?.length > 0));
   const showRgb = Boolean(tonal?.rgb) && rgbView;
@@ -369,7 +370,8 @@ function MeasurementsSection({ evidence }) {
   const hasTonal = hasHistogram || tonal?.metrics?.length > 0;
   const hasFocus = Boolean(focus?.map) || focus?.metrics?.length > 0;
   const hasCapture = capture?.hasSettings || capture?.supplemental?.length > 0;
-  if (!hasTonal && !hasFocus && !hasCapture) return null;
+  const hasGeometry = geometry?.length > 0;
+  if (!hasTonal && !hasFocus && !hasGeometry && !hasCapture) return null;
   return <section className={SECTION} id="measurements" aria-labelledby="measurements-title">
     <SectionHeading id="measurements-title" eyebrow="Measurements" title="The numbers behind the read" description="What the pixels measure, independent of taste." />
     <div className="grid gap-6 md:grid-cols-2">
@@ -408,6 +410,10 @@ function MeasurementsSection({ evidence }) {
         <h3 className={EYEBROW}>Focus &amp; sharpness</h3>
         {focus.map && <img className="mt-4 max-h-56 w-full rounded-lg bg-zinc-100 object-contain dark:bg-zinc-900" src={focus.map} alt="Focus map: brighter areas hold more detail" />}
         <Facts items={focus.metrics} />
+      </article>}
+      {hasGeometry && <article className={CARD}>
+        <h3 className={EYEBROW}>Geometry &amp; balance</h3>
+        <Facts items={geometry} />
       </article>}
       {hasCapture && <article className={CARD}>
         <h3 className={EYEBROW}>Capture details</h3>

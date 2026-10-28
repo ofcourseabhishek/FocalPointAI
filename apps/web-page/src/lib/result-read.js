@@ -208,7 +208,23 @@ function measuredEvidence(result, advancedCv) {
     ['Color profile', cameraSettings.color_profile || canonical?.capture?.color_profile],
     ['Dimensions', canonical?.capture?.dimensions || statistics.dimensions || (result?.metadata?.width && result?.metadata?.height ? `${result.metadata.width}x${result.metadata.height}` : '')],
   ].map(([label, value]) => ({ label, value: metricValue(value) })).filter((item) => item.value);
+  const horizon = advancedCv?.horizon || {};
+  const centering = advancedCv?.subject_centering || {};
+  const symmetry = advancedCv?.composition?.symmetry_patterns || {};
+  const offsetX = firstNumeric(centering.offset_x);
+  const offsetY = firstNumeric(centering.offset_y);
+  const share = (offset) => `${Math.round(Math.abs(offset) * 100)}%`;
+  const score = (value) => value === null ? '' : `${Math.round(value)}/100`;
+  const horizonAngle = horizon.detected ? firstNumeric(horizon.angle) : null;
+  const geometry = [
+    { label: 'Horizon tilt', value: horizonAngle === null ? '' : `${Math.abs(horizonAngle).toFixed(1)}°` },
+    { label: 'Subject offset', value: offsetX === null || offsetY === null ? '' : `${share(offsetX)} ${offsetX < 0 ? 'left' : 'right'}, ${share(offsetY)} ${offsetY < 0 ? 'up' : 'down'}` },
+    { label: 'Left-right symmetry', value: score(firstNumeric(symmetry.horizontal_symmetry_score)) },
+    { label: 'Top-bottom symmetry', value: score(firstNumeric(symmetry.vertical_symmetry_score)) },
+    { label: 'Negative space', value: formatPercent(firstNumeric(advancedCv?.composition?.negative_space?.percentage)) },
+  ].filter((item) => item.value);
   return {
+    geometry,
     tonal: {
       histogram,
       rgb: normalizeRgbHistogram(statistics.rgb_histogram),
