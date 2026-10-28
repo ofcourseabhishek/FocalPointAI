@@ -32,8 +32,6 @@ const DEFAULT_NAV_ITEMS = {
 
 /** Gap opened on each side of the active link, in px. */
 const SPLIT = 8;
-/** Gap a hovered link opens around itself, in px. */
-const HOVER_SPLIT = 2;
 /** Movement before a press turns into a scrub, in px. */
 const DRAG_SLOP = 4;
 /** Seconds of release velocity added to where a flick lands. */
@@ -81,19 +79,12 @@ const bump = (focus, k) => Math.max(0, 1 - Math.abs(focus - k));
  * fractional while scrubbing. Offsets are centred so the bar grows evenly on
  * both sides.
  */
-const splitOffsets = (count, focus, hover) => {
+// Snapgrade: no hover split; the bar only separates around the selected link.
+const splitOffsets = (count, focus) => {
   const cumulative = [0];
   let total = 0;
   for (let joint = 0; joint < count - 1; joint++) {
-    let gap = SPLIT * Math.max(bump(focus, joint), bump(focus, joint + 1));
-    const hoverJoint =
-      hover !== null &&
-      hover !== Math.round(focus) &&
-      (joint === hover - 1 || joint === hover);
-    if (hoverJoint) {
-      gap = Math.max(gap, HOVER_SPLIT);
-    }
-    total += gap;
+    total += SPLIT * Math.max(bump(focus, joint), bump(focus, joint + 1));
     cumulative.push(total);
   }
   return cumulative.map((x) => round2(x - total / 2));
@@ -213,8 +204,7 @@ function Segment({
   current,
   linkRef,
   onSelect,
-  onFocus,
-  onHover
+  onFocus
 }) {
   const transform = useTransform(() => `translate3d(${x.get()}px,0,0)`);
   const opacity = useTransform(() =>
@@ -231,8 +221,6 @@ function Segment({
   return (
     <motion.div
       className={cn("relative", pinned ? "z-20" : "z-10", hidden && "pointer-events-none")}
-      onPointerEnter={(event) => onHover(event, true)}
-      onPointerLeave={(event) => onHover(event, false)}
       style={{ transform, opacity }}>
       <NavLink
         aria-current={current ? "page" : undefined}
@@ -367,7 +355,6 @@ export function MorphicNavbar({
   const activeIndex = paths.indexOf(findItemPath(paths, activePath) ?? "");
   /** Where a scrub or keyboard focus has moved the split, before committing. */
   const [previewIndex, setPreviewIndex] = useState(null);
-  const [hoverIndex, setHoverIndex] = useState(null);
   const [keyboardInside, setKeyboardInside] = useState(false);
   const [scrubbing, setScrubbing] = useState(false);
 
@@ -386,7 +373,7 @@ export function MorphicNavbar({
   // One spring-driven offset per link, rebuilt only when the count changes.
   // biome-ignore lint/correctness/useExhaustiveDependencies: the first split only seeds new values; later moves animate them
   const xs = useMemo(
-    () => splitOffsets(count, activeIndex, null).map((x) => motionValue(x)),
+    () => splitOffsets(count, activeIndex).map((x) => motionValue(x)),
     [count]
   );
   const fold = useMotionValue(0);
@@ -403,7 +390,7 @@ export function MorphicNavbar({
   const reduceRef = useRef(false);
   reduceRef.current = reduceMotion === true;
 
-  const live = { activeIndex, highlightIndex, hoverIndex, folded, count };
+  const live = { activeIndex, highlightIndex, folded, count };
   const liveRef = useRef(live);
   liveRef.current = live;
 
@@ -452,7 +439,7 @@ export function MorphicNavbar({
       chevron = result.chevron;
     } else {
       const focus = drag?.scrubbing ? drag.focus : state.highlightIndex;
-      targets = splitOffsets(state.count, focus, drag?.scrubbing ? null : state.hoverIndex);
+      targets = splitOffsets(state.count, focus);
       // Unfolded, the chevron waits tucked behind the active link.
       const anchor = Math.max(0, state.activeIndex);
       chevron = (layout?.centers[anchor] ?? 0) + (targets[anchor] ?? 0);
@@ -468,7 +455,7 @@ export function MorphicNavbar({
   useEffect(() => {
     retargetRef.current(instantRef.current);
     instantRef.current = false;
-  }, [activeIndex, highlightIndex, hoverIndex, folded, count]);
+  }, [activeIndex, highlightIndex, folded, count]);
 
   const selectIndex = (index) => {
     const path = paths[index];
@@ -511,7 +498,6 @@ export function MorphicNavbar({
       drag.scrubbing = true;
       event.currentTarget.setPointerCapture(event.pointerId);
       setScrubbing(true);
-      setHoverIndex(null);
     }
     drag.samples.push({ x: event.clientX, t: event.timeStamp });
     if (drag.samples.length > 12) {
@@ -588,22 +574,6 @@ export function MorphicNavbar({
     }
   };
 
-  const onHover = (
-    index,
-    event,
-    entering
-  ) => {
-    if (event.pointerType !== "mouse" || dragRef.current?.scrubbing) {
-      return;
-    }
-    setHoverIndex((current) => {
-      if (entering) {
-        return index;
-      }
-      return current === index ? null : current;
-    });
-  };
-
   const openFolded = () => {
     openBar();
     linkRefs.current[activeIndex]?.focus({ preventScroll: true });
@@ -639,7 +609,6 @@ export function MorphicNavbar({
             name={name}
             nextX={xs[index + 1]}
             onFocus={(event) => onLinkFocus(index, event)}
-            onHover={(event, entering) => onHover(index, event, entering)}
             onSelect={() => selectIndex(index)}
             pinned={index === activeIndex}
             prevX={xs[index - 1]}
