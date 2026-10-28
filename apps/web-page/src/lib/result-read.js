@@ -454,7 +454,8 @@ export function getResultReadModel(result = {}) {
       interpretation: prose.interpretation,
       // False when interpretation is only the "No … reading was returned" placeholder.
       hasReading: !prose.placeholder,
-      supporting: prose.supporting,
+      // The backend can send the same sentence as summary and detail; show it once.
+      supporting: prose.supporting?.trim() === prose.interpretation?.trim() ? '' : prose.supporting,
       evidenceBreakdown: categoryMetrics(category, result, id).map(m => ({
         title: m.label,
         score: m.score,

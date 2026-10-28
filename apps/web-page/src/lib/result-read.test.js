@@ -282,6 +282,12 @@ test('respects an intentional-absence focus treatment without scoring it as a fa
   assert.equal(focus.supporting, 'The soft focus is part of the image intent.');
 });
 
+test('drops a category supporting line that repeats its interpretation', () => {
+  const model = getResultReadModel({ frameWorks: { composition: { interpretation: 'Centering works.', supporting: 'Centering works. ' } } });
+  assert.equal(frameWork(model, 'composition').interpretation, 'Centering works.');
+  assert.equal(frameWork(model, 'composition').supporting, '');
+});
+
 test('keeps absent and null scores unavailable instead of coercing them to zero', () => {
   for (const value of [undefined, null, '', '   ', false]) {
     const model = getResultReadModel({ score_engine: { overall: value, categories: { visual_hierarchy: value } } });

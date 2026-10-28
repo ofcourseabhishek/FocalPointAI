@@ -9,6 +9,7 @@ import { describeMetric } from '../lib/metric-guide';
 import { MorphicNavbar } from './kokonutui/morphic-navbar';
 import ScrollIndex from './kokonutui/scroll-index';
 import { MistakeCard } from './result/MistakeCard';
+import { MorphIcon } from 'morphicons/react';
 import { deriveMistakes } from '../lib/mistake-guidance';
 
 import { DownloadIcon } from './icons/snapgrade-icons';
@@ -237,40 +238,60 @@ function metricRows(category) {
   }).filter((row) => row.tag || row.comment || row.advice);
 }
 
-function BreakdownSection({ categories }) {
+const plusPath = 'M12 5v14M5 12h14';
+const minusPath = 'M5 12h14';
+
+function BreakdownCard({ category, palette, defaultOpen }) {
+  const [open, setOpen] = useState(defaultOpen);
+  const rows = metricRows(category);
+  const contentId = `category-${category.id}-details`;
+  return <article className={`${CARD} scroll-mt-8`} id={`category-${category.id}`}>
+    <button type="button" className="flex w-full cursor-pointer items-center justify-between gap-4 text-left" onClick={() => setOpen((current) => !current)} aria-expanded={open} aria-controls={rows.length ? contentId : undefined}>
+      <h3 className="result-read__display text-2xl font-medium tracking-tight text-zinc-900 dark:text-zinc-100">{category.label}</h3>
+      <span className="flex items-center gap-4">
+        {category.score != null && <span className="result-read__display text-3xl tabular-nums text-zinc-900 dark:text-zinc-100">{category.score}<small className="ml-0.5 text-sm text-zinc-400">/100</small></span>}
+        <span className="text-zinc-500 dark:text-zinc-400" aria-hidden="true"><MorphIcon icon={open ? minusPath : plusPath} spring="snappy" strokeWidth={1.5} size={18} color="currentColor" /></span>
+      </span>
+    </button>
+    {category.interpretation && <p className="mt-3 max-w-3xl text-base text-zinc-700 dark:text-zinc-300">{category.interpretation}</p>}
+    {category.supporting && <p className="mt-2 max-w-3xl text-sm text-zinc-500 dark:text-zinc-400">{category.supporting}</p>}
+    {palette?.length > 0 && <Swatches colors={palette} />}
+    {rows.length > 0 && <div className={`grid transition-[grid-template-rows] duration-300 motion-reduce:transition-none ${open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`} id={contentId} inert={!open}>
+      {/* No padding on the clipped box: overflow hidden doesn't clip its own padding. */}
+      <div className="overflow-hidden">
+        <ul className="mt-6 divide-y divide-zinc-100 border-t border-zinc-100 dark:divide-zinc-900 dark:border-zinc-900">
+          {rows.map((row) => <li className="py-4" key={row.id}>
+            <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+              <h4 className="text-sm font-medium text-zinc-900 dark:text-zinc-100">{row.title}</h4>
+              {row.tag && <span className="rounded-full border border-zinc-200 px-2.5 py-0.5 text-xs text-zinc-600 dark:border-zinc-800 dark:text-zinc-400">{row.tag}</span>}
+            </div>
+            {row.comment && <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">{row.comment}</p>}
+            {row.advice && <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400"><span className="font-medium text-[#856324] dark:text-[#d2b16e]">{row.adviceLabel}:</span> {row.advice}</p>}
+          </li>)}
+        </ul>
+      </div>
+    </div>}
+  </article>;
+}
+
+function BreakdownSection({ categories, measuredPalette }) {
   // Skip categories that would only show the "No … reading was returned" placeholder.
   const visible = categories.filter((category) => category.score != null || category.hasReading || category.metrics?.length);
   if (!visible.length) return null;
   return <section className={SECTION} id="breakdown" aria-labelledby="breakdown-title">
     <SectionHeading id="breakdown-title" eyebrow="Category breakdown" title="What the image is doing" description="Every category we read, with what we saw in each part and how to push it further." />
     <div className="grid gap-6">
-      {visible.map((category) => {
-        const rows = metricRows(category);
-        return <article className={`${CARD} scroll-mt-8`} id={`category-${category.id}`} key={category.id}>
-          <div className="flex items-baseline justify-between gap-4">
-            <h3 className="result-read__display text-2xl font-medium tracking-tight text-zinc-900 dark:text-zinc-100">{category.label}</h3>
-            {category.score != null && <span className="result-read__display text-3xl tabular-nums text-zinc-900 dark:text-zinc-100">{category.score}<small className="ml-0.5 text-sm text-zinc-400">/100</small></span>}
-          </div>
-          {category.interpretation && <p className="mt-3 max-w-3xl text-base text-zinc-700 dark:text-zinc-300">{category.interpretation}</p>}
-          {category.supporting && <p className="mt-2 max-w-3xl text-sm text-zinc-500 dark:text-zinc-400">{category.supporting}</p>}
-          {category.palette?.length > 0 && <Swatches colors={category.palette} />}
-          {rows.length > 0 && <ul className="mt-6 divide-y divide-zinc-100 border-t border-zinc-100 dark:divide-zinc-900 dark:border-zinc-900">
-            {rows.map((row) => <li className="py-4" key={row.id}>
-              <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
-                <h4 className="text-sm font-medium text-zinc-900 dark:text-zinc-100">{row.title}</h4>
-                {row.tag && <span className="rounded-full border border-zinc-200 px-2.5 py-0.5 text-xs text-zinc-600 dark:border-zinc-800 dark:text-zinc-400">{row.tag}</span>}
-              </div>
-              {row.comment && <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">{row.comment}</p>}
-              {row.advice && <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400"><span className="font-medium text-[#856324] dark:text-[#d2b16e]">{row.adviceLabel}:</span> {row.advice}</p>}
-            </li>)}
-          </ul>}
-        </article>;
-      })}
+      {visible.map((category, index) => <BreakdownCard
+        key={category.id}
+        category={category}
+        // The measured palette carries percentages, so Color gets the proportional bar.
+        palette={category.id === 'color' && measuredPalette?.length ? measuredPalette : category.palette}
+        defaultOpen={index === 0}
+      />)}
     </div>
   </section>;
 }
 
-/** Small on/off switch for the histogram view (Kokonut's switch-button only toggles the theme). */
 function HistogramViewSwitch({ checked, onChange }) {
   return <button
     aria-checked={checked}
@@ -296,9 +317,8 @@ function MeasurementsSection({ evidence }) {
   const hasHistogram = Boolean(tonal?.rgb) || tonal?.histogram?.length > 0;
   const hasTonal = hasHistogram || tonal?.metrics?.length > 0;
   const hasFocus = Boolean(focus?.map) || focus?.metrics?.length > 0;
-  const hasColor = evidence?.palette?.length > 0;
   const hasCapture = capture?.hasSettings || capture?.supplemental?.length > 0;
-  if (!hasTonal && !hasFocus && !hasColor && !hasCapture) return null;
+  if (!hasTonal && !hasFocus && !hasCapture) return null;
   return <section className={SECTION} id="measurements" aria-labelledby="measurements-title">
     <SectionHeading id="measurements-title" eyebrow="Measurements" title="The numbers behind the read" description="What the pixels measure, independent of taste." />
     <div className="grid gap-6 md:grid-cols-2">
@@ -337,10 +357,6 @@ function MeasurementsSection({ evidence }) {
         <h3 className={EYEBROW}>Focus &amp; sharpness</h3>
         {focus.map && <img className="mt-4 max-h-56 w-full rounded-lg bg-zinc-100 object-contain dark:bg-zinc-900" src={focus.map} alt="Focus map: brighter areas hold more detail" />}
         <Facts items={focus.metrics} />
-      </article>}
-      {hasColor && <article className={CARD}>
-        <h3 className={EYEBROW}>Color profile</h3>
-        <Swatches colors={evidence.palette} />
       </article>}
       {hasCapture && <article className={CARD}>
         <h3 className={EYEBROW}>Capture details</h3>
@@ -525,7 +541,7 @@ export function ResultRead({ analysis, file, previewUrl, imageDimensions, onDown
 
       <ScoresSection categories={model.frameWorks} />
       <ActionsSection actions={model.overviewActions} mistakes={mistakes} />
-      <BreakdownSection categories={model.frameWorks} />
+      <BreakdownSection categories={model.frameWorks} measuredPalette={model.measuredEvidence?.palette} />
       <MeasurementsSection evidence={model.measuredEvidence} />
       <ImproveSection lessons={model.measuredEvidence?.whatToLearnNext} mistakes={mistakes} categories={model.frameWorks} />
 
