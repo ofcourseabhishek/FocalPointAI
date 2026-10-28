@@ -28,6 +28,7 @@ const SECTION_INDEX = [['read', 'Read'], ['scores', 'Scores'], ['actions', 'Acti
 /**
  * The navbar shows near the top and whenever the reader scrolls up; it slides away while
  * they scroll down. Movements under JITTER px are ignored so trackpad wobble can't flicker it.
+ * Only the reader's own scrolling hides it: jumps from clicking a link or tab never do.
  */
 const NAVBAR_TOP_ZONE = 200;
 const JITTER = 8;
@@ -36,6 +37,12 @@ function useNavbarVisible() {
   useEffect(() => {
     let last = window.scrollY;
     let frame = 0;
+    let readerScrolling = false;
+    const byReader = (event) => {
+      // A pointerdown on <html> itself is a grab of the page scrollbar.
+      readerScrolling = event.type !== 'pointerdown' || event.target === document.documentElement;
+    };
+    const byJump = () => { readerScrolling = false; };
     const update = () => {
       frame = 0;
       const y = window.scrollY;
@@ -43,15 +50,21 @@ function useNavbarVisible() {
         setVisible(true);
         last = y;
       } else if (Math.abs(y - last) > JITTER) {
-        setVisible(y < last);
+        if (y < last) setVisible(true);
+        else if (readerScrolling) setVisible(false);
         last = y;
       }
     };
     const onScroll = () => {
       if (!frame) frame = requestAnimationFrame(update);
     };
+    const readerEvents = ['wheel', 'touchmove', 'keydown', 'pointerdown'];
+    readerEvents.forEach((type) => window.addEventListener(type, byReader, { passive: true }));
+    window.addEventListener('click', byJump);
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => {
+      readerEvents.forEach((type) => window.removeEventListener(type, byReader));
+      window.removeEventListener('click', byJump);
       window.removeEventListener('scroll', onScroll);
       cancelAnimationFrame(frame);
     };
