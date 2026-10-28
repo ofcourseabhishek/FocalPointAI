@@ -1,5 +1,9 @@
-import unittest
+import json
 import re
+import tempfile
+import unittest
+from pathlib import Path
+from unittest import mock
 
 from app.services.recommendations import load_tutorial_catalog, recommend_tutorials
 
@@ -13,6 +17,20 @@ class TutorialRecommendationEngineTests(unittest.TestCase):
         self.assertTrue(all(re.fullmatch(r"(?:\d+:)?\d{1,2}:\d{2}", item["runtime"]) for item in tutorials))
         self.assertTrue(all(item["embed_url"].startswith("https://www.youtube-nocookie.com/embed/") for item in tutorials))
         self.assertTrue(all(item["thumbnail_url"].endswith("/maxresdefault.jpg") for item in tutorials))
+
+    def test_unavailable_videos_are_skipped(self):
+        catalog = {"focus": {
+            "playable": {"youtube_link": "https://www.youtube.com/watch?v=aaaaaaaaaaa"},
+            "private": {"youtube_link": "https://www.youtube.com/watch?v=bbbbbbbbbbb", "available": False},
+        }}
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "catalog.json"
+            path.write_text(json.dumps(catalog), encoding="utf-8")
+            # The loader is cached; clear it so this test reads its own catalog and leaves no trace.
+            load_tutorial_catalog.cache_clear()
+            self.addCleanup(load_tutorial_catalog.cache_clear)
+            with mock.patch("app.services.recommendations.tutorial_recommendation_engine.CATALOG_PATH", path):
+                self.assertEqual([item["objective"] for item in load_tutorial_catalog()], ["playable"])
 
     def test_weak_exposure_prioritizes_relevant_lesson(self):
         analysis = {
