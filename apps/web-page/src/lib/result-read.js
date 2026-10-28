@@ -22,7 +22,10 @@ function clamp(value, min = 0, max = 1) {
 }
 function point(value) { const x = Array.isArray(value) ? value[0] : value?.x; const y = Array.isArray(value) ? value[1] : value?.y; const normalizedX = normalizedCoordinate(x); const normalizedY = normalizedCoordinate(y); return normalizedX === null || normalizedY === null ? null : { x: normalizedX, y: normalizedY }; }
 function line(value) { if (Array.isArray(value) && value.length >= 4 && !Array.isArray(value[0])) { const start = point([value[0], value[1]]); const end = point([value[2], value[3]]); return start && end ? { start, end } : null; } const start = point(value?.start || value?.from || value?.[0]); const end = point(value?.end || value?.to || value?.[1]); return start && end ? { start, end } : null; }
-function assetUrl(value) { const candidate = typeof value === 'string' ? value.trim() : firstText(value?.src, value?.url, value?.data, value?.data_url, value?.base64, value?.asset, value?.mask, value?.mask_url, value?.image, value?.image_url); if (!candidate) return ''; return /^(?:data:|blob:|https?:\/\/|\/)/i.test(candidate) ? candidate : `data:image/jpeg;base64,${candidate}`; }
+function assetUrl(value) { const candidate = typeof value === 'string' ? value.trim() : firstText(value?.src, value?.url, value?.data, value?.data_url, value?.base64, value?.asset, value?.mask, value?.mask_url, value?.image, value?.image_url); if (!candidate) return ''; if (/^(?:data:|blob:|https?:\/\/)/i.test(candidate)) return candidate;
+  // Raw base64 JPEGs start with "/9j/", so a leading slash alone does not mean a site path.
+  const looksBase64 = /^[A-Za-z0-9+/]{100,}={0,2}$/.test(candidate);
+  return candidate.startsWith('/') && !looksBase64 ? candidate : `data:image/jpeg;base64,${candidate}`; }
 
 function flattenOverlays(overlays) {
   if (Array.isArray(overlays)) return overlays;

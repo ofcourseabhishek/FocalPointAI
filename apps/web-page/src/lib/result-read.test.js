@@ -681,3 +681,13 @@ test('categories say whether they have a real reading or only placeholder text',
   assert.equal(byId.technical.hasReading, false, 'no technical reading was supplied');
   assert.equal(byId.visualHierarchy.hasReading, false);
 });
+
+test('assetUrl wraps raw base64 JPEGs even though they start with a slash', () => {
+  // Base64 JPEG data always begins "/9j/", which used to be mistaken for a site path,
+  // so focus and attention maps from the backend rendered as broken images.
+  const jpeg = `/9j/4AAQSkZJRgABAQ${'A'.repeat(200)}==`;
+  assert.equal(__testables.assetUrl(jpeg), `data:image/jpeg;base64,${jpeg}`);
+  assert.equal(__testables.assetUrl('/background.jpg'), '/background.jpg');
+  assert.equal(__testables.assetUrl('/images/read/read-photo.jpg'), '/images/read/read-photo.jpg');
+  assert.equal(__testables.assetUrl('https://example.com/a.png'), 'https://example.com/a.png');
+});
