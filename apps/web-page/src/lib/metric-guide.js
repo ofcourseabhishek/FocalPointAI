@@ -22,20 +22,23 @@ const GUIDES = [
     meaning: 'The share of the photo so bright it turned pure white, with no detail left to recover.',
     verdict: (n) => n < 1 ? 'Almost no highlight detail lost.'
       : n < 5 ? 'A little highlight detail lost, usually fine.'
-        : 'Noticeable areas blown out to pure white.',
+        // A white border or backdrop clips too; the number alone cannot tell them apart.
+        : 'Large areas are pure white: blown highlights, or a white border or background.',
   },
   {
     match: /shadow clipping/i,
     meaning: 'The share of the photo so dark it turned pure black, with no detail left to recover.',
     verdict: (n) => n < 1 ? 'Almost no shadow detail lost.'
       : n < 5 ? 'A little shadow detail lost, usually fine.'
-        : 'Noticeable areas crushed to pure black.',
+        : 'Large areas are pure black: crushed shadows, or a deliberate silhouette or dark background.',
   },
   {
     match: /sharpness/i,
     meaning: 'How much fine edge detail the camera captured. Higher is crisper; around 100 and up usually reads as sharp.',
-    verdict: (n) => n < 50 ? 'Soft: likely camera shake, motion blur or missed focus.'
-      : n < 100 ? 'Slightly soft; fine at small sizes.'
+    // Measured over the whole frame, so fog, sky and still water read low even when the subject
+    // is sharp; name both readings rather than blaming the camera.
+    verdict: (n) => n < 50 ? 'Little fine detail across the frame: soft focus, or a smooth scene like fog, sky or water.'
+      : n < 100 ? 'Moderate fine detail; fine at small sizes.'
         : 'Crisp, well-resolved detail.',
   },
   {
