@@ -4,6 +4,13 @@
 /* The pull-cord theme switch toggles .dark on <html>, not the OS setting. */
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* Dark mode is charcoal rather than near-black: the darkest surface (zinc-950) is #18181b, and
+   zinc-900 steps up so raised surfaces (lesson cards, outlined pills) still read above it. */
+.dark {
+  --color-zinc-950: #18181b;
+  --color-zinc-900: #232327;
+}
+
 @theme inline {
   --font-sans: var(--font-main);
   --color-background: var(--background);

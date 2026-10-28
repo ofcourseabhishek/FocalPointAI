@@ -89,6 +89,10 @@ def load_tutorial_catalog() -> list[dict[str, Any]]:
         for objective, tutorial in objectives.items():
             if not isinstance(tutorial, dict) or not tutorial.get("youtube_link"):
                 continue
+            # Set by scripts/check_tutorial_videos.py when YouTube won't play the video
+            # in an embed (private, removed or embedding disabled).
+            if tutorial.get("available") is False:
+                continue
             video_id = parse_qs(urlparse(tutorial["youtube_link"]).query).get("v", [""])[0]
             tutorials.append(
                 {

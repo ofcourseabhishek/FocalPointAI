@@ -192,25 +192,14 @@ function readTheme() {
 }
 
 /** Lamp on = light theme. Fixed top right so it carries across the upload and result pages. */
-function ThemeCord() {
-  const [theme, setTheme] = useState(readTheme);
-
-  useLayoutEffect(() => {
-    document.documentElement.classList.toggle('dark', theme === 'dark');
-    try {
-      window.localStorage.setItem(THEME_KEY, theme);
-    } catch {
-      // Storage can be blocked; the theme still applies for this visit.
-    }
-  }, [theme]);
-
+function ThemeCord({ theme, onThemeChange }) {
   return (
-    // Tablet and up only; the mobile version is still to be decided.
-    <div className="pointer-events-none fixed top-0 right-6 z-50 hidden h-[270px] w-[216px] md:block">
+    // Desktop only; below 1024px the result page's section menu carries the theme switch.
+    <div className="pointer-events-none fixed top-0 right-6 z-50 hidden h-[270px] w-[216px] lg:block">
       <PullCord
         className="origin-top-left scale-75 rounded-none border-0 bg-transparent dark:bg-transparent [&>div]:hidden [&_g]:pointer-events-auto [&_path]:pointer-events-auto"
         checked={theme === 'light'}
-        onCheckedChange={(on) => setTheme(on ? 'light' : 'dark')}
+        onCheckedChange={(on) => onThemeChange(on ? 'light' : 'dark')}
         label="Light theme"
       />
     </div>
@@ -218,6 +207,7 @@ function ThemeCord() {
 }
 
 export default function App() {
+  const [theme, setTheme] = useState(readTheme);
   const [persistedResult] = useState(readPersistedResult);
   const [appLocation, setAppLocation] = useState(() => window.location.href);
   const [file, setFile] = useState(() => persistedResult ? { name: persistedResult.fileName } : null);
@@ -233,6 +223,15 @@ export default function App() {
   const currentLocation = new URL(appLocation);
   const showResultPreview = import.meta.env.DEV
     && (currentLocation.searchParams.get('preview') === 'result' || currentLocation.pathname.startsWith('/analysis/preview'));
+
+  useLayoutEffect(() => {
+    document.documentElement.classList.toggle('dark', theme === 'dark');
+    try {
+      window.localStorage.setItem(THEME_KEY, theme);
+    } catch {
+      // Storage can be blocked; the theme still applies for this visit.
+    }
+  }, [theme]);
 
   useEffect(() => () => {
     selectionVersionRef.current += 1;
@@ -381,17 +380,19 @@ export default function App() {
         isDownloadingReport={isDownloadingReport}
         downloadError={downloadError}
         onAnalyzeAnother={handleAnalyzeAnother}
+        theme={theme}
+        onThemeChange={setTheme}
       />
     );
   } else if (analysisResult) {
-    page = <ResultRead analysis={analysisResult} file={file} previewUrl={previewUrl} imageDimensions={fileMetadata} onDownloadReport={() => handleDownloadReport(analysisResult, file)} isDownloadingReport={isDownloadingReport} downloadError={downloadError} onAnalyzeAnother={handleAnalyzeAnother} />;
+    page = <ResultRead analysis={analysisResult} file={file} previewUrl={previewUrl} imageDimensions={fileMetadata} onDownloadReport={() => handleDownloadReport(analysisResult, file)} isDownloadingReport={isDownloadingReport} downloadError={downloadError} onAnalyzeAnother={handleAnalyzeAnother} theme={theme} onThemeChange={setTheme} />;
   } else {
     page = <UploadWorkspace onPrepare={preparePhotograph} onAnalyze={analyzePhotograph} />;
   }
 
   return (
     <>
-      <ThemeCord />
+      <ThemeCord theme={theme} onThemeChange={setTheme} />
       {page}
     </>
   );

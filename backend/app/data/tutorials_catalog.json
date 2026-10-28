@@ -268,7 +268,8 @@
         "Directing viewer attention",
         "Narrative image construction",
         "Combining technical and creative choices"
-      ]
+      ],
+      "available": false
     },
     "photo_sequences_and_photo_essays": {
       "tutorial_title": "Visual Storytelling: Creating Stories with a Set of Photos",
@@ -519,7 +520,8 @@
         "Green and magenta",
         "Colour separation",
         "Balancing opposing colours"
-      ]
+      ],
+      "available": false
     },
     "advanced_colour_masterclass": {
       "tutorial_title": "Lightroom Masterclass: Color and Color Theory",
@@ -568,7 +570,8 @@
         "Perspective correction",
         "Basic sharpening",
         "Basic noise reduction"
-      ]
+      ],
+      "available": false
     },
     "natural_film_grain": {
       "tutorial_title": "The Best Way to Add Natural Film Grain in Lightroom",
@@ -619,7 +622,8 @@
         "Editing stacks",
         "Masking",
         "Exporting"
-      ]
+      ],
+      "available": false
     },
     "snapseed_film_emulation": {
       "tutorial_title": "How to Edit Photos on Snapseed to Make Them Look Like Film",

@@ -3,6 +3,7 @@ import CommandButton from '@/components/kokonutui/command-button';
 import FileUpload from '@/components/kokonutui/file-upload';
 import Loader from '@/components/kokonutui/loader';
 import ShapeHero from '@/components/kokonutui/shape-hero';
+import { ShadowText } from '@/components/kokonutui/shadow-text';
 
 const REPO_URL = 'https://github.com/ofcourseabhishek/FocalPointAI';
 
@@ -80,11 +81,14 @@ export function UploadWorkspace({ onPrepare, onAnalyze }) {
       >
         snapgrade
       </a>
+      {/* At least one screen tall; on short screens it grows (and the page scrolls) so the
+          Analyze button is never pushed off-screen. The shapes layer is pinned to the screen,
+          so the background stays put while the content scrolls over it. */}
       <ShapeHero
-        className="h-svh min-h-0 pt-[8svh] pb-0 sm:pt-[8svh] sm:[&_h1]:text-5xl [&>div>p]:mt-4 [&>div>p]:max-w-xl [&>div:last-child>div]:mt-6"
+        className="min-h-svh pt-[max(8svh,6rem)] pb-0 sm:[&_h1]:text-5xl [&>div[aria-hidden]]:fixed [&>div>p]:mt-4 [&>div>p]:max-w-xl [&>div:last-child>div]:mt-6"
         fill={0.2}
         as="h1"
-        title="Every photograph has a story. Let's read yours."
+        title={<ShadowText as="span">Every photograph has a story. Let's read yours.</ShadowText>}
         description="Snapgrade scores your composition, light, color and focus, then tells you the one change that would make the frame stronger."
         actions={(
           <>
