@@ -527,14 +527,14 @@ function ImproveSection({ lessons, mistakes, categories }) {
         ? 'YouTube lessons matched to where this photograph has the most room to grow.'
         : 'YouTube searches aimed at where this photograph has the most room to grow.'}
     />
-    {/* Narrow screens: lessons, then what needs work. Desktop: what needs work on the left. */}
+    {/* Lessons first: above the text on narrow screens, on the left on desktop. */}
     <div className="grid items-center gap-10 lg:grid-cols-2">
       <CardStack
         cards={cards}
         accent="#b8924a"
         onAction={(card) => window.open(card.href, '_blank', 'noopener,noreferrer')}
       />
-      {(areas.length > 0 || solid) && <div className="lg:order-first"><WeakAreas areas={areas} hasWeak={hasWeak} solid={solid} /></div>}
+      {(areas.length > 0 || solid) && <div><WeakAreas areas={areas} hasWeak={hasWeak} solid={solid} /></div>}
     </div>
   </section>;
 }
