@@ -138,15 +138,47 @@ function Facts({ items, explain = true }) {
   </dl>;
 }
 
+// Dark text on light swatches, white on dark ones.
+function readableOn(hex) {
+  const digits = hex.slice(1, hex.length === 4 || hex.length === 5 ? 4 : 7);
+  const [r, g, b] = (digits.length === 3 ? [...digits].map((d) => d + d) : digits.match(/../g)).map((pair) => parseInt(pair, 16));
+  return 0.299 * r + 0.587 * g + 0.114 * b > 150 ? '#18181b' : '#ffffff';
+}
+
+// Proportional palette bar. Hovering or focusing a swatch floats a pill in its colour
+// with the hex code and share; clicking copies the hex code.
 function Swatches({ colors }) {
+  const [active, setActive] = useState(null); // { index, x } with x relative to the bar
+  const [copied, setCopied] = useState(null);
   if (!colors?.length) return null;
-  return <div className="mt-4">
-    <div className="flex h-12 overflow-hidden rounded-lg" role="img" aria-label={`Color palette: ${colors.map((color) => color.hex || color).join(', ')}`}>
-      {colors.map((color, index) => <span key={`${color.hex || color}-${index}`} style={{ backgroundColor: color.hex || color, flexGrow: color.percentage || 1 }} />)}
+  const swatches = colors.map((color) => typeof color === 'string' ? { hex: color, percentage: null } : color);
+  const show = (index, x) => setActive({ index, x });
+  const copy = (hex, index) => navigator.clipboard?.writeText(hex.toUpperCase()).then(() => {
+    setCopied(index);
+    setTimeout(() => setCopied((current) => current === index ? null : current), 1200);
+  });
+  const current = active && swatches[active.index];
+  return <div className="relative mt-4" onMouseLeave={() => setActive(null)}>
+    <div className="flex h-12 overflow-hidden rounded-lg">
+      {swatches.map((color, index) => <button
+        type="button"
+        key={`${color.hex}-${index}`}
+        className="cursor-copy outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white"
+        style={{ backgroundColor: color.hex, flexGrow: color.percentage || 1 }}
+        aria-label={`Copy ${color.hex.toUpperCase()}${color.percentage != null ? `, ${Math.round(color.percentage)}% of the photo` : ''}`}
+        onMouseMove={(event) => show(index, event.clientX - event.currentTarget.parentElement.getBoundingClientRect().left)}
+        onFocus={(event) => show(index, event.currentTarget.offsetLeft + event.currentTarget.offsetWidth / 2)}
+        onBlur={() => setActive(null)}
+        onClick={() => copy(color.hex, index)}
+      />)}
     </div>
-    {colors.some((color) => color.percentage != null) && <ul className="mt-3 grid grid-cols-2 gap-x-6 gap-y-1 text-xs text-zinc-500 sm:grid-cols-3 dark:text-zinc-400">
-      {colors.map((color, index) => <li className="flex items-center gap-2" key={`${color.hex}-legend-${index}`}><span className="size-2.5 rounded-full" style={{ backgroundColor: color.hex }} />{color.hex.toUpperCase()}{color.percentage != null && <span className="ml-auto tabular-nums">{Math.round(color.percentage)}%</span>}</li>)}
-    </ul>}
+    {current && <span
+      className="pointer-events-none absolute bottom-full mb-2 -translate-x-1/2 whitespace-nowrap rounded-full px-3 py-1 text-xs font-medium tabular-nums shadow-md ring-1 ring-black/10"
+      style={{ left: active.x, backgroundColor: current.hex, color: readableOn(current.hex) }}
+      aria-live="polite"
+    >
+      {copied === active.index ? 'Copied' : `${current.hex.toUpperCase()}${current.percentage != null ? ` · ${Math.round(current.percentage)}%` : ''}`}
+    </span>}
   </div>;
 }
 
@@ -245,6 +277,12 @@ function BreakdownCard({ category, palette, defaultOpen }) {
   const [open, setOpen] = useState(defaultOpen);
   const rows = metricRows(category);
   const contentId = `category-${category.id}-details`;
+  // Open when a link (e.g. a score in At a glance) jumps to this category.
+  useEffect(() => {
+    const openOnJump = (event) => { if (event.target.closest?.(`a[href="#category-${category.id}"]`)) setOpen(true); };
+    document.addEventListener('click', openOnJump);
+    return () => document.removeEventListener('click', openOnJump);
+  }, [category.id]);
   return <article className={`${CARD} scroll-mt-8`} id={`category-${category.id}`}>
     <button type="button" className="flex w-full cursor-pointer items-center justify-between gap-4 text-left" onClick={() => setOpen((current) => !current)} aria-expanded={open} aria-controls={rows.length ? contentId : undefined}>
       <h3 className="result-read__display text-2xl font-medium tracking-tight text-zinc-900 dark:text-zinc-100">{category.label}</h3>
