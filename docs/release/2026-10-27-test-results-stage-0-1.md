@@ -318,3 +318,17 @@ critique of their photo.
 | Stage 4 | Accessibility scan; non-Chromium smoke |
 | Stage 5 | Mobile layout decision and tests |
 | Stage 6 | Compatibility cells, abort and N=2 concurrency, rollout and rollback drill |
+
+## 9. Decision 2026-10-28 — release with Gemini as a requirement
+
+The product owner decided that production always runs with `GEMINI_API_KEY` configured, so the
+Gemini-off fallback is not a supported user experience. **F1 (backend half), F2 and F7 are accepted,
+not fixed**: they only affect responses produced when Gemini is unavailable or fails, where the
+local-CV templates are used. If Gemini outages become frequent, revisit them or label fallback
+results as a limited analysis in the UI.
+
+CORS was confirmed for both production frontends before merge: preflight `OPTIONS /analyze` returns
+`access-control-allow-origin` for `https://snapgradebyark.vercel.app` and
+`https://snapgrade-app.vercel.app`, and nothing for an unlisted origin.
+
+Remaining plan items (Stages 2, 3, 5, 6) were not run before this merge, at the owner's decision.
