@@ -590,7 +590,7 @@ export function ResultRead({ analysis, file, previewUrl, imageDimensions, onDown
   const mistakes = useMemo(() => deriveMistakes(model.frameWorks), [model.frameWorks]);
 
   return <main className="result-read relative">
-    <a className="absolute top-6 left-[4.5rem] z-10 font-['Neue_Haas_Grotesk_Display',Geist,Inter,sans-serif] font-semibold text-xl tracking-tight text-zinc-900 lg:left-10 dark:text-zinc-100" href={import.meta.env.VITE_LANDING_URL || 'https://snapgrade.com'}>snapgrade</a>
+    <a className="absolute top-6 left-[4.5rem] z-10 font-['Neue_Haas_Grotesk_Display',Geist,Inter,sans-serif] font-semibold text-xl tracking-tight text-zinc-900 lg:left-10 dark:text-zinc-100" href={import.meta.env.VITE_LANDING_URL || 'https://snapgradebyark.vercel.app'}>snapgrade</a>
 
     {/* Desktop only, like the lamp; smaller screens get the SectionMenu. It slides away while reading down and drops back
         down on scroll up; inert while hidden so its links leave the tab order. */}

@@ -77,7 +77,7 @@ export function UploadWorkspace({ onPrepare, onAnalyze }) {
     <div className="relative font-['Neue_Haas_Grotesk_Display',Geist,Inter,sans-serif]">
       <a
         className="absolute top-6 left-6 z-10 font-semibold text-xl text-zinc-900 tracking-tight sm:left-10 dark:text-zinc-100"
-        href={import.meta.env.VITE_LANDING_URL || 'https://snapgrade.com'}
+        href={import.meta.env.VITE_LANDING_URL || 'https://snapgradebyark.vercel.app'}
       >
         snapgrade
       </a>
@@ -105,9 +105,7 @@ export function UploadWorkspace({ onPrepare, onAnalyze }) {
             </a>
             <a
               className="inline-flex h-10 items-center rounded-full border border-zinc-200 bg-white px-5 font-medium text-sm text-zinc-700 transition-colors duration-150 ease-out hover:bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-300 dark:hover:bg-zinc-900"
-              href={`${REPO_URL}/tree/master/docs`}
-              target="_blank"
-              rel="noreferrer"
+              href="/docs"
             >
               Read the docs
             </a>
