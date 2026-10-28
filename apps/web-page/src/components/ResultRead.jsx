@@ -482,9 +482,11 @@ export function ResultRead({ analysis, file, previewUrl, imageDimensions, onDown
     </div>}
 
     <div className="result-read__content mx-auto w-full max-w-6xl px-6 sm:px-10">
-      {/* The scroll index takes over while the navbar is hidden (always on phones, which have no navbar). */}
+      {/* The scroll index takes over while the navbar is hidden (always on phones, which have no navbar).
+          From tablet width up it hangs fixed under the pull-cord lamp, in the margin the content keeps
+          clear for the lamp, so it no longer needs a column of its own. */}
       <ScrollIndex
-        className={`[&>nav]:transition-[opacity,visibility] [&>nav]:duration-300 ${navbarVisible ? 'md:[&>nav]:invisible md:[&>nav]:opacity-0' : ''}`}
+        className={`[&>nav]:transition-[opacity,visibility] [&>nav]:duration-300 md:block md:[&>nav]:fixed md:[&>nav]:top-[210px] md:[&>nav]:right-[100px] ${navbarVisible ? 'md:[&>nav]:invisible md:[&>nav]:opacity-0' : ''}`}
         scroller="window"
         selector="h2"
       >
