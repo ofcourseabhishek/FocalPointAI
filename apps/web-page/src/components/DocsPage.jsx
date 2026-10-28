@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 
 import '../result-read.css';
+import ScrollIndex from './kokonutui/scroll-index';
 
 const REPO_URL = 'https://github.com/ofcourseabhishek/FocalPointAI';
 const UPDATED = '28 October 2026';
@@ -103,7 +104,8 @@ export default function DocsPage() {
       <a className="text-sm font-medium text-zinc-600 hover:text-zinc-900 lg:mr-40 dark:text-zinc-400 dark:hover:text-zinc-100" href="/">Analyze a photograph <span aria-hidden="true">→</span></a>
     </header>
 
-    <div className="mx-auto grid w-full max-w-6xl gap-12 px-6 pt-16 pb-24 sm:px-10 lg:grid-cols-[12rem_minmax(0,1fr)] lg:pt-24">
+    {/* lg:pr-44 keeps the article clear of the fixed scroll index on the right. */}
+    <div className="mx-auto grid w-full max-w-6xl gap-12 px-6 pt-16 pb-24 sm:px-10 lg:grid-cols-[12rem_minmax(0,1fr)] lg:pt-24 lg:pr-44">
       {/* Desktop: a sticky contents list. Phones get the inline one under the intro. */}
       <nav className="hidden lg:block" aria-label="On this page">
         <ul className="sticky top-24 grid gap-2 text-sm">
@@ -112,6 +114,12 @@ export default function DocsPage() {
       </nav>
 
       <article className="max-w-3xl">
+        {/* Desktop: a tick per section heading, fixed under the lamp like the result page. */}
+        <ScrollIndex
+          className="block max-lg:[&>nav]:hidden lg:[&>nav]:fixed lg:[&>nav]:top-[210px] lg:[&>nav]:right-[100px]"
+          scroller="window"
+          selector="h2"
+        >
         <p className={EYEBROW}>Documentation</p>
         <h1 className="result-read__display mt-3 text-4xl font-medium tracking-tight text-zinc-900 sm:text-5xl dark:text-zinc-100">How Snapgrade reads a photograph</h1>
         <p className={`${BODY} mt-5 text-lg`}>Most photo critiques stop at taste: the composition feels weak, the light could be better. Snapgrade connects that feedback to measurable evidence and a useful next step. This page explains how it works today, the decisions behind it, and where it is heading.</p>
@@ -191,6 +199,7 @@ export default function DocsPage() {
           </dl>
           <p className={`${BODY} mt-8`}>The code is open source under the MIT licence. Read it, run it, or open an issue on <a className={LINK} href={REPO_URL} rel="noreferrer" target="_blank">GitHub</a>.</p>
         </Section>
+        </ScrollIndex>
       </article>
     </div>
   </main>;
