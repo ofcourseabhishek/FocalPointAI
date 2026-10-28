@@ -170,6 +170,17 @@ function formatIso(value) {
   if (!text) return '';
   return /^iso\b/i.test(text) ? text : `ISO ${text}`;
 }
+// Camera-style per-channel histogram: three equal-length arrays of 0-100, or null.
+function normalizeRgbHistogram(value) {
+  const channels = ['r', 'g', 'b'].map((key) => (Array.isArray(value?.[key]) ? value[key].map(numericValue) : null));
+  if (channels.some((bins) => !bins || bins.length < 2 || bins.some((bin) => bin === null))) return null;
+  if (new Set(channels.map((bins) => bins.length)).size !== 1) return null;
+  const [r, g, b] = channels.map((bins) => bins.map((bin) => Math.min(100, Math.max(0, bin))));
+  return { r, g, b };
+}
+// Backend defaults (SHADOW_CLIP_LEVEL / HIGHLIGHT_CLIP_LEVEL) for responses that predate clipping_levels.
+const DEFAULT_CLIP_LEVELS = { shadow: 25, highlight: 230 };
+
 function measuredEvidence(result, advancedCv) {
   const canonical = result?.measured_evidence || result?.measuredEvidence || {};
   const statistics = result?.image_statistics || advancedCv?.image_statistics || {};
@@ -197,9 +208,32 @@ function measuredEvidence(result, advancedCv) {
     ['Color profile', cameraSettings.color_profile || canonical?.capture?.color_profile],
     ['Dimensions', canonical?.capture?.dimensions || statistics.dimensions || (result?.metadata?.width && result?.metadata?.height ? `${result.metadata.width}x${result.metadata.height}` : '')],
   ].map(([label, value]) => ({ label, value: metricValue(value) })).filter((item) => item.value);
+  const horizon = advancedCv?.horizon || {};
+  const centering = advancedCv?.subject_centering || {};
+  const symmetry = advancedCv?.composition?.symmetry_patterns || {};
+  const offsetX = firstNumeric(centering.offset_x);
+  const offsetY = firstNumeric(centering.offset_y);
+  const share = (offset) => `${Math.round(Math.abs(offset) * 100)}%`;
+  const score = (value) => value === null ? '' : `${Math.round(value)}/100`;
+  const horizonAngle = horizon.detected ? firstNumeric(horizon.angle) : null;
+  const geometry = [
+    { label: 'Horizon tilt', value: horizonAngle === null ? '' : `${Math.abs(horizonAngle).toFixed(1)}°` },
+    { label: 'Subject offset', value: offsetX === null || offsetY === null ? '' : `${share(offsetX)} ${offsetX < 0 ? 'left' : 'right'}, ${share(offsetY)} ${offsetY < 0 ? 'up' : 'down'}` },
+    { label: 'Left-right symmetry', value: score(firstNumeric(symmetry.horizontal_symmetry_score)) },
+    { label: 'Top-bottom symmetry', value: score(firstNumeric(symmetry.vertical_symmetry_score)) },
+    { label: 'Negative space', value: formatPercent(firstNumeric(advancedCv?.composition?.negative_space?.percentage)) },
+  ].filter((item) => item.value);
   return {
+    geometry,
     tonal: {
       histogram,
+      rgb: normalizeRgbHistogram(statistics.rgb_histogram),
+      clipLevels: {
+        shadow: firstNumeric(statistics.clipping_levels?.shadow) ?? DEFAULT_CLIP_LEVELS.shadow,
+        highlight: firstNumeric(statistics.clipping_levels?.highlight) ?? DEFAULT_CLIP_LEVELS.highlight,
+      },
+      shadowClipping,
+      highlightClipping,
       metrics: [
         { label: 'Mean luminance', value: formatDecimal(meanLuminance) },
         { label: 'Shadow clipping', value: formatPercent(shadowClipping) },
@@ -436,7 +470,8 @@ export function getResultReadModel(result = {}) {
       interpretation: prose.interpretation,
       // False when interpretation is only the "No … reading was returned" placeholder.
       hasReading: !prose.placeholder,
-      supporting: prose.supporting,
+      // The backend can send the same sentence as summary and detail; show it once.
+      supporting: prose.supporting?.trim() === prose.interpretation?.trim() ? '' : prose.supporting,
       evidenceBreakdown: categoryMetrics(category, result, id).map(m => ({
         title: m.label,
         score: m.score,

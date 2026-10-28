@@ -7,7 +7,9 @@ import { ResultPhotoViewport } from './result/ResultPhotoViewport';
 import { DiagnosticPanel } from './result/DiagnosticPanel';
 import { describeMetric } from '../lib/metric-guide';
 import { MorphicNavbar } from './kokonutui/morphic-navbar';
+import ScrollIndex from './kokonutui/scroll-index';
 import { MistakeCard } from './result/MistakeCard';
+import { MorphIcon } from 'morphicons/react';
 import { deriveMistakes } from '../lib/mistake-guidance';
 
 import { DownloadIcon } from './icons/snapgrade-icons';
@@ -23,6 +25,53 @@ const SECTION = 'scroll-mt-20 border-t border-zinc-200 py-16 sm:py-20 dark:borde
 const SECTION_INDEX = [['read', 'Read'], ['scores', 'Scores'], ['actions', 'Actions'], ['breakdown', 'Breakdown'], ['measurements', 'Numbers'], ['improve', 'Improve']];
 
 /** Which sections exist, and which one sits under the middle of the viewport. */
+/**
+ * The navbar shows near the top and whenever the reader scrolls up; it slides away while
+ * they scroll down. Movements under JITTER px are ignored so trackpad wobble can't flicker it.
+ * Only the reader's own scrolling hides it: jumps from clicking a link or tab never do.
+ */
+const NAVBAR_TOP_ZONE = 200;
+const JITTER = 8;
+function useNavbarVisible() {
+  const [visible, setVisible] = useState(true);
+  useEffect(() => {
+    let last = window.scrollY;
+    let frame = 0;
+    let readerScrolling = false;
+    const byReader = (event) => {
+      // A pointerdown on <html> itself is a grab of the page scrollbar.
+      readerScrolling = event.type !== 'pointerdown' || event.target === document.documentElement;
+    };
+    const byJump = () => { readerScrolling = false; };
+    const update = () => {
+      frame = 0;
+      const y = window.scrollY;
+      if (y < NAVBAR_TOP_ZONE) {
+        setVisible(true);
+        last = y;
+      } else if (Math.abs(y - last) > JITTER) {
+        if (y < last) setVisible(true);
+        else if (readerScrolling) setVisible(false);
+        last = y;
+      }
+    };
+    const onScroll = () => {
+      if (!frame) frame = requestAnimationFrame(update);
+    };
+    const readerEvents = ['wheel', 'touchmove', 'keydown', 'pointerdown'];
+    readerEvents.forEach((type) => window.addEventListener(type, byReader, { passive: true }));
+    window.addEventListener('click', byJump);
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      readerEvents.forEach((type) => window.removeEventListener(type, byReader));
+      window.removeEventListener('click', byJump);
+      window.removeEventListener('scroll', onScroll);
+      cancelAnimationFrame(frame);
+    };
+  }, []);
+  return visible;
+}
+
 function useSectionIndex() {
   const [sections, setSections] = useState([]);
   const [current, setCurrent] = useState('read');
@@ -102,15 +151,47 @@ function Facts({ items, explain = true }) {
   </dl>;
 }
 
+// Dark text on light swatches, white on dark ones.
+function readableOn(hex) {
+  const digits = hex.slice(1, hex.length === 4 || hex.length === 5 ? 4 : 7);
+  const [r, g, b] = (digits.length === 3 ? [...digits].map((d) => d + d) : digits.match(/../g)).map((pair) => parseInt(pair, 16));
+  return 0.299 * r + 0.587 * g + 0.114 * b > 150 ? '#18181b' : '#ffffff';
+}
+
+// Proportional palette bar. Hovering or focusing a swatch floats a pill in its colour
+// with the hex code and share; clicking copies the hex code.
 function Swatches({ colors }) {
+  const [active, setActive] = useState(null); // { index, x } with x relative to the bar
+  const [copied, setCopied] = useState(null);
   if (!colors?.length) return null;
-  return <div className="mt-4">
-    <div className="flex h-12 overflow-hidden rounded-lg" role="img" aria-label={`Color palette: ${colors.map((color) => color.hex || color).join(', ')}`}>
-      {colors.map((color, index) => <span key={`${color.hex || color}-${index}`} style={{ backgroundColor: color.hex || color, flexGrow: color.percentage || 1 }} />)}
+  const swatches = colors.map((color) => typeof color === 'string' ? { hex: color, percentage: null } : color);
+  const show = (index, x) => setActive({ index, x });
+  const copy = (hex, index) => navigator.clipboard?.writeText(hex.toUpperCase()).then(() => {
+    setCopied(index);
+    setTimeout(() => setCopied((current) => current === index ? null : current), 1200);
+  });
+  const current = active && swatches[active.index];
+  return <div className="relative mt-4" onMouseLeave={() => setActive(null)}>
+    <div className="flex h-12 overflow-hidden rounded-lg">
+      {swatches.map((color, index) => <button
+        type="button"
+        key={`${color.hex}-${index}`}
+        className="cursor-copy outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white"
+        style={{ backgroundColor: color.hex, flexGrow: color.percentage || 1 }}
+        aria-label={`Copy ${color.hex.toUpperCase()}${color.percentage != null ? `, ${Math.round(color.percentage)}% of the photo` : ''}`}
+        onMouseMove={(event) => show(index, event.clientX - event.currentTarget.parentElement.getBoundingClientRect().left)}
+        onFocus={(event) => show(index, event.currentTarget.offsetLeft + event.currentTarget.offsetWidth / 2)}
+        onBlur={() => setActive(null)}
+        onClick={() => copy(color.hex, index)}
+      />)}
     </div>
-    {colors.some((color) => color.percentage != null) && <ul className="mt-3 grid grid-cols-2 gap-x-6 gap-y-1 text-xs text-zinc-500 sm:grid-cols-3 dark:text-zinc-400">
-      {colors.map((color, index) => <li className="flex items-center gap-2" key={`${color.hex}-legend-${index}`}><span className="size-2.5 rounded-full" style={{ backgroundColor: color.hex }} />{color.hex.toUpperCase()}{color.percentage != null && <span className="ml-auto tabular-nums">{Math.round(color.percentage)}%</span>}</li>)}
-    </ul>}
+    {current && <span
+      className="pointer-events-none absolute bottom-full mb-2 -translate-x-1/2 whitespace-nowrap rounded-full px-3 py-1 text-xs font-medium tabular-nums shadow-md ring-1 ring-black/10"
+      style={{ left: active.x, backgroundColor: current.hex, color: readableOn(current.hex) }}
+      aria-live="polite"
+    >
+      {copied === active.index ? 'Copied' : `${current.hex.toUpperCase()}${current.percentage != null ? ` · ${Math.round(current.percentage)}%` : ''}`}
+    </span>}
   </div>;
 }
 
@@ -202,60 +283,125 @@ function metricRows(category) {
   }).filter((row) => row.tag || row.comment || row.advice);
 }
 
-function BreakdownSection({ categories }) {
+const plusPath = 'M12 5v14M5 12h14';
+const minusPath = 'M5 12h14';
+
+function BreakdownCard({ category, palette, defaultOpen }) {
+  const [open, setOpen] = useState(defaultOpen);
+  const rows = metricRows(category);
+  const contentId = `category-${category.id}-details`;
+  // Open when a link (e.g. a score in At a glance) jumps to this category.
+  useEffect(() => {
+    const openOnJump = (event) => { if (event.target.closest?.(`a[href="#category-${category.id}"]`)) setOpen(true); };
+    document.addEventListener('click', openOnJump);
+    return () => document.removeEventListener('click', openOnJump);
+  }, [category.id]);
+  return <article className={`${CARD} scroll-mt-8`} id={`category-${category.id}`}>
+    <button type="button" className="flex w-full cursor-pointer items-center justify-between gap-4 text-left" onClick={() => setOpen((current) => !current)} aria-expanded={open} aria-controls={rows.length ? contentId : undefined}>
+      <h3 className="result-read__display text-2xl font-medium tracking-tight text-zinc-900 dark:text-zinc-100">{category.label}</h3>
+      <span className="flex items-center gap-4">
+        {category.score != null && <span className="result-read__display text-3xl tabular-nums text-zinc-900 dark:text-zinc-100">{category.score}<small className="ml-0.5 text-sm text-zinc-400">/100</small></span>}
+        <span className="text-zinc-500 dark:text-zinc-400" aria-hidden="true"><MorphIcon icon={open ? minusPath : plusPath} spring="snappy" strokeWidth={1.5} size={18} color="currentColor" /></span>
+      </span>
+    </button>
+    {category.interpretation && <p className="mt-3 max-w-3xl text-base text-zinc-700 dark:text-zinc-300">{category.interpretation}</p>}
+    {category.supporting && <p className="mt-2 max-w-3xl text-sm text-zinc-500 dark:text-zinc-400">{category.supporting}</p>}
+    {palette?.length > 0 && <Swatches colors={palette} />}
+    {rows.length > 0 && <div className={`grid transition-[grid-template-rows] duration-300 motion-reduce:transition-none ${open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`} id={contentId} inert={!open}>
+      {/* No padding on the clipped box: overflow hidden doesn't clip its own padding. */}
+      <div className="overflow-hidden">
+        <ul className="mt-6 divide-y divide-zinc-100 border-t border-zinc-100 dark:divide-zinc-900 dark:border-zinc-900">
+          {rows.map((row) => <li className="py-4" key={row.id}>
+            <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+              <h4 className="text-sm font-medium text-zinc-900 dark:text-zinc-100">{row.title}</h4>
+              {row.tag && <span className="rounded-full border border-zinc-200 px-2.5 py-0.5 text-xs text-zinc-600 dark:border-zinc-800 dark:text-zinc-400">{row.tag}</span>}
+            </div>
+            {row.comment && <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">{row.comment}</p>}
+            {row.advice && <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400"><span className="font-medium text-[#856324] dark:text-[#d2b16e]">{row.adviceLabel}:</span> {row.advice}</p>}
+          </li>)}
+        </ul>
+      </div>
+    </div>}
+  </article>;
+}
+
+function BreakdownSection({ categories, measuredPalette }) {
   // Skip categories that would only show the "No … reading was returned" placeholder.
   const visible = categories.filter((category) => category.score != null || category.hasReading || category.metrics?.length);
   if (!visible.length) return null;
   return <section className={SECTION} id="breakdown" aria-labelledby="breakdown-title">
     <SectionHeading id="breakdown-title" eyebrow="Category breakdown" title="What the image is doing" description="Every category we read, with what we saw in each part and how to push it further." />
     <div className="grid gap-6">
-      {visible.map((category) => {
-        const rows = metricRows(category);
-        return <article className={`${CARD} scroll-mt-8`} id={`category-${category.id}`} key={category.id}>
-          <div className="flex items-baseline justify-between gap-4">
-            <h3 className="result-read__display text-2xl font-medium tracking-tight text-zinc-900 dark:text-zinc-100">{category.label}</h3>
-            {category.score != null && <span className="result-read__display text-3xl tabular-nums text-zinc-900 dark:text-zinc-100">{category.score}<small className="ml-0.5 text-sm text-zinc-400">/100</small></span>}
-          </div>
-          {category.interpretation && <p className="mt-3 max-w-3xl text-base text-zinc-700 dark:text-zinc-300">{category.interpretation}</p>}
-          {category.supporting && <p className="mt-2 max-w-3xl text-sm text-zinc-500 dark:text-zinc-400">{category.supporting}</p>}
-          {category.palette?.length > 0 && <Swatches colors={category.palette} />}
-          {rows.length > 0 && <ul className="mt-6 divide-y divide-zinc-100 border-t border-zinc-100 dark:divide-zinc-900 dark:border-zinc-900">
-            {rows.map((row) => <li className="py-4" key={row.id}>
-              <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
-                <h4 className="text-sm font-medium text-zinc-900 dark:text-zinc-100">{row.title}</h4>
-                {row.tag && <span className="rounded-full border border-zinc-200 px-2.5 py-0.5 text-xs text-zinc-600 dark:border-zinc-800 dark:text-zinc-400">{row.tag}</span>}
-              </div>
-              {row.comment && <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">{row.comment}</p>}
-              {row.advice && <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400"><span className="font-medium text-[#856324] dark:text-[#d2b16e]">{row.adviceLabel}:</span> {row.advice}</p>}
-            </li>)}
-          </ul>}
-        </article>;
-      })}
+      {visible.map((category, index) => <BreakdownCard
+        key={category.id}
+        category={category}
+        // The measured palette carries percentages, so Color gets the proportional bar.
+        palette={category.id === 'color' && measuredPalette?.length ? measuredPalette : category.palette}
+        defaultOpen={index === 0}
+      />)}
     </div>
   </section>;
+}
+
+function HistogramViewSwitch({ checked, onChange }) {
+  return <button
+    aria-checked={checked}
+    className="group inline-flex items-center gap-2 rounded-full text-xs font-medium text-zinc-600 outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 focus-visible:ring-offset-2 dark:text-zinc-300 dark:focus-visible:ring-offset-zinc-950"
+    onClick={() => onChange(!checked)}
+    role="switch"
+    type="button"
+  >
+    RGB
+    <span className={`relative h-5 w-9 rounded-full border transition-colors duration-150 ${checked ? 'border-zinc-900 bg-zinc-900 dark:border-zinc-100 dark:bg-zinc-100' : 'border-zinc-300 bg-zinc-200 dark:border-zinc-700 dark:bg-zinc-800'}`}>
+      <span className={`absolute top-0.5 left-0.5 size-3.5 rounded-full shadow-sm transition-transform duration-150 ease-out ${checked ? 'translate-x-4 bg-white dark:bg-zinc-900' : 'translate-x-0 bg-white dark:bg-zinc-400'}`} />
+    </span>
+  </button>;
 }
 
 function MeasurementsSection({ evidence }) {
   const tonal = evidence?.tonal;
   const focus = evidence?.focus;
   const capture = evidence?.capture;
-  const hasTonal = tonal?.histogram?.length > 0 || tonal?.metrics?.length > 0;
+  const geometry = evidence?.geometry;
+  // Start on the simple tonal curve; RGB is opt-in (or the only view, if that is all there is).
+  const [rgbView, setRgbView] = useState(() => !(tonal?.histogram?.length > 0));
+  const showRgb = Boolean(tonal?.rgb) && rgbView;
+  const hasHistogram = Boolean(tonal?.rgb) || tonal?.histogram?.length > 0;
+  const hasTonal = hasHistogram || tonal?.metrics?.length > 0;
   const hasFocus = Boolean(focus?.map) || focus?.metrics?.length > 0;
-  const hasColor = evidence?.palette?.length > 0;
   const hasCapture = capture?.hasSettings || capture?.supplemental?.length > 0;
-  if (!hasTonal && !hasFocus && !hasColor && !hasCapture) return null;
+  const hasGeometry = geometry?.length > 0;
+  if (!hasTonal && !hasFocus && !hasGeometry && !hasCapture) return null;
   return <section className={SECTION} id="measurements" aria-labelledby="measurements-title">
     <SectionHeading id="measurements-title" eyebrow="Measurements" title="The numbers behind the read" description="What the pixels measure, independent of taste." />
     <div className="grid gap-6 md:grid-cols-2">
       {hasTonal && <article className={CARD}>
-        <h3 className={EYEBROW}>Tonal range</h3>
-        {tonal.histogram?.length > 0 && <>
-          <div className="result-read__histogram-chart-mini mt-4" aria-hidden="true">
+        <div className="flex items-center justify-between gap-4">
+          <h3 className={EYEBROW}>Tonal range</h3>
+          {tonal?.rgb && tonal?.histogram?.length > 0 && <HistogramViewSwitch checked={rgbView} onChange={setRgbView} />}
+        </div>
+        {hasHistogram && <>
+          <div
+            className={showRgb
+              ? 'result-read__camera-histogram mt-4 h-[140px] overflow-hidden rounded-md border border-zinc-500/70 bg-black p-1 [isolation:isolate]'
+              : 'result-read__histogram-chart-mini mt-4 text-zinc-700 dark:text-zinc-300'}
+            aria-hidden="true"
+          >
             <Suspense fallback={<Skeleton className="result-read__histogram-skeleton h-24" />}>
-              <MeasuredHistogramChart data={tonal.histogram.map((value, index) => ({ bin: index + 1, value }))} />
+              <MeasuredHistogramChart
+                view={showRgb ? 'rgb' : 'tonal'}
+                rgb={tonal.rgb}
+                luminance={tonal.histogram}
+                clipLevels={tonal.clipLevels}
+                shadowClipping={tonal.shadowClipping}
+                highlightClipping={tonal.highlightClipping}
+              />
             </Suspense>
           </div>
           <div className="mt-2 flex justify-between text-[10px] font-medium uppercase tracking-[0.1em] text-zinc-400"><span>Shadows</span><span>Midtones</span><span>Highlights</span></div>
+          <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
+            Shaded edges: clipped below {tonal.clipLevels.shadow} or above {tonal.clipLevels.highlight} (gold when over 1%)
+          </p>
         </>}
         {tonal.interpretation && <p className="mt-4 text-sm text-zinc-600 dark:text-zinc-400">{tonal.interpretation}</p>}
         <Facts items={tonal.metrics} />
@@ -265,9 +411,9 @@ function MeasurementsSection({ evidence }) {
         {focus.map && <img className="mt-4 max-h-56 w-full rounded-lg bg-zinc-100 object-contain dark:bg-zinc-900" src={focus.map} alt="Focus map: brighter areas hold more detail" />}
         <Facts items={focus.metrics} />
       </article>}
-      {hasColor && <article className={CARD}>
-        <h3 className={EYEBROW}>Color profile</h3>
-        <Swatches colors={evidence.palette} />
+      {hasGeometry && <article className={CARD}>
+        <h3 className={EYEBROW}>Geometry &amp; balance</h3>
+        <Facts items={geometry} />
       </article>}
       {hasCapture && <article className={CARD}>
         <h3 className={EYEBROW}>Capture details</h3>
@@ -387,22 +533,35 @@ export function ResultRead({ analysis, file, previewUrl, imageDimensions, onDown
     unavailableReason: available[id] ? undefined : 'No spatial evidence is available for this layer.',
   }));
   const { sections, current } = useSectionIndex();
+  const navbarVisible = useNavbarVisible();
   const mistakes = useMemo(() => deriveMistakes(model.frameWorks), [model.frameWorks]);
   const selectTab = (tab, input = 'pointer') => { if (available[tab]) { setMotionMode(input); setActiveTab(tab); } };
 
   return <main className="result-read relative">
     <a className="absolute top-6 left-6 z-10 font-semibold text-xl tracking-tight text-zinc-900 sm:left-10 dark:text-zinc-100" href={import.meta.env.VITE_LANDING_URL || 'https://snapgrade.com'}>snapgrade</a>
 
-    {/* Tablet and up only, like the lamp; the mobile treatment is still to be decided. */}
-    {sections.length > 1 && <MorphicNavbar
-      ariaLabel="Sections"
-      className="pointer-events-none fixed inset-x-0 top-3 z-40 hidden md:flex [&>div]:pointer-events-auto"
-      compact
-      items={Object.fromEntries(sections.map(([id, name]) => ['#' + id, { name }]))}
-      value={'#' + current}
-    />}
+    {/* Tablet and up only, like the lamp. It slides away while reading down and drops back
+        down on scroll up; inert while hidden so its links leave the tab order. */}
+    {sections.length > 1 && <div
+      className={`pointer-events-none fixed inset-x-0 top-3 z-40 hidden transition-transform duration-300 ease-out motion-reduce:transition-none md:block ${navbarVisible ? 'translate-y-0' : '-translate-y-24'}`}
+      inert={!navbarVisible}
+    >
+      <MorphicNavbar
+        ariaLabel="Jump to section"
+        className="[&>div]:pointer-events-auto"
+        items={Object.fromEntries(sections.map(([id, name]) => ['#' + id, { name }]))}
+        value={'#' + current}
+      />
+    </div>}
 
     <div className="result-read__content mx-auto w-full max-w-6xl px-6 sm:px-10">
+      {/* The scroll index is always visible. From tablet width up it hangs fixed under the pull-cord
+          lamp, in the margin the content keeps clear for the lamp, so it needs no column of its own. */}
+      <ScrollIndex
+        className="md:block md:[&>nav]:fixed md:[&>nav]:top-[210px] md:[&>nav]:right-[100px]"
+        scroller="window"
+        selector="h2"
+      >
       <section className="grid scroll-mt-20 gap-10 pt-24 pb-16 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] lg:items-center" id="read" aria-labelledby="result-title">
         <div className="result-read__hero-photo" aria-label="Photograph and visual evidence">
           <DiagnosticPanel modes={modes} activeModeId={activeTab} onModeChange={(id) => selectTab(id, 'pointer')}>
@@ -439,7 +598,7 @@ export function ResultRead({ analysis, file, previewUrl, imageDimensions, onDown
 
       <ScoresSection categories={model.frameWorks} />
       <ActionsSection actions={model.overviewActions} mistakes={mistakes} />
-      <BreakdownSection categories={model.frameWorks} />
+      <BreakdownSection categories={model.frameWorks} measuredPalette={model.measuredEvidence?.palette} />
       <MeasurementsSection evidence={model.measuredEvidence} />
       <ImproveSection lessons={model.measuredEvidence?.whatToLearnNext} mistakes={mistakes} categories={model.frameWorks} />
 
@@ -451,6 +610,7 @@ export function ResultRead({ analysis, file, previewUrl, imageDimensions, onDown
         </div>
         <button className={PILL_PRIMARY} type="button" onClick={onAnalyzeAnother}>Analyze another photograph <span aria-hidden="true">→</span></button>
       </section>}
+      </ScrollIndex>
     </div>
   </main>;
 }

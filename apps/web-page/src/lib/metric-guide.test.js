@@ -10,6 +10,10 @@ test('describeMetric turns raw measurements into plain-language verdicts', () =>
   assert.match(describeMetric('Shadow clipping', '0.6%').verdict, /Almost no shadow/);
   assert.match(describeMetric('Sharpness index', '286.4').verdict, /Crisp/);
   assert.match(describeMetric('Subject centered', false).verdict, /Off-centre/);
+  assert.match(describeMetric('Horizon tilt', '0.8°').verdict, /Level/);
+  assert.match(describeMetric('Horizon tilt', '3.2°').verdict, /rotate about 3.2°/);
+  assert.match(describeMetric('Left-right symmetry', '82/100').verdict, /Strongly mirrored/);
+  assert.match(describeMetric('Negative space', '45%').verdict, /room to breathe/);
 });
 
 // A whole-frame measurement cannot tell blur from fog or a white border from blown sky, so the

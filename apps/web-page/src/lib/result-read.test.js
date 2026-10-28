@@ -282,6 +282,29 @@ test('respects an intentional-absence focus treatment without scoring it as a fa
   assert.equal(focus.supporting, 'The soft focus is part of the image intent.');
 });
 
+test('drops a category supporting line that repeats its interpretation', () => {
+  const model = getResultReadModel({ frameWorks: { composition: { interpretation: 'Centering works.', supporting: 'Centering works. ' } } });
+  assert.equal(frameWork(model, 'composition').interpretation, 'Centering works.');
+  assert.equal(frameWork(model, 'composition').supporting, '');
+});
+
+test('reads horizon, subject offset, symmetry and negative space into geometry facts', () => {
+  const model = getResultReadModel({ advanced_cv: {
+    horizon: { detected: true, angle: -2.34 },
+    subject_centering: { offset_x: -0.18, offset_y: 0.04 },
+    composition: { symmetry_patterns: { horizontal_symmetry_score: 61.6, vertical_symmetry_score: 40 }, negative_space: { percentage: 45.2 } },
+  } });
+  assert.deepEqual(model.measuredEvidence.geometry.map((item) => [item.label, item.value]), [
+    ['Horizon tilt', '2.3°'],
+    ['Subject offset', '18% left, 4% down'],
+    ['Left-right symmetry', '62/100'],
+    ['Top-bottom symmetry', '40/100'],
+    ['Negative space', '45.2%'],
+  ]);
+  const noHorizon = getResultReadModel({ advanced_cv: { horizon: { detected: false, angle: null } } });
+  assert.deepEqual(noHorizon.measuredEvidence.geometry, []);
+});
+
 test('keeps absent and null scores unavailable instead of coercing them to zero', () => {
   for (const value of [undefined, null, '', '   ', false]) {
     const model = getResultReadModel({ score_engine: { overall: value, categories: { visual_hierarchy: value } } });
@@ -690,4 +713,26 @@ test('assetUrl wraps raw base64 JPEGs even though they start with a slash', () =
   assert.equal(__testables.assetUrl('/background.jpg'), '/background.jpg');
   assert.equal(__testables.assetUrl('/images/read/read-photo.jpg'), '/images/read/read-photo.jpg');
   assert.equal(__testables.assetUrl('https://example.com/a.png'), 'https://example.com/a.png');
+});
+
+test('tonal evidence carries the RGB histogram and the clipping levels the percentages use', () => {
+  const bins = (peakAt) => Array.from({ length: 64 }, (_, index) => (index === peakAt ? 100 : 5));
+  const model = getResultReadModel({
+    image_statistics: {
+      rgb_histogram: { r: bins(60), g: bins(30), b: bins(3) },
+      clipping_levels: { shadow: 25, highlight: 230 },
+      shadow_clipping_percent: 0.6,
+      highlight_clipping_percent: 12.5,
+    },
+  });
+  const tonal = model.measuredEvidence.tonal;
+  assert.deepEqual(tonal.rgb.r, bins(60));
+  assert.equal(tonal.rgb.b.length, 64);
+  assert.deepEqual(tonal.clipLevels, { shadow: 25, highlight: 230 });
+  assert.equal(tonal.highlightClipping, 12.5);
+
+  // Older responses have no RGB data and no levels: no RGB curves, and the backend's defaults.
+  const legacy = getResultReadModel({ image_statistics: { rgb_histogram: { r: [1, 2], g: [1], b: 'x' } } }).measuredEvidence.tonal;
+  assert.equal(legacy.rgb, null);
+  assert.deepEqual(legacy.clipLevels, { shadow: 25, highlight: 230 });
 });

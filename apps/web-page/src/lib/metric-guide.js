@@ -50,6 +50,32 @@ const GUIDES = [
     meaning: 'Where the sharpest detail sits in the frame, which is usually where the eye lands first.',
   },
   {
+    match: /horizon tilt/i,
+    meaning: 'How far the strongest horizontal line, usually the horizon, leans from level.',
+    verdict: (n) => n < 1.5 ? 'Level, or close enough that nobody will notice.'
+      : `Tilted: rotate about ${n}° in your editor, unless the lean is deliberate.`,
+  },
+  {
+    match: /subject offset/i,
+    meaning: "How far the subject's centre sits from the middle of the frame, as a share of its width and height.",
+  },
+  {
+    match: /symmetry/i,
+    meaning: 'How closely one half of the frame mirrors the other, from 0 to 100.',
+    // 78 matches the backend's "excellent symmetry" threshold.
+    verdict: (n) => n > 78 ? 'Strongly mirrored: formal, balanced and calm.'
+      : n > 50 ? 'Loosely mirrored halves.'
+        : 'Asymmetric, which suits informal and dynamic frames.',
+  },
+  {
+    match: /negative space/i,
+    meaning: 'The share of the frame that is calm, empty space around the subject.',
+    // Same thresholds as the backend's negative-space description.
+    verdict: (n) => n > 65 ? 'Very open and minimal; the subject stands isolated.'
+      : n > 40 ? 'The subject has room to breathe.'
+        : 'Densely packed frame: energetic, but can feel busy.',
+  },
+  {
     match: /subject cent(er|r)ed/i,
     meaning: 'Whether the main subject sits in the middle of the frame.',
     verdict: (_, value) => isNo(value) ? 'Off-centre, which gives the frame more tension and movement.'
