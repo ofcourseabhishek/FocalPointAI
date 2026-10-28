@@ -521,13 +521,14 @@ test('maps compatibility tutorial paths, YouTube links, tiers, and duplicate pro
       { id: 'a-repeat', title: 'Repeated URL', url: 'https://youtube.com/watch?v=a', priority: 2 },
       { id: 'b', title: 'Explore', url: 'https://youtube.com/watch?v=b', priority: 2 },
       { id: 'c', title: 'Deeper', url: 'https://youtube.com/watch?v=c', priority: 3 },
-      { id: 'd', title: 'Final', url: 'https://youtube.com/watch?v=d', priority: 4 },
-      { id: 'e', title: 'Too many', url: 'https://youtube.com/watch?v=e', priority: 5 },
+      { id: 'd', title: 'Fourth', url: 'https://youtube.com/watch?v=d', priority: 4 },
+      ...['e', 'f', 'g', 'h'].map((id, index) => ({ id, title: `Extra ${id}`, url: `https://youtube.com/watch?v=${id}`, priority: 5 + index })),
+      { id: 'i', title: 'Too many', url: 'https://youtube.com/watch?v=i', priority: 9 },
     ],
   });
-  assert.equal(model.measuredEvidence.whatToLearnNext.length, 4);
-  assert.deepEqual(model.measuredEvidence.whatToLearnNext.map((item) => item.title), ['Start here', 'Explore', 'Deeper', 'Final']);
-  assert.deepEqual(model.measuredEvidence.whatToLearnNext.map((item) => item.priority_label), ['START HERE', 'THEN EXPLORE', 'OPTIONAL DEEPER DIVE', 'OPTIONAL DEEPER DIVE']);
+  assert.equal(model.measuredEvidence.whatToLearnNext.length, 8);
+  assert.deepEqual(model.measuredEvidence.whatToLearnNext.map((item) => item.title), ['Start here', 'Explore', 'Deeper', 'Fourth', 'Extra e', 'Extra f', 'Extra g', 'Extra h']);
+  assert.deepEqual(model.measuredEvidence.whatToLearnNext.map((item) => item.priority_label), ['START HERE', 'THEN EXPLORE', 'OPTIONAL DEEPER DIVE', 'OPTIONAL DEEPER DIVE', 'OPTIONAL DEEPER DIVE', 'OPTIONAL DEEPER DIVE', 'OPTIONAL DEEPER DIVE', 'OPTIONAL DEEPER DIVE']);
 });
 
 test('adapts array categories and canonical mask and region evidence from the backend', () => {

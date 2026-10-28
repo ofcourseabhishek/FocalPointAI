@@ -13,6 +13,8 @@ import CardFlip from './kokonutui/card-flip';
 import CardStack from './kokonutui/card-stack';
 import { MorphIcon } from 'morphicons/react';
 import { deriveMistakes } from '../lib/mistake-guidance';
+import { weakAreas, WEAK_BELOW } from '../lib/weak-areas';
+import { lessonDeck } from '../lib/lesson-deck';
 
 import { DownloadIcon } from './icons/snapgrade-icons';
 
@@ -433,39 +435,6 @@ function MeasurementsSection({ evidence }) {
   </section>;
 }
 
-const youtubeSearch = (query) => `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
-
-/**
- * When the backend sends no tutorials, point at YouTube searches for this photo's weak spots:
- * its detected mistakes first, then its lowest-scoring categories. Real search links, never
- * invented videos.
- */
-function searchRecommendations(mistakes, categories) {
-  const picks = mistakes.map((mistake) => ({
-    key: mistake.id,
-    topic: mistake.metricLabel || mistake.categoryLabel,
-    area: mistake.categoryLabel,
-    reason: mistake.diagnosis,
-  }));
-  const weakest = categories.filter((category) => category.score != null).sort((a, b) => a.score - b.score);
-  for (const [rank, category] of weakest.entries()) {
-    if (picks.some((pick) => pick.area === category.label)) continue;
-    const reason = rank === 0
-      ? `${category.label} scored ${category.score}/100, this frame's lowest.`
-      : `${category.label} scored ${category.score}/100.`;
-    picks.push({ key: category.id, topic: category.label, area: category.label, reason });
-  }
-  return picks.slice(0, 3).map((pick, index) => ({
-    id: `search-${pick.key}`,
-    url: youtubeSearch(`${pick.topic} photography tutorial`),
-    priority_label: index === 0 ? 'Most needed' : 'Then explore',
-    learning_goal: `Improve your ${pick.topic.toLowerCase()}`,
-    reason: pick.reason,
-    helps_with: [pick.area],
-    isSearch: true,
-  }));
-}
-
 /** A lesson's thumbnail, or a gold tile for a search, which has no single video. */
 function LessonArt({ lesson }) {
   const thumbnail = lesson.thumbnail || lesson.thumbnailFallback;
@@ -489,29 +458,17 @@ function LessonArt({ lesson }) {
   />;
 }
 
-// Areas scoring under this are listed beside the lessons as what needs the most work.
-const WEAK_BELOW = 60;
-
-/** Scored metrics under WEAK_BELOW, worst first, each with the analysis's own note and fix. */
-function weakAreas(categories) {
-  return categories.flatMap((category) => (category.metrics || [])
-    .filter((metric) => metric.score != null && metric.score < WEAK_BELOW)
-    .map((metric) => ({
-      id: `${category.id}-${metric.id || metric.label}`,
-      area: category.label,
-      label: metric.label,
-      score: metric.score,
-      note: metric.saw || metric.observation,
-      fix: metric.improve || metric.try,
-    })))
-    .sort((a, b) => a.score - b.score);
-}
-
 // Desktop steps the text up so it holds its own beside the lesson deck.
-function WeakAreas({ areas }) {
+// solid uses the same rule as "What went wrong" (no detected mistakes), so the two sections
+// never disagree about whether the frame is technically solid.
+function WeakAreas({ areas, hasWeak, solid }) {
   return <div>
-    <h3 className={EYEBROW}>What needs the most work</h3>
-    <ol className="mt-5 grid gap-6">
+    <h3 className={EYEBROW}>{hasWeak && !solid ? 'What needs the most work' : 'What limits its potential'}</h3>
+    {solid && <p className="mt-3 text-sm lg:text-[15px] text-zinc-600 dark:text-zinc-400">
+      No significant issues were detected. This frame is technically solid.
+      {areas.length > 0 && ' What would lift it further are the areas below, its weakest relative to the rest, and the lessons in this section are picked to help with them.'}
+    </p>}
+    {areas.length > 0 && <ol className="mt-5 grid gap-6">
       {areas.map((area) => <li className="border-l-2 border-[#b8924a]/60 pl-4" key={area.id}>
         <div className="flex items-baseline justify-between gap-4">
           <h4 className="text-base font-medium lg:text-[17px] text-zinc-900 dark:text-zinc-100">
@@ -522,15 +479,17 @@ function WeakAreas({ areas }) {
         {area.note && <p className="mt-1 text-sm lg:text-[15px] text-zinc-600 dark:text-zinc-400">{area.note}</p>}
         {area.fix && <p className="mt-2 text-sm lg:text-[15px] text-zinc-600 dark:text-zinc-400"><span className="font-medium text-[#856324] dark:text-[#d2b16e]">How to improve:</span> {area.fix}</p>}
       </li>)}
-    </ol>
+    </ol>}
   </div>;
 }
 
 function ImproveSection({ lessons, mistakes, categories }) {
-  const supplied = (lessons || []).slice(0, 3);
-  const shown = supplied.length ? supplied : searchRecommendations(mistakes, categories);
+  const { areas, hasWeak } = weakAreas(categories);
+  const solid = mistakes.length === 0;
+  const supplied = lessons || [];
+  // At least four cards, or one per area under the cutoff: real lessons first, then searches.
+  const shown = lessonDeck({ lessons: supplied, weak: areas.filter((area) => area.score < WEAK_BELOW), mistakes, categories });
   if (!shown.length) return null;
-  const areas = weakAreas(categories);
   // Closed: the thumbnail and what the lesson teaches. Open: the player (searches have none),
   // why it was suggested, and the video's title, creator, length and topic.
   const cards = shown.map((lesson, index) => {
@@ -540,7 +499,7 @@ function ImproveSection({ lessons, mistakes, categories }) {
     return {
       id: lesson.id || href || String(index),
       title: lesson.learning_goal || lesson.title,
-      subtitle: index === 0 ? 'Most recommended' : lesson.priority_label || 'Then explore',
+      subtitle: lesson.priority_label,
       detailTitle: lesson.title || lesson.learning_goal,
       art: <LessonArt lesson={lesson} />,
       player: videoId ? <iframe
@@ -575,7 +534,7 @@ function ImproveSection({ lessons, mistakes, categories }) {
         accent="#b8924a"
         onAction={(card) => window.open(card.href, '_blank', 'noopener,noreferrer')}
       />
-      {areas.length > 0 && <div className="lg:order-first"><WeakAreas areas={areas} /></div>}
+      {(areas.length > 0 || solid) && <div className="lg:order-first"><WeakAreas areas={areas} hasWeak={hasWeak} solid={solid} /></div>}
     </div>
   </section>;
 }

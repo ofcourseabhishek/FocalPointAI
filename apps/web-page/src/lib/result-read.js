@@ -333,6 +333,8 @@ function overviewActions(result) {
 }
 
 const LESSON_TIER_LABELS = ['START HERE', 'THEN EXPLORE', 'OPTIONAL DEEPER DIVE', 'OPTIONAL DEEPER DIVE'];
+// Matches the API's MAX_RECOMMENDATIONS; lessons past the tier list keep its last label.
+const MAX_LESSONS = 8;
 // YouTube serves every video's thumbnail at a fixed address, so a lesson URL is enough to show one.
 export function youtubeVideoId(url) { return /(?:youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/)|youtu\.be\/)([\w-]{11})/.exec(String(url || ''))?.[1] || ''; }
 function youtubeThumbnail(url) { const id = youtubeVideoId(url); return id ? `https://i.ytimg.com/vi/${id}/hqdefault.jpg` : ''; }
@@ -364,8 +366,8 @@ function normalizeLearningPath(value) {
       priority_label: firstText(lesson.priority_label),
       helps_with: matchedMetricIds.length ? matchedMetricIds : (Array.isArray(lesson.helps_with) ? lesson.helps_with.map(textValue).filter(Boolean) : [])
     };
-  }).filter(Boolean).sort((left, right) => (left.priority ?? Number.MAX_SAFE_INTEGER) - (right.priority ?? Number.MAX_SAFE_INTEGER)).slice(0, 4)
-    .map((lesson, index) => ({ ...lesson, priority_label: lesson.priority_label || LESSON_TIER_LABELS[index] }));
+  }).filter(Boolean).sort((left, right) => (left.priority ?? Number.MAX_SAFE_INTEGER) - (right.priority ?? Number.MAX_SAFE_INTEGER)).slice(0, MAX_LESSONS)
+    .map((lesson, index) => ({ ...lesson, priority_label: lesson.priority_label || LESSON_TIER_LABELS[Math.min(index, LESSON_TIER_LABELS.length - 1)] }));
 }
 
 function canonicalEvidence(value) {
