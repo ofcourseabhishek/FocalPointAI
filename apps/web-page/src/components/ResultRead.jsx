@@ -291,11 +291,8 @@ function MeasurementsSection({ evidence }) {
             </Suspense>
           </div>
           <div className="mt-2 flex justify-between text-[10px] font-medium uppercase tracking-[0.1em] text-zinc-400"><span>Shadows</span><span>Midtones</span><span>Highlights</span></div>
-          <p className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-zinc-500 dark:text-zinc-400">
-            {showRgb && [['Red', 'bg-red-500'], ['Green', 'bg-green-500'], ['Blue', 'bg-blue-500']].map(([name, swatch]) => (
-              <span className="inline-flex items-center gap-1.5" key={name}><span className={`size-2 rounded-full ${swatch}`} />{name}</span>
-            ))}
-            <span>Shaded edges: clipped below {tonal.clipLevels.shadow} or above {tonal.clipLevels.highlight} (gold when over 1%)</span>
+          <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
+            Shaded edges: clipped below {tonal.clipLevels.shadow} or above {tonal.clipLevels.highlight} (gold when over 1%)
           </p>
         </>}
         {tonal.interpretation && <p className="mt-4 text-sm text-zinc-600 dark:text-zinc-400">{tonal.interpretation}</p>}
