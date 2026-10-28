@@ -378,8 +378,8 @@ export default function App() {
       <ResultRead
         analysis={RESULT_PREVIEW}
         file={{ name: 'light-study.jpg' }}
-        previewUrl="/background.jpg"
-        imageDimensions={{ width: 4640, height: 6960 }}
+        previewUrl="/preview-photo.jpg"
+        imageDimensions={{ width: 1107, height: 1600 }}
         onDownloadReport={() => handleDownloadReport(RESULT_PREVIEW, null)}
         isDownloadingReport={isDownloadingReport}
         downloadError={downloadError}
