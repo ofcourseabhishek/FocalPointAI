@@ -131,16 +131,13 @@
   }
 }
 
+/* Plain page colour matching the pages themselves (white / charcoal), so overscroll shows no
+   stray image. No min-height: on phones 100vh is taller than the visible screen, which let the
+   one-screen upload page scroll. */
 body {
-  background-color: var(--bg);
-  background-image: url('/background.jpg');
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
-  background-attachment: fixed;
+  background-color: #ffffff;
   color: var(--text-primary);
   font-family: var(--font-main);
-  min-height: 100vh;
   overflow-x: hidden;
   position: relative;
   -webkit-font-smoothing: antialiased;
@@ -153,18 +150,8 @@ body {
   }
 }
 
-/* Cosmic Ambient Lights */
-body::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  background: rgba(2,15,21,0.35);
-  pointer-events: none;
-  z-index: 0;
-}
-
-body::after {
-  content: none;
+.dark body {
+  background-color: #18181b;
 }
 
 @keyframes float-slow {
@@ -177,8 +164,9 @@ body::after {
   100% { transform: translate(-80px, -60px) scale(1.05); }
 }
 
+/* svh, not vh: on phones 100vh is taller than the visible screen and made the page scroll. */
 #root {
-  min-height: 100vh;
+  min-height: 100svh;
   display: flex;
   flex-direction: column;
   position: relative;

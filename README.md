@@ -13,8 +13,8 @@
 </p>
 
 <p align="center">
-  <a href="https://snapgradebyark.vercel.app">Landing page</a> ·
-  <a href="https://snapgrade-app.vercel.app">Open the analyzer</a> ·
+  <a href="https://snapgradebyark.vercel.app">Open the analyzer</a> ·
+  <a href="https://snapgradebyark.vercel.app/docs">How it works</a> ·
   <a href="https://snapgrade-api.onrender.com/docs">API docs</a>
 </p>
 
