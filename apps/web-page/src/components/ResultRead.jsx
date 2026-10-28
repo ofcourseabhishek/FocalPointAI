@@ -135,11 +135,14 @@ function ScoresSection({ categories }) {
 
 function ActionsSection({ actions, mistakes }) {
   const keep = actions?.keep?.filter((item) => item?.label || item?.text).slice(0, 2) || [];
-  const change = actions?.change;
-  const next = actions?.tryThisNext;
+  // The model always returns these objects; only show a card when it has real content
+  // (without Gemini, well-scored photos get no practice variations).
+  const change = actions?.change?.action ? actions.change : null;
+  const next = actions?.tryThisNext?.variations?.length ? actions.tryThisNext : null;
+  const cards = [keep.length > 0, change, next].filter(Boolean).length;
   return <section className={SECTION} id="actions" aria-labelledby="actions-title">
     <SectionHeading id="actions-title" eyebrow="What to do with it" title="Keep, change, try, fix" />
-    {(keep.length > 0 || change || next) && <div className="grid gap-6 lg:grid-cols-3">
+    {cards > 0 && <div className={`grid gap-6 ${['', 'lg:grid-cols-1', 'lg:grid-cols-2', 'lg:grid-cols-3'][cards]}`}>
       {keep.length > 0 && <article className={CARD}>
         <h3 className={EYEBROW}>Keep</h3>
         <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">What deserves to stay.</p>
@@ -200,7 +203,8 @@ function metricRows(category) {
 }
 
 function BreakdownSection({ categories }) {
-  const visible = categories.filter((category) => category.score != null || category.interpretation || category.supporting || category.metrics?.length);
+  // Skip categories that would only show the "No … reading was returned" placeholder.
+  const visible = categories.filter((category) => category.score != null || category.hasReading || category.metrics?.length);
   if (!visible.length) return null;
   return <section className={SECTION} id="breakdown" aria-labelledby="breakdown-title">
     <SectionHeading id="breakdown-title" eyebrow="Category breakdown" title="What the image is doing" description="Every category we read, with what we saw in each part and how to push it further." />

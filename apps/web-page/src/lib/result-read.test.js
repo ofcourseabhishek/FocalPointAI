@@ -670,3 +670,14 @@ test('a response shaped like backend/prompt.txt fills every result-page section'
   assert.equal(mistakes[0].metricLabel, 'Horizon');
   assert.equal(mistakes[0].postTip, 'Rotate two degrees.');
 });
+
+test('categories say whether they have a real reading or only placeholder text', () => {
+  const model = getResultReadModel({
+    score_engine: { overall: 70, categories: { composition: 70 } },
+    frame_work: { composition: { interpretation: 'The edge holds the frame.' } },
+  });
+  const byId = Object.fromEntries(model.frameWorks.map((category) => [category.id, category]));
+  assert.equal(byId.composition.hasReading, true);
+  assert.equal(byId.technical.hasReading, false, 'no technical reading was supplied');
+  assert.equal(byId.visualHierarchy.hasReading, false);
+});
