@@ -1,0 +1,11 @@
+# Secrets are passed at runtime (--env-file / host settings), never baked in.
+.env
+.env.*
+__pycache__/
+*.pyc
+.pytest_cache/
+tests/
+requirements-dev.txt
+Dockerfile
+.dockerignore
+README.md
