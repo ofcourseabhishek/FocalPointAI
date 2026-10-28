@@ -16,6 +16,8 @@ from urllib.parse import parse_qs, urlparse
 
 
 CATALOG_PATH = Path(__file__).resolve().parents[2] / "data" / "tutorials_catalog.json"
+# Most lessons one analysis returns; the result page shows at least four, and one per weak area.
+MAX_RECOMMENDATIONS = 8
 LEVEL_ORDER = {"beginner": 0, "novice": 1, "experienced": 2, "professional": 3}
 CATEGORY_LABELS = {
     "exposure_and_camera_control": "Exposure & camera control",
@@ -215,7 +217,7 @@ def recommend_tutorials(analysis: dict[str, Any], limit: int = 3) -> list[dict[s
     if not isinstance(analysis, dict):
         raise ValueError("Analysis must be an object")
 
-    limit = max(1, min(8, int(limit)))
+    limit = max(1, min(MAX_RECOMMENDATIONS, int(limit)))
     all_needs = _collect_needs(analysis)
     rejected_visual_needs = []
     eligible_needs = []

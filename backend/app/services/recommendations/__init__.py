@@ -1,1 +1,1 @@
-from .tutorial_recommendation_engine import load_tutorial_catalog, recommend_tutorials
+from .tutorial_recommendation_engine import MAX_RECOMMENDATIONS, load_tutorial_catalog, recommend_tutorials
