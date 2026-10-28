@@ -6,7 +6,7 @@ const CATEGORY_CONFIG = {
   color: { label: 'Color', scoreKeys: ['color', 'colour'], overlayNames: ['color', 'colour'], aspectKeys: ['colour', 'color', 'saturation', 'warmth'], unavailable: 'No color reading was returned for this photograph.' },
   focus: { label: 'Focus', scoreKeys: ['focus'], overlayNames: ['focus', 'sharpness'], aspectKeys: ['details', 'focus'], unavailable: 'No focus reading was returned for this photograph.' },
   visualHierarchy: { label: 'Subject', scoreKeys: ['visual_hierarchy', 'visualHierarchy', 'hierarchy'], overlayNames: ['visual_hierarchy', 'visualhierarchy', 'hierarchy', 'attention', 'saliency', 'subject'], aspectKeys: [], unavailable: 'No visual-hierarchy reading was returned for this photograph.' },
-  technical: { label: 'Technical', scoreKeys: ['technical', 'post_processing', 'postProcessing'], overlayNames: [], aspectKeys: [], unavailable: 'No technical characteristics reading was returned for this photograph.' },
+  technical: { label: 'Final technical', scoreKeys: ['technical', 'post_processing', 'postProcessing'], overlayNames: [], aspectKeys: [], unavailable: 'No technical characteristics reading was returned for this photograph.' },
 };
 
 function textValue(value) {
@@ -22,7 +22,10 @@ function clamp(value, min = 0, max = 1) {
 }
 function point(value) { const x = Array.isArray(value) ? value[0] : value?.x; const y = Array.isArray(value) ? value[1] : value?.y; const normalizedX = normalizedCoordinate(x); const normalizedY = normalizedCoordinate(y); return normalizedX === null || normalizedY === null ? null : { x: normalizedX, y: normalizedY }; }
 function line(value) { if (Array.isArray(value) && value.length >= 4 && !Array.isArray(value[0])) { const start = point([value[0], value[1]]); const end = point([value[2], value[3]]); return start && end ? { start, end } : null; } const start = point(value?.start || value?.from || value?.[0]); const end = point(value?.end || value?.to || value?.[1]); return start && end ? { start, end } : null; }
-function assetUrl(value) { const candidate = typeof value === 'string' ? value.trim() : firstText(value?.src, value?.url, value?.data, value?.data_url, value?.base64, value?.asset, value?.mask, value?.mask_url, value?.image, value?.image_url); if (!candidate) return ''; return /^(?:data:|blob:|https?:\/\/|\/)/i.test(candidate) ? candidate : `data:image/jpeg;base64,${candidate}`; }
+function assetUrl(value) { const candidate = typeof value === 'string' ? value.trim() : firstText(value?.src, value?.url, value?.data, value?.data_url, value?.base64, value?.asset, value?.mask, value?.mask_url, value?.image, value?.image_url); if (!candidate) return ''; if (/^(?:data:|blob:|https?:\/\/)/i.test(candidate)) return candidate;
+  // Raw base64 JPEGs start with "/9j/", so a leading slash alone does not mean a site path.
+  const looksBase64 = /^[A-Za-z0-9+/]{100,}={0,2}$/.test(candidate);
+  return candidate.startsWith('/') && !looksBase64 ? candidate : `data:image/jpeg;base64,${candidate}`; }
 
 function flattenOverlays(overlays) {
   if (Array.isArray(overlays)) return overlays;
@@ -102,7 +105,7 @@ function splitRead(value) { const prose = textValue(value); if (!prose) return {
 function categoryEntries(result) { const raw = result.frame_work || result.frameWorks || result.categories || {}; if (Array.isArray(raw)) return raw.reduce((entries, item) => ({ ...entries, [String(item?.id || item?.key || item?.category || '').replace(/[_\s-]/g, '').toLowerCase()]: item }), {}); if (!raw || typeof raw !== 'object') return {}; return Object.entries(raw).reduce((entries, [key, item]) => ({ ...entries, [key.replace(/[_\s-]/g, '').toLowerCase()]: item }), {}); }
 const CATEGORY_ALIASES = { light: ['lighting'], visualHierarchy: ['visual_hierarchy', 'hierarchy', 'subject'], technical: ['post_processing', 'postProcessing', 'refinement'] };
 function canonicalCategory(entries, id) { return [id, ...(CATEGORY_ALIASES[id] || [])].map((key) => entries[key.replace(/[_\s-]/g, '').toLowerCase()]).find(Boolean) || null; }
-function categoryProse(category, result, id) { const status = String(category?.status || '').toLowerCase(); if (category?.not_applicable === true || status === 'not_applicable' || status === 'intentional_absence') { const intentional = status === 'intentional_absence'; return { interpretation: firstText(category?.interpretation, category?.read, category?.summary) || (intentional ? 'This treatment is intentional for the photograph.' : 'Not applicable to this photograph.'), supporting: firstText(category?.reason, category?.supporting) }; } const interpretation = firstText(category?.interpretation, category?.read, category?.summary, category?.description); const supporting = firstText(category?.supporting, category?.detail, category?.evidence_read, category?.rationale); if (interpretation) return { interpretation, supporting }; if (id === 'visualHierarchy') return { interpretation: CATEGORY_CONFIG[id].unavailable, supporting: '' }; const note = CATEGORY_CONFIG[id].aspectKeys.map((key) => result?.aspects?.[key]).find(Boolean); const fallback = firstText(note?.what_works, note?.what_could_be_improved, note) || CATEGORY_CONFIG[id].unavailable; const secondary = firstText(note?.what_could_be_improved, note?.what_works); return { interpretation: fallback, supporting: secondary === fallback ? '' : secondary }; }
+function categoryProse(category, result, id) { const status = String(category?.status || '').toLowerCase(); if (category?.not_applicable === true || status === 'not_applicable' || status === 'intentional_absence') { const intentional = status === 'intentional_absence'; return { interpretation: firstText(category?.interpretation, category?.read, category?.summary) || (intentional ? 'This treatment is intentional for the photograph.' : 'Not applicable to this photograph.'), supporting: firstText(category?.reason, category?.supporting) }; } const interpretation = firstText(category?.interpretation, category?.read, category?.summary, category?.description); const supporting = firstText(category?.supporting, category?.detail, category?.evidence_read, category?.rationale); if (interpretation) return { interpretation, supporting }; if (id === 'visualHierarchy') return { interpretation: CATEGORY_CONFIG[id].unavailable, supporting: '', placeholder: true }; const note = CATEGORY_CONFIG[id].aspectKeys.map((key) => result?.aspects?.[key]).find(Boolean); const noted = firstText(note?.what_works, note?.what_could_be_improved, note); const fallback = noted || CATEGORY_CONFIG[id].unavailable; const secondary = firstText(note?.what_could_be_improved, note?.what_works); return { interpretation: fallback, supporting: secondary === fallback ? '' : secondary, placeholder: !noted }; }
 function numericValue(value) { if (value === null || value === undefined || typeof value === 'boolean' || (typeof value === 'string' && !value.trim())) return null; const number = Number(value); return Number.isFinite(number) ? number : null; }
 function validScore(value) { const score = numericValue(value); return score === null ? null : Math.round(Math.min(MAX_SCORE, Math.max(0, score))); }
 function categoryScore(category, scoreCategories, id) { const status = String(category?.status || '').toLowerCase(); if (category?.not_applicable === true || status === 'not_applicable' || status === 'intentional_absence') return null; const explicit = validScore(category?.score ?? category?.rating); if (explicit !== null) return explicit; return CATEGORY_CONFIG[id].scoreKeys.map((key) => validScore(scoreCategories?.[key])).find((score) => score !== null) ?? null; }
@@ -296,6 +299,8 @@ function overviewActions(result) {
 }
 
 const LESSON_TIER_LABELS = ['START HERE', 'THEN EXPLORE', 'OPTIONAL DEEPER DIVE', 'OPTIONAL DEEPER DIVE'];
+// YouTube serves every video's thumbnail at a fixed address, so a lesson URL is enough to show one.
+function youtubeThumbnail(url) { const id = /(?:youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/)|youtu\.be\/)([\w-]{11})/.exec(String(url || ''))?.[1]; return id ? `https://i.ytimg.com/vi/${id}/hqdefault.jpg` : ''; }
 function normalizeLearningPath(value) {
   if (!Array.isArray(value)) return [];
   const seen = new Set();
@@ -315,7 +320,7 @@ function normalizeLearningPath(value) {
       creator: firstText(video.channel, video.creator, lesson.channel, lesson.creator),
       duration: firstText(video.duration, lesson.duration),
       thumbnail: firstText(video.thumbnail_url, video.thumbnail, lesson.thumbnail_url, lesson.thumbnail),
-      thumbnailFallback: firstText(video.thumbnail_fallback_url, lesson.thumbnail_fallback_url),
+      thumbnailFallback: firstText(video.thumbnail_fallback_url, lesson.thumbnail_fallback_url) || youtubeThumbnail(url),
       url,
       category: firstText(lesson.topic, lesson.category, lesson.metric),
       reason: firstText(lesson.reason, lesson.description),
@@ -429,6 +434,8 @@ export function getResultReadModel(result = {}) {
       score: categoryScoreValue,
       scoreLabel: categoryScoreValue === null ? '' : String(categoryScoreValue),
       interpretation: prose.interpretation,
+      // False when interpretation is only the "No … reading was returned" placeholder.
+      hasReading: !prose.placeholder,
       supporting: prose.supporting,
       evidenceBreakdown: categoryMetrics(category, result, id).map(m => ({
         title: m.label,
@@ -460,7 +467,7 @@ export function getResultReadModel(result = {}) {
             title: m.learn.title,
             creator: m.learn.creator,
             duration: m.learn.duration,
-            thumbnail: m.learn.thumbnail,
+            thumbnail: m.learn.thumbnail || youtubeThumbnail(m.learn.youtube_url || m.learn.url),
             url: m.learn.youtube_url || m.learn.url,
             category: fw.label,
             reason: m.learn.reason || m.improve || m.works,
@@ -486,4 +493,4 @@ export function getResultReadModel(result = {}) {
 
   return { score, genre, read: { primary: readParts.statement, supporting: readParts.remainder || supportingRead(result.aspects) }, evidence: { layers: mainLayers, geometry, attention: mainLayers.attention.asset, focus: mainLayers.focus.asset, light: mainLayers.light.asset, composition: mainLayers.composition.asset, shapes: Object.fromEntries(Object.entries(mainLayers).map(([key, layer]) => [key, layer.shapes])) }, diagnosticModes, frameWorks, measuredEvidence: measured, overviewActions: overviewActions(result) };
 }
-export const __testables = { assetUrl, line, point, supportingRead, normalizedShape, normalizedRuleOfThirds, splitRead, normalizePalette, normalizeHistogram, normalizeMeasuredPalette, measuredEvidence, overviewActions, overlayEntriesByIds, centeredCategory, readingZoneCategory, nextAvailableTab, validScore, normalizeNextSteps, normalizeLearningPath, canonicalEvidence, getContainTransform };
+export const __testables = { assetUrl, line, point, supportingRead, normalizedShape, normalizedRuleOfThirds, splitRead, normalizePalette, normalizeHistogram, normalizeMeasuredPalette, measuredEvidence, overviewActions, overlayEntriesByIds, centeredCategory, readingZoneCategory, nextAvailableTab, validScore, normalizeNextSteps, normalizeLearningPath, canonicalEvidence, getContainTransform, youtubeThumbnail };

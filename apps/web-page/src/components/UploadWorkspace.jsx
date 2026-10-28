@@ -1,305 +1,166 @@
-import { useEffect, useRef, useState } from 'react';
-import { Button } from '@/components/ui/button';
-import {
-  ArrowRightIcon,
-  ReplaceIcon,
-  UploadIcon,
-} from '@/components/icons/snapgrade-icons';
-import '../upload-workspace.css';
+import { useRef, useState } from 'react';
+import CommandButton from '@/components/kokonutui/command-button';
+import FileUpload from '@/components/kokonutui/file-upload';
+import Loader from '@/components/kokonutui/loader';
+import ShapeHero from '@/components/kokonutui/shape-hero';
 
-const FILE_ACCEPT = 'image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp';
+const REPO_URL = 'https://github.com/ofcourseabhishek/FocalPointAI';
 
+const PILL = 'h-11 px-5 font-medium text-base tracking-tight';
+const OUTLINE = 'border border-zinc-200 bg-white text-zinc-900 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100';
+const SOLID = 'bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900';
+const GOLD = 'bg-[#b8924a] text-zinc-950';
 
-function hasFiles(dataTransfer) {
-  return Boolean(dataTransfer?.types && Array.from(dataTransfer.types).includes('Files'));
-}
+const HERO_TERMS = [
+  'Composition', 'Light', 'Color', 'Focus', 'Visual hierarchy', 'Rule of thirds', 'Exposure',
+  'Leading lines', 'Contrast', 'Negative space', 'Aperture', 'Shutter speed', 'ISO', 'White balance',
+  'Depth of field', 'Bokeh', 'Golden hour', 'Framing', 'Symmetry', 'Balance', 'Texture', 'Saturation',
+  'Highlights', 'Shadows', 'Sharpness', 'Horizon', 'Subject', 'Crop', 'Perspective', 'Silhouette',
+  'Tone', 'Mood', 'Grain', 'Vignette', 'Dynamic range', 'Reflection', 'Pattern', 'Motion blur',
+];
+const PILL_STYLES = [SOLID, OUTLINE, OUTLINE, GOLD, OUTLINE];
+const DOT_STYLES = [`size-16 ${GOLD}`, `size-12 ${SOLID}`, `size-20 ${OUTLINE}`, `size-14 ${GOLD}`];
 
-function formatFileSize(bytes) {
-  if (!Number.isFinite(bytes)) return '';
-  return `${(bytes / (1024 * 1024)).toFixed(bytes < 10 * 1024 * 1024 ? 1 : 0)} MB`;
-}
+// Three passes over the terms so even a 1080p hero can reach its fill; ShapeHero hides what doesn't fit.
+// ponytail: ~130 bodies is the physics' O(n²) ceiling, scale pill size instead if screens get bigger.
+const HERO_SHAPES = [0, 1, 2].flatMap((pass) =>
+  HERO_TERMS.flatMap((term, i) => {
+    const pill = { id: `${pass}-${term}`, content: term, className: `${PILL} ${PILL_STYLES[(i + pass) % PILL_STYLES.length]}` };
+    return i % 6 === 2 ? [pill, { id: `${pass}-dot-${i}`, className: DOT_STYLES[(i + pass) % DOT_STYLES.length] }] : [pill];
+  }),
+);
 
 /**
- * Focused file-selection workbench. Parent owns file validation, preview creation,
- * and request state; this component owns only local input and drag affordances.
+ * Landing hero with the photo drop zone. Two stages, each with its own retry:
+ * - upload: FileUpload's row runs `onPrepare(file)`; a bad photo fails on the row (Retry / remove).
+ * - analysis: the Enter command runs `onAnalyze(file, dimensions, signal)`; a failure keeps the
+ *   uploaded photo and shows under the button, which then retries just the analysis.
  */
-export function UploadWorkspace({
-  file,
-  previewUrl,
-  fileMetadata,
-  isPreparing = false,
-  isLoading = false,
-  error = '',
-  onFiles,
-  onAnalyze,
-  onCancel,
-}) {
-  const inputRef = useRef(null);
-  const dragDepthRef = useRef(0);
-  const headingRef = useRef(null);
-  const [isDraggingFile, setIsDraggingFile] = useState(false);
-  const hasPreview = Boolean(file && previewUrl);
-  const isBusy = isPreparing || isLoading;
-  
-  const currentState = error ? 'error' : isLoading ? 'loading' : isPreparing ? 'preparing' : hasPreview ? 'ready' : 'idle';
-  useEffect(() => {
-    // Wait for the next tick to ensure the DOM has updated the heading
-    const timer = setTimeout(() => {
-      if (currentState !== 'idle') {
-        headingRef.current?.focus();
-      }
-    }, 0);
-    return () => clearTimeout(timer);
-  }, [currentState]);
+export function UploadWorkspace({ onPrepare, onAnalyze }) {
+  const cancelRef = useRef(null);
+  const [photo, setPhoto] = useState(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analysisError, setAnalysisError] = useState('');
 
-  const clearDragState = () => {
-    dragDepthRef.current = 0;
-    setIsDraggingFile(false);
+  const upload = async (file, { signal }) => {
+    const dimensions = await onPrepare(file);
+    if (signal.aborted) return;
+    setPhoto({ file, dimensions });
+    setAnalysisError('');
   };
 
-  useEffect(() => {
-    const onDragEnter = (event) => {
-      if (!hasFiles(event.dataTransfer)) return;
-      event.preventDefault();
-      if (isLoading) {
-        event.dataTransfer.dropEffect = 'none';
-        return;
-      }
-      dragDepthRef.current += 1;
-      event.dataTransfer.dropEffect = 'copy';
-      setIsDraggingFile(true);
-    };
-
-    const onDragOver = (event) => {
-      if (!hasFiles(event.dataTransfer)) return;
-      event.preventDefault();
-      event.dataTransfer.dropEffect = isLoading ? 'none' : 'copy';
-    };
-
-    const onDragLeave = (event) => {
-      if (!hasFiles(event.dataTransfer)) return;
-      dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
-      if (dragDepthRef.current === 0) setIsDraggingFile(false);
-    };
-
-    const onDrop = (event) => {
-      if (!hasFiles(event.dataTransfer)) return;
-      event.preventDefault();
-      clearDragState();
-      if (isLoading) return;
-      const files = Array.from(event.dataTransfer.files || []);
-      if (files.length) onFiles?.(files);
-    };
-    
-    const onKeyDown = (event) => {
-      if (event.key === 'Escape' && isBusy) {
-        onCancel?.();
-      }
-    };
-
-    window.addEventListener('dragenter', onDragEnter);
-    window.addEventListener('dragover', onDragOver);
-    window.addEventListener('dragleave', onDragLeave);
-    window.addEventListener('drop', onDrop);
-    window.addEventListener('keydown', onKeyDown);
-    window.addEventListener('blur', clearDragState);
-    window.addEventListener('pagehide', clearDragState);
-    document.addEventListener('visibilitychange', clearDragState);
-
-    return () => {
-      window.removeEventListener('dragenter', onDragEnter);
-      window.removeEventListener('dragover', onDragOver);
-      window.removeEventListener('dragleave', onDragLeave);
-      window.removeEventListener('drop', onDrop);
-      window.removeEventListener('keydown', onKeyDown);
-      window.removeEventListener('blur', clearDragState);
-      window.removeEventListener('pagehide', clearDragState);
-      document.removeEventListener('visibilitychange', clearDragState);
-    };
-  }, [isLoading, isBusy, onFiles, onCancel]);
-
-  const chooseFile = () => {
-    if (!isBusy) inputRef.current?.click();
+  const removePhoto = () => {
+    cancelRef.current?.abort();
+    setPhoto(null);
+    setAnalysisError('');
   };
 
-  const onInputChange = (event) => {
-    const files = Array.from(event.target.files || []);
-    if (files.length) onFiles?.(files);
-    // Allow re-selecting the same file after a validation or network error.
-    event.target.value = '';
+  const send = async () => {
+    if (!photo || isAnalyzing) return;
+    const controller = new AbortController();
+    cancelRef.current = controller;
+    setIsAnalyzing(true);
+    setAnalysisError('');
+    try {
+      await onAnalyze(photo.file, photo.dimensions, controller.signal);
+    } catch (err) {
+      // Cancel is the user's choice, not a failure worth reporting.
+      if (!controller.signal.aborted) setAnalysisError(err?.message || 'The critique could not be completed. Please try again.');
+    } finally {
+      if (cancelRef.current === controller) cancelRef.current = null;
+      setIsAnalyzing(false);
+    }
   };
-
-  const metadata = fileMetadata?.width && fileMetadata?.height
-    ? `${fileMetadata.width} × ${fileMetadata.height}`
-    : '';
-  const isDropTarget = isDraggingFile && !isLoading;
-  const surfaceClass = [
-    'upload-workspace__surface',
-    hasPreview && 'upload-workspace__surface--ready',
-    isDropTarget && 'upload-workspace__surface--dragging',
-    isLoading && 'upload-workspace__surface--loading',
-  ].filter(Boolean).join(' ');
-
-  let topContent = null;
-  let bottomContent = null;
-  if (error) {
-    topContent = (
-      <div className="upload-workspace__processing-header">
-        <p className="upload-workspace__eyebrow">ANALYSIS INTERRUPTED</p>
-        <h1 ref={headingRef} tabIndex={-1} style={{ outline: 'none' }}>We couldn't finish reading this photograph.</h1>
-        <p className="upload-workspace__error">{error}</p>
-        <p className="upload-workspace__description">Your image is still here. You can try again or choose another one.</p>
-      </div>
-    );
-    bottomContent = (
-      <div className="upload-workspace__processing-body">
-        <Button className="upload-workspace__primary-button" type="button" onClick={onAnalyze}>
-          Try again
-        </Button>
-        <Button className="upload-workspace__quiet-button" variant="ghost" type="button" onClick={chooseFile}>
-          Choose another photograph
-        </Button>
-      </div>
-    );
-  } else if (isLoading) {
-    topContent = (
-      <div className="upload-workspace__processing-header">
-        <p className="upload-workspace__eyebrow upload-workspace__eyebrow--gold">ANALYSIS IN PROGRESS</p>
-        <h1 ref={headingRef} tabIndex={-1} style={{ outline: 'none' }}>Reading the frame.</h1>
-        <p className="upload-workspace__description">Snapgrade is looking at the decisions shaping this image.</p>
-      </div>
-    );
-    bottomContent = (
-      <div className="upload-workspace__processing-body">
-        <ul className="upload-workspace__category-list">
-          <li>COMPOSITION</li>
-          <li>LIGHT</li>
-          <li>COLOR</li>
-          <li>FOCUS</li>
-          <li>VISUAL HIERARCHY</li>
-        </ul>
-        <div className="upload-workspace__working-indicator">
-          <span className="upload-workspace__working-dot" aria-hidden="true">●</span> Working
-        </div>
-        {onCancel && (
-          <Button className="upload-workspace__quiet-button" variant="ghost" type="button" onClick={onCancel} style={{ marginTop: '24px' }}>
-            Cancel
-          </Button>
-        )}
-      </div>
-    );
-  } else if (isPreparing) {
-    topContent = (
-      <div className="upload-workspace__processing-header">
-        <h1 ref={headingRef} tabIndex={-1} style={{ outline: 'none' }}>Getting it ready.</h1>
-        <div className="upload-workspace__progress" role="status" aria-live="polite" aria-busy="true">
-          <span className="upload-workspace__spinner" aria-hidden="true" />
-          <p>Checking the file and its dimensions.</p>
-        </div>
-      </div>
-    );
-  } else if (hasPreview) {
-    topContent = (
-      <div className="upload-workspace__processing-header">
-        <h1 ref={headingRef} tabIndex={-1} style={{ outline: 'none' }}>Ready to read.</h1>
-        <p className="upload-workspace__filename" title={file.name}>{file.name}</p>
-        <p className="upload-workspace__metadata" aria-label={`Photo details: ${[metadata, formatFileSize(file.size)].filter(Boolean).join(', ')}`}>
-          <span className="upload-workspace__desktop-meta">{metadata}</span>
-          <span className="upload-workspace__desktop-meta">{metadata && formatFileSize(file.size) ? ' · ' : ''}</span>
-          <span className="upload-workspace__desktop-meta">{formatFileSize(file.size)}</span>
-        </p>
-      </div>
-    );
-    bottomContent = (
-      <div className="upload-workspace__processing-body">
-        <Button className="upload-workspace__primary-button" type="button" onClick={onAnalyze}>
-          Analyze photograph <ArrowRightIcon data-icon="inline-end" aria-hidden="true" />
-        </Button>
-        <Button className="upload-workspace__quiet-button" variant="ghost" type="button" onClick={chooseFile}>
-          <ReplaceIcon data-icon="inline-start" aria-hidden="true" />
-          Choose another
-        </Button>
-      </div>
-    );
-  } else {
-    topContent = (
-      <div className="upload-workspace__processing-header">
-        <h1 ref={headingRef} tabIndex={-1} style={{ outline: 'none' }}>Add a photograph</h1>
-        <p className="upload-workspace__description">Drop one here or choose a file from your device.</p>
-      </div>
-    );
-    bottomContent = (
-      <div className="upload-workspace__processing-body">
-        <Button className="upload-workspace__primary-button" type="button" onClick={chooseFile}>
-          Choose photo <UploadIcon data-icon="inline-end" aria-hidden="true" />
-        </Button>
-        <p className="upload-workspace__file-hint">JPEG · PNG · WebP<br />Up to 20 MB</p>
-      </div>
-    );
-  }
 
   return (
-    <div className={`upload-workspace${isDropTarget ? ' upload-workspace--dragging' : ''}`}>
-      <header className="upload-workspace__header">
-        <a className="upload-workspace__wordmark" href={import.meta.env.VITE_LANDING_URL || 'https://snapgrade.com'}>snapgrade</a>
-      </header>
-
-      <main className="upload-workspace__main">
-        <p className="upload-workspace__new-label">NEW ANALYSIS</p>
-        <p className="upload-workspace__live-status" role="status" aria-live="polite">
-          {error
-            ? `Analysis interrupted. ${error}`
-            : isLoading
-              ? 'Reading the frame.'
-              : isPreparing
-                ? 'Preparing photograph.'
-                : hasPreview
-                  ? 'Photograph ready to analyze.'
-                  : 'Ready to add a photograph.'}
-        </p>
-        <div className="upload-workspace__grid">
-          <div className="upload-workspace__media-column">
-            {hasPreview ? (
-              <div className={surfaceClass}>
-                <img className="upload-workspace__image" src={previewUrl} alt={`Preview of ${file.name}`} decoding="async" />
-              </div>
-            ) : (
+    <div className="relative font-['Neue_Haas_Grotesk_Display',Geist,Inter,sans-serif]">
+      <a
+        className="absolute top-6 left-6 z-10 font-semibold text-xl text-zinc-900 tracking-tight sm:left-10 dark:text-zinc-100"
+        href={import.meta.env.VITE_LANDING_URL || 'https://snapgrade.com'}
+      >
+        snapgrade
+      </a>
+      <ShapeHero
+        className="h-svh min-h-0 pt-[8svh] pb-0 sm:pt-[8svh] sm:[&_h1]:text-5xl [&>div>p]:mt-4 [&>div>p]:max-w-xl [&>div:last-child>div]:mt-6"
+        fill={0.2}
+        as="h1"
+        title="Every photograph has a story. Let's read yours."
+        description="Snapgrade scores your composition, light, color and focus, then tells you the one change that would make the frame stronger."
+        actions={(
+          <>
+            <a
+              className="inline-flex h-10 items-center gap-2 rounded-full bg-zinc-900 px-5 font-medium text-sm text-white transition-colors duration-150 ease-out hover:bg-zinc-700 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200"
+              href={REPO_URL}
+              target="_blank"
+              rel="noreferrer"
+            >
+              <svg aria-hidden="true" className="size-4" viewBox="0 0 16 16" fill="currentColor">
+                <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z" />
+              </svg>
+              GitHub
+            </a>
+            <a
+              className="inline-flex h-10 items-center rounded-full border border-zinc-200 bg-white px-5 font-medium text-sm text-zinc-700 transition-colors duration-150 ease-out hover:bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-300 dark:hover:bg-zinc-900"
+              href={`${REPO_URL}/tree/master/docs`}
+              target="_blank"
+              rel="noreferrer"
+            >
+              Read the docs
+            </a>
+            <div className="mt-3 basis-full">
+              <FileUpload
+                acceptedFileTypes={['image/jpeg', 'image/png', 'image/webp']}
+                maxFileSize={20 * 1024 * 1024}
+                multiple={false}
+                onUpload={upload}
+                onFileRemove={removePhoto}
+              />
+              <CommandButton className="mx-auto mt-3 flex disabled:text-zinc-400 disabled:opacity-100 dark:disabled:text-zinc-500" shortcut="enter" disabled={!photo || isAnalyzing} onClick={send}>
+                {analysisError ? 'Retry analysis' : 'Analyze photograph'}
+              </CommandButton>
+            </div>
+          </>
+        )}
+        shapes={HERO_SHAPES}
+      />
+      {/* Analysis status: the loader while it runs, then the error with a retry that keeps the photo. */}
+      {(isAnalyzing || analysisError) && (
+        <div
+          className="fixed inset-0 z-40 flex flex-col items-center justify-center bg-white/85 backdrop-blur-sm dark:bg-zinc-950/85"
+          role="dialog"
+          aria-modal="true"
+          aria-label={isAnalyzing ? 'Analyzing photograph' : 'Analysis failed'}
+        >
+          {isAnalyzing ? (
+            <Loader title="Reading your photograph" subtitle="Looking at composition, light, color and focus." />
+          ) : (
+            <div className="flex max-w-sm flex-col items-center gap-2 p-8 text-center" role="alert">
+              <p className="font-medium text-base text-zinc-900 dark:text-zinc-100">We couldn't finish the read.</p>
+              <p className="text-sm text-zinc-500 dark:text-zinc-400">{analysisError} Your photo is still added.</p>
+            </div>
+          )}
+          <div className="flex gap-2">
+            {!isAnalyzing && (
               <button
-                className={surfaceClass}
+                className="h-9 rounded-full bg-zinc-900 px-4 text-sm text-white transition-colors duration-150 hover:bg-zinc-700 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200"
                 type="button"
-                onClick={chooseFile}
-                disabled={isBusy}
-                aria-label="Choose a photograph from your device"
+                autoFocus
+                onClick={send}
               >
-                  <span className="upload-workspace__empty-content">
-                  <UploadIcon className="upload-workspace__frame-mark" aria-hidden="true" />
-                  <span>{isDropTarget ? 'Release to add' : 'Drop a photograph here'}</span>
-                </span>
+                Retry analysis
               </button>
             )}
-            {!isLoading && <p className="upload-workspace__privacy">Your photograph stays on this device until you analyze it.</p>}
-          </div>
-
-          <div className="upload-workspace__information" data-loading={isLoading}>
-            <div className="upload-workspace__information-top">
-              {topContent}
-            </div>
-            <div className="upload-workspace__information-bottom">
-              {bottomContent}
-            </div>
+            <button
+              className="h-9 rounded-full border border-zinc-200 px-4 text-sm text-zinc-600 transition-colors duration-150 hover:bg-zinc-100 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-900"
+              type="button"
+              autoFocus={isAnalyzing}
+              onClick={() => (isAnalyzing ? cancelRef.current?.abort() : setAnalysisError(''))}
+            >
+              {isAnalyzing ? 'Cancel' : 'Close'}
+            </button>
           </div>
         </div>
-      </main>
-
-      <input
-        ref={inputRef}
-        className="upload-workspace__input"
-        type="file"
-        accept={FILE_ACCEPT}
-        onChange={onInputChange}
-        tabIndex={-1}
-        aria-hidden="true"
-      />
+      )}
     </div>
   );
 }

@@ -25,7 +25,7 @@ os.environ["GEMINI_API_KEY"] = ""
 from main import app  # noqa: E402
 
 EXPECTED_CATEGORIES = {
-    "composition", "lighting", "focus", "color", "subject", "post_processing"
+    "composition", "lighting", "focus", "color", "subject", "technical"
 }
 
 

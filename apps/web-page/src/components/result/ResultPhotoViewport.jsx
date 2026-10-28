@@ -123,6 +123,7 @@ export function ResultPhotoViewport({
       className={cn('result-read__photo-viewport', className)}
       data-loaded={isLoaded}
       data-orientation={getOrientation(dimensions)}
+      data-object-fit={objectFit}
       data-framing={stageAspectRatio && stageAspectRatio !== sourceAspectRatio ? 'bounded' : 'natural'}
       style={{
         ...style,
@@ -140,7 +141,7 @@ export function ResultPhotoViewport({
           onLoad={handleImageLoad}
           className="result-read__photo-viewport-image"
           data-loaded={isLoaded}
-          style={{ objectFit }}
+          style={{ objectFit, objectPosition: 'center center' }}
           draggable={false}
           loading={loading}
           fetchPriority={fetchPriority}

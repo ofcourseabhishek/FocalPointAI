@@ -44,6 +44,9 @@ class AnalysisContractTests(unittest.TestCase):
         self.assertTrue(all(item["id"] in catalog_ids for item in tutorials))
         self.assertTrue(all(item["matched_metric_ids"] for item in tutorials))
         self.assertEqual(tutorials[0]["priority_label"], "START HERE")
+        # The lesson cards show a runtime; the catalog calls it "runtime", the UI reads "duration".
+        catalog_runtime = {item["id"]: item["runtime"] for item in load_tutorial_catalog()}
+        self.assertTrue(all(item["duration"] == catalog_runtime[item["id"]] for item in tutorials))
 
     def test_visual_geometry_is_normalized_or_omitted(self):
         for evidence in self.data["visual_breakdown"]["evidence"]:

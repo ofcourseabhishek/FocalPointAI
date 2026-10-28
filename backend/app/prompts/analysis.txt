@@ -34,6 +34,23 @@ NON-NEGOTIABLE RULES
     evidence actually shows, not a generic tip.
 13. In overview, return at most two keep strengths, exactly one prioritized change, and one
     practical next exercise. Keep every item grounded in the supplied evidence.
+14. Write for a photographer who wants to improve: plain language, no jargon without a short
+    explanation, and every sentence about this photograph. Name the part of the frame you mean
+    ("the bright window on the left", "the subject's face") instead of giving generic advice.
+    Never leave a number to speak for itself; say what it means for the picture.
+15. "first_impression" is exactly two sentences. Sentence one (max 26 words) is the single most
+    important thing about this photograph; it is shown as the headline. Sentence two supports it
+    with what is visible in the frame.
+16. Keep "assessment" to a 1-3 word verdict with no hedging and no numbers, so the result page
+    can tell strengths from problems at a glance.
+    For a strength, use a plain positive word: Balanced, Strong, Clean, Sharp, Clear, Natural,
+    Even, Pleasing, Effective, Well-placed, Properly exposed.
+    For a problem, use one of these phrases: Soft focus, Motion blur, Camera shake, Noisy,
+    Overexposed, Blown highlights, Underexposed, Crushed shadows, Low contrast, Flat,
+    Color cast, Busy background, Competing elements, Crooked horizon, Weak separation,
+    Awkward crop, Tight crop.
+    For composition and crop, the assessment may instead name the technique or ratio in use
+    (for example "Rule of Thirds", "Centered Composition", "3:4"), as in rule 10.
 
 Return this structure:
 {
