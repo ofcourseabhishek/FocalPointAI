@@ -8,7 +8,7 @@
 @font-face { font-family: 'Neue Haas Grotesk Display'; src: url('/fonts/neuehaasgrotdisp-65medium-trial.otf') format('opentype'); font-style: normal; font-weight: 500 700; font-display: swap; }
 
 body:has(.result-read) { background: #ffffff; background-image: none; color: #18181b; color-scheme: light; }
-.dark body:has(.result-read) { background: #09090b; color: #f4f4f5; color-scheme: dark; }
+.dark body:has(.result-read) { background: #18181b; color: #f4f4f5; color-scheme: dark; }
 body:has(.result-read)::before, body:has(.result-read)::after { content: none; display: none; }
 .result-read, .result-read * { box-sizing: border-box; }
 /* index.css paints every svg near-white for the dark upload screen; icons here follow their text. */
@@ -34,14 +34,14 @@ body:has(.result-read)::before, body:has(.result-read)::after { content: none; d
 .result-read__display { font-family: var(--rr-font-grotesk); }
 
 /* Dark theme from the pull-cord: same palette roles, inverted for a dark canvas. */
-.dark .result-read { --rr-canvas: #09090b; --rr-surface: #18181b; --rr-ink: #f4f4f5; --rr-secondary: #d4d4d8; --rr-muted: #a1a1aa; --rr-gold-text: #d2b16e; --rr-gold-soft: #4a3d22; --rr-line: #27272a; --rr-line-strong: rgba(244, 244, 245, 0.2); --rr-focus: #a1a1aa; --rr-photo-mat: #18181b; }
+.dark .result-read { --rr-canvas: #18181b; --rr-surface: #18181b; --rr-ink: #f4f4f5; --rr-secondary: #d4d4d8; --rr-muted: #a1a1aa; --rr-gold-text: #d2b16e; --rr-gold-soft: #4a3d22; --rr-line: #27272a; --rr-line-strong: rgba(244, 244, 245, 0.2); --rr-focus: #a1a1aa; --rr-photo-mat: #232327; }
 .result-read__histogram-skeleton { position: relative; width: 100%; height: 230px; border-bottom: 1px solid var(--rr-line); }
 .result-read__histogram-skeleton::after { position: absolute; top: 0; bottom: 0; left: 0; width: 1px; background: var(--rr-line); content: ''; }:disabled { color: var(--rr-muted); cursor: not-allowed; opacity: 0.42; }
 .result-read__histogram-skeleton { width: 100%; height: 220px; border-radius: 0; }
 .result-read__sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 .result-read ::selection { background: var(--rr-ink); color: var(--rr-canvas); }
 body:has(.result-read) { scrollbar-color: #d4d4d8 #ffffff; }
-.dark body:has(.result-read) { scrollbar-color: #3f3f46 #09090b; }
+.dark body:has(.result-read) { scrollbar-color: #3f3f46 #18181b; }
 
 @media (max-width: 760px) {
   .result-read { --rr-header-height: 121px; --rr-sticky-offset: 121px; }
