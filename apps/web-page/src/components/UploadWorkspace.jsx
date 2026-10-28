@@ -80,8 +80,10 @@ export function UploadWorkspace({ onPrepare, onAnalyze }) {
       >
         snapgrade
       </a>
+      {/* At least one screen tall; on short screens it grows (and the page scrolls) so the
+          Analyze button is never pushed off-screen, with room below for the shapes to settle. */}
       <ShapeHero
-        className="h-svh min-h-0 pt-[8svh] pb-0 sm:pt-[8svh] sm:[&_h1]:text-5xl [&>div>p]:mt-4 [&>div>p]:max-w-xl [&>div:last-child>div]:mt-6"
+        className="min-h-svh pt-[max(8svh,6rem)] pb-24 sm:[&_h1]:text-5xl [&>div>p]:mt-4 [&>div>p]:max-w-xl [&>div:last-child>div]:mt-6"
         fill={0.2}
         as="h1"
         title="Every photograph has a story. Let's read yours."

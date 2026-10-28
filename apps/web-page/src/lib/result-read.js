@@ -334,7 +334,8 @@ function overviewActions(result) {
 
 const LESSON_TIER_LABELS = ['START HERE', 'THEN EXPLORE', 'OPTIONAL DEEPER DIVE', 'OPTIONAL DEEPER DIVE'];
 // YouTube serves every video's thumbnail at a fixed address, so a lesson URL is enough to show one.
-function youtubeThumbnail(url) { const id = /(?:youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/)|youtu\.be\/)([\w-]{11})/.exec(String(url || ''))?.[1]; return id ? `https://i.ytimg.com/vi/${id}/hqdefault.jpg` : ''; }
+export function youtubeVideoId(url) { return /(?:youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/)|youtu\.be\/)([\w-]{11})/.exec(String(url || ''))?.[1] || ''; }
+function youtubeThumbnail(url) { const id = youtubeVideoId(url); return id ? `https://i.ytimg.com/vi/${id}/hqdefault.jpg` : ''; }
 function normalizeLearningPath(value) {
   if (!Array.isArray(value)) return [];
   const seen = new Set();
