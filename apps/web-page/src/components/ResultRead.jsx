@@ -235,10 +235,29 @@ function BreakdownSection({ categories }) {
   </section>;
 }
 
+/** Small on/off switch for the histogram view (Kokonut's switch-button only toggles the theme). */
+function HistogramViewSwitch({ checked, onChange }) {
+  return <button
+    aria-checked={checked}
+    className="group inline-flex items-center gap-2 rounded-full text-xs font-medium text-zinc-600 outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 focus-visible:ring-offset-2 dark:text-zinc-300 dark:focus-visible:ring-offset-zinc-950"
+    onClick={() => onChange(!checked)}
+    role="switch"
+    type="button"
+  >
+    RGB
+    <span className={`relative h-5 w-9 rounded-full border transition-colors duration-150 ${checked ? 'border-zinc-900 bg-zinc-900 dark:border-zinc-100 dark:bg-zinc-100' : 'border-zinc-300 bg-zinc-200 dark:border-zinc-700 dark:bg-zinc-800'}`}>
+      <span className={`absolute top-0.5 left-0.5 size-3.5 rounded-full shadow-sm transition-transform duration-150 ease-out ${checked ? 'translate-x-4 bg-white dark:bg-zinc-900' : 'translate-x-0 bg-white dark:bg-zinc-400'}`} />
+    </span>
+  </button>;
+}
+
 function MeasurementsSection({ evidence }) {
   const tonal = evidence?.tonal;
   const focus = evidence?.focus;
   const capture = evidence?.capture;
+  // Start on the simple tonal curve; RGB is opt-in (or the only view, if that is all there is).
+  const [rgbView, setRgbView] = useState(() => !(tonal?.histogram?.length > 0));
+  const showRgb = Boolean(tonal?.rgb) && rgbView;
   const hasHistogram = Boolean(tonal?.rgb) || tonal?.histogram?.length > 0;
   const hasTonal = hasHistogram || tonal?.metrics?.length > 0;
   const hasFocus = Boolean(focus?.map) || focus?.metrics?.length > 0;
@@ -249,11 +268,20 @@ function MeasurementsSection({ evidence }) {
     <SectionHeading id="measurements-title" eyebrow="Measurements" title="The numbers behind the read" description="What the pixels measure, independent of taste." />
     <div className="grid gap-6 md:grid-cols-2">
       {hasTonal && <article className={CARD}>
-        <h3 className={EYEBROW}>Tonal range</h3>
+        <div className="flex items-center justify-between gap-4">
+          <h3 className={EYEBROW}>Tonal range</h3>
+          {tonal?.rgb && tonal?.histogram?.length > 0 && <HistogramViewSwitch checked={rgbView} onChange={setRgbView} />}
+        </div>
         {hasHistogram && <>
-          <div className="result-read__histogram-chart-mini result-read__rgb-histogram mt-4 text-zinc-700 dark:text-zinc-300" aria-hidden="true">
+          <div
+            className={showRgb
+              ? 'result-read__camera-histogram mt-4 h-[140px] overflow-hidden rounded-md border border-zinc-500/70 bg-black p-1 [isolation:isolate]'
+              : 'result-read__histogram-chart-mini mt-4 text-zinc-700 dark:text-zinc-300'}
+            aria-hidden="true"
+          >
             <Suspense fallback={<Skeleton className="result-read__histogram-skeleton h-24" />}>
               <MeasuredHistogramChart
+                view={showRgb ? 'rgb' : 'tonal'}
                 rgb={tonal.rgb}
                 luminance={tonal.histogram}
                 clipLevels={tonal.clipLevels}
@@ -264,7 +292,7 @@ function MeasurementsSection({ evidence }) {
           </div>
           <div className="mt-2 flex justify-between text-[10px] font-medium uppercase tracking-[0.1em] text-zinc-400"><span>Shadows</span><span>Midtones</span><span>Highlights</span></div>
           <p className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-zinc-500 dark:text-zinc-400">
-            {tonal.rgb && [['Red', 'bg-red-500'], ['Green', 'bg-green-500'], ['Blue', 'bg-blue-500']].map(([name, swatch]) => (
+            {showRgb && [['Red', 'bg-red-500'], ['Green', 'bg-green-500'], ['Blue', 'bg-blue-500']].map(([name, swatch]) => (
               <span className="inline-flex items-center gap-1.5" key={name}><span className={`size-2 rounded-full ${swatch}`} />{name}</span>
             ))}
             <span>Shaded edges: clipped below {tonal.clipLevels.shadow} or above {tonal.clipLevels.highlight} (gold when over 1%)</span>

@@ -1,9 +1,12 @@
 import { Area, AreaChart, ReferenceArea, ResponsiveContainer, XAxis, YAxis } from 'recharts';
 
+// Camera look: bright outlines over dark fills. Drawn with screen blending on a black panel,
+// the dark fills add up, so where all three channels overlap the area turns grey.
 const CHANNELS = [
-  { key: 'r', color: '#ef4444' },
-  { key: 'g', color: '#22c55e' },
-  { key: 'b', color: '#3b82f6' },
+  // Fills sum to roughly #616161 where all three overlap: a mid grey, as on a camera screen.
+  { key: 'r', stroke: '#ff5252', fill: '#3d1212' },
+  { key: 'g', stroke: '#4ade80', fill: '#123d18' },
+  { key: 'b', stroke: '#3b8bff', fill: '#12244d' },
 ];
 const GOLD = '#b8924a';
 // A clip zone turns gold once at least this share of the photo is clipped there.
@@ -20,11 +23,13 @@ function toPoints(series, keys) {
 }
 
 /**
- * Camera-style histogram: R, G and B areas when the analysis supplies them, otherwise one
- * luminance area in the current text colour. Shaded zones mark the clipping levels.
+ * Tonal-range histogram. view="tonal" draws one luminance area in the current text colour;
+ * view="rgb" draws camera-style R, G and B channels (render it on a black panel).
+ * Shaded zones mark the clipping levels in both views.
  */
-export default function MeasuredHistogramChart({ rgb, luminance, clipLevels, shadowClipping, highlightClipping }) {
-  const data = rgb ? toPoints(rgb, ['r', 'g', 'b']) : toPoints({ l: luminance }, ['l']);
+export default function MeasuredHistogramChart({ view = 'tonal', rgb, luminance, clipLevels, shadowClipping, highlightClipping }) {
+  const showRgb = view === 'rgb' && rgb;
+  const data = showRgb ? toPoints(rgb, ['r', 'g', 'b']) : toPoints({ l: luminance }, ['l']);
   const zone = (percent) => ({ fill: GOLD, fillOpacity: percent >= CLIPPED_PERCENT ? 0.28 : 0.08 });
 
   return (
@@ -34,9 +39,9 @@ export default function MeasuredHistogramChart({ rgb, luminance, clipLevels, sha
         <YAxis domain={[0, 100]} hide />
         <ReferenceArea x1={0} x2={clipLevels.shadow} ifOverflow="hidden" {...zone(shadowClipping ?? 0)} />
         <ReferenceArea x1={clipLevels.highlight} x2={255} ifOverflow="hidden" {...zone(highlightClipping ?? 0)} />
-        {rgb
-          ? CHANNELS.map(({ key, color }) => (
-            <Area key={key} dataKey={key} type="monotone" stroke={color} strokeWidth={1.5} fill={color} fillOpacity={0.35} isAnimationActive={false} />
+        {showRgb
+          ? CHANNELS.map(({ key, stroke, fill }) => (
+            <Area key={key} dataKey={key} type="monotone" stroke={stroke} strokeWidth={2} fill={fill} fillOpacity={1} isAnimationActive={false} />
           ))
           : <Area dataKey="l" type="monotone" stroke="currentColor" strokeWidth={1.5} fill="currentColor" fillOpacity={0.25} isAnimationActive={false} />}
       </AreaChart>

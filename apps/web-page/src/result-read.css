@@ -2527,7 +2527,6 @@ body:has(.result-read) { scrollbar-color: #d4d4d8 #ffffff; }
   }
 }
 
-/* Camera-style RGB histogram: overlapping channels mix like light on dark backgrounds
-   (overlaps brighten toward white) and like ink on light ones. */
-.result-read__rgb-histogram .recharts-area-area { mix-blend-mode: multiply; }
-.dark .result-read__rgb-histogram .recharts-area-area { mix-blend-mode: screen; }
+/* Camera-style RGB histogram on its black panel: channels add like light, so the dark fills
+   turn grey where all three overlap, as on a camera screen. */
+.result-read__camera-histogram .recharts-area-area { mix-blend-mode: screen; }
