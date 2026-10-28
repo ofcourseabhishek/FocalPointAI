@@ -20,7 +20,7 @@
 
 <p align="center">
   <img alt="Project status: MVP" src="https://img.shields.io/badge/status-MVP-D7B56D">
-  <img alt="Python 3.10 or newer" src="https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white">
+  <img alt="Python 3.14" src="https://img.shields.io/badge/Python-3.14-3776AB?logo=python&logoColor=white">
   <img alt="FastAPI backend" src="https://img.shields.io/badge/FastAPI-backend-009688?logo=fastapi&logoColor=white">
   <img alt="React 19" src="https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=20232A">
   <img alt="MIT License" src="https://img.shields.io/badge/license-MIT-4C8BF5">
@@ -96,7 +96,7 @@ The browser normalizes the canonical API response in `apps/web-page/src/lib/resu
 
 ### Prerequisites
 
-- Python 3.10+
+- Python 3.14 (the pinned dependencies are tested on it), or Docker for the API
 - Node.js `^20.19.0` or `>=22.12.0`
 - npm
 
@@ -114,10 +114,21 @@ From the repository root:
 ```powershell
 py -m venv .venv
 .\.venv\Scripts\Activate.ps1
-python -m pip install -r backend\requirements.txt
+python -m pip install -r backend\requirements-dev.txt
 cd backend
 python -m uvicorn main:app --reload --host 127.0.0.1 --port 8000
 ```
+
+`requirements.txt` pins the exact runtime versions; `requirements-dev.txt` adds the test runner.
+
+**Or with Docker** (no local Python needed), from `backend`:
+
+```powershell
+docker build -t snapgrade-api .
+docker run --rm -p 8000:8000 --env-file .env snapgrade-api
+```
+
+Leave out `--env-file .env` if you have no `.env`; Gemini is optional. Secrets are passed at run time and never copied into the image.
 
 On macOS or Linux, create the environment with `python3 -m venv .venv`, activate it with `source .venv/bin/activate`, and use forward slashes in the remaining commands.
 
