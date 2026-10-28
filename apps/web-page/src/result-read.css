@@ -1209,7 +1209,12 @@ body:has(.result-read) { scrollbar-color: #d4d4d8 #ffffff; }
   flex-direction: column;
   gap: 20px;
   max-width: 720px;
-  padding-bottom: 32px;
+}
+
+/* Spacing below the tips lives on the last tip, not as padding on the clipped box:
+   overflow:hidden never clips its own padding, so a collapsed card leaked 32px of tip. */
+.result-read__mistake-content > :last-child {
+  margin-bottom: 32px;
 }
 
 .result-read__mistake-tip {
