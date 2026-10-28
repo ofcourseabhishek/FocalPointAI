@@ -8,8 +8,9 @@ import { ShadowText } from '@/components/kokonutui/shadow-text';
 const REPO_URL = 'https://github.com/ofcourseabhishek/FocalPointAI';
 
 const PILL = 'h-11 px-5 font-medium text-base tracking-tight';
-const OUTLINE = 'border border-zinc-200 bg-white text-zinc-900 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100';
-const SOLID = 'bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900';
+// White pills are the project's off-white paper tone (#f3efe7, --background) rather than pure white.
+const OUTLINE = 'border border-zinc-200 bg-[#f3efe7] text-zinc-900 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100';
+const SOLID = 'bg-zinc-900 text-white dark:bg-[#f3efe7] dark:text-zinc-900';
 const GOLD = 'bg-[#b8924a] text-zinc-950';
 
 const HERO_TERMS = [
