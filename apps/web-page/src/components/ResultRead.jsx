@@ -7,6 +7,7 @@ import { ResultPhotoViewport } from './result/ResultPhotoViewport';
 import { DiagnosticPanel } from './result/DiagnosticPanel';
 import { describeMetric } from '../lib/metric-guide';
 import { MorphicNavbar } from './kokonutui/morphic-navbar';
+import ScrollIndex from './kokonutui/scroll-index';
 import { MistakeCard } from './result/MistakeCard';
 import { deriveMistakes } from '../lib/mistake-guidance';
 
@@ -23,6 +24,40 @@ const SECTION = 'scroll-mt-20 border-t border-zinc-200 py-16 sm:py-20 dark:borde
 const SECTION_INDEX = [['read', 'Read'], ['scores', 'Scores'], ['actions', 'Actions'], ['breakdown', 'Breakdown'], ['measurements', 'Numbers'], ['improve', 'Improve']];
 
 /** Which sections exist, and which one sits under the middle of the viewport. */
+/**
+ * The navbar shows near the top and whenever the reader scrolls up; it slides away while
+ * they scroll down. Movements under JITTER px are ignored so trackpad wobble can't flicker it.
+ */
+const NAVBAR_TOP_ZONE = 200;
+const JITTER = 8;
+function useNavbarVisible() {
+  const [visible, setVisible] = useState(true);
+  useEffect(() => {
+    let last = window.scrollY;
+    let frame = 0;
+    const update = () => {
+      frame = 0;
+      const y = window.scrollY;
+      if (y < NAVBAR_TOP_ZONE) {
+        setVisible(true);
+        last = y;
+      } else if (Math.abs(y - last) > JITTER) {
+        setVisible(y < last);
+        last = y;
+      }
+    };
+    const onScroll = () => {
+      if (!frame) frame = requestAnimationFrame(update);
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      cancelAnimationFrame(frame);
+    };
+  }, []);
+  return visible;
+}
+
 function useSectionIndex() {
   const [sections, setSections] = useState([]);
   const [current, setCurrent] = useState('read');
@@ -425,22 +460,34 @@ export function ResultRead({ analysis, file, previewUrl, imageDimensions, onDown
     unavailableReason: available[id] ? undefined : 'No spatial evidence is available for this layer.',
   }));
   const { sections, current } = useSectionIndex();
+  const navbarVisible = useNavbarVisible();
   const mistakes = useMemo(() => deriveMistakes(model.frameWorks), [model.frameWorks]);
   const selectTab = (tab, input = 'pointer') => { if (available[tab]) { setMotionMode(input); setActiveTab(tab); } };
 
   return <main className="result-read relative">
     <a className="absolute top-6 left-6 z-10 font-semibold text-xl tracking-tight text-zinc-900 sm:left-10 dark:text-zinc-100" href={import.meta.env.VITE_LANDING_URL || 'https://snapgrade.com'}>snapgrade</a>
 
-    {/* Tablet and up only, like the lamp; the mobile treatment is still to be decided. */}
-    {sections.length > 1 && <MorphicNavbar
-      ariaLabel="Sections"
-      className="pointer-events-none fixed inset-x-0 top-3 z-40 hidden md:flex [&>div]:pointer-events-auto"
-      compact
-      items={Object.fromEntries(sections.map(([id, name]) => ['#' + id, { name }]))}
-      value={'#' + current}
-    />}
+    {/* Tablet and up only, like the lamp. It slides away while reading down and drops back
+        down on scroll up; inert while hidden so its links leave the tab order. */}
+    {sections.length > 1 && <div
+      className={`pointer-events-none fixed inset-x-0 top-3 z-40 hidden transition-transform duration-300 ease-out motion-reduce:transition-none md:block ${navbarVisible ? 'translate-y-0' : '-translate-y-24'}`}
+      inert={!navbarVisible}
+    >
+      <MorphicNavbar
+        ariaLabel="Jump to section"
+        className="[&>div]:pointer-events-auto"
+        items={Object.fromEntries(sections.map(([id, name]) => ['#' + id, { name }]))}
+        value={'#' + current}
+      />
+    </div>}
 
     <div className="result-read__content mx-auto w-full max-w-6xl px-6 sm:px-10">
+      {/* The scroll index takes over while the navbar is hidden (always on phones, which have no navbar). */}
+      <ScrollIndex
+        className={`[&>nav]:transition-[opacity,visibility] [&>nav]:duration-300 ${navbarVisible ? 'md:[&>nav]:invisible md:[&>nav]:opacity-0' : ''}`}
+        scroller="window"
+        selector="h2"
+      >
       <section className="grid scroll-mt-20 gap-10 pt-24 pb-16 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] lg:items-center" id="read" aria-labelledby="result-title">
         <div className="result-read__hero-photo" aria-label="Photograph and visual evidence">
           <DiagnosticPanel modes={modes} activeModeId={activeTab} onModeChange={(id) => selectTab(id, 'pointer')}>
@@ -489,6 +536,7 @@ export function ResultRead({ analysis, file, previewUrl, imageDimensions, onDown
         </div>
         <button className={PILL_PRIMARY} type="button" onClick={onAnalyzeAnother}>Analyze another photograph <span aria-hidden="true">→</span></button>
       </section>}
+      </ScrollIndex>
     </div>
   </main>;
 }
