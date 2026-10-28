@@ -170,6 +170,17 @@ function formatIso(value) {
   if (!text) return '';
   return /^iso\b/i.test(text) ? text : `ISO ${text}`;
 }
+// Camera-style per-channel histogram: three equal-length arrays of 0-100, or null.
+function normalizeRgbHistogram(value) {
+  const channels = ['r', 'g', 'b'].map((key) => (Array.isArray(value?.[key]) ? value[key].map(numericValue) : null));
+  if (channels.some((bins) => !bins || bins.length < 2 || bins.some((bin) => bin === null))) return null;
+  if (new Set(channels.map((bins) => bins.length)).size !== 1) return null;
+  const [r, g, b] = channels.map((bins) => bins.map((bin) => Math.min(100, Math.max(0, bin))));
+  return { r, g, b };
+}
+// Backend defaults (SHADOW_CLIP_LEVEL / HIGHLIGHT_CLIP_LEVEL) for responses that predate clipping_levels.
+const DEFAULT_CLIP_LEVELS = { shadow: 25, highlight: 230 };
+
 function measuredEvidence(result, advancedCv) {
   const canonical = result?.measured_evidence || result?.measuredEvidence || {};
   const statistics = result?.image_statistics || advancedCv?.image_statistics || {};
@@ -200,6 +211,13 @@ function measuredEvidence(result, advancedCv) {
   return {
     tonal: {
       histogram,
+      rgb: normalizeRgbHistogram(statistics.rgb_histogram),
+      clipLevels: {
+        shadow: firstNumeric(statistics.clipping_levels?.shadow) ?? DEFAULT_CLIP_LEVELS.shadow,
+        highlight: firstNumeric(statistics.clipping_levels?.highlight) ?? DEFAULT_CLIP_LEVELS.highlight,
+      },
+      shadowClipping,
+      highlightClipping,
       metrics: [
         { label: 'Mean luminance', value: formatDecimal(meanLuminance) },
         { label: 'Shadow clipping', value: formatPercent(shadowClipping) },

@@ -691,3 +691,25 @@ test('assetUrl wraps raw base64 JPEGs even though they start with a slash', () =
   assert.equal(__testables.assetUrl('/images/read/read-photo.jpg'), '/images/read/read-photo.jpg');
   assert.equal(__testables.assetUrl('https://example.com/a.png'), 'https://example.com/a.png');
 });
+
+test('tonal evidence carries the RGB histogram and the clipping levels the percentages use', () => {
+  const bins = (peakAt) => Array.from({ length: 64 }, (_, index) => (index === peakAt ? 100 : 5));
+  const model = getResultReadModel({
+    image_statistics: {
+      rgb_histogram: { r: bins(60), g: bins(30), b: bins(3) },
+      clipping_levels: { shadow: 25, highlight: 230 },
+      shadow_clipping_percent: 0.6,
+      highlight_clipping_percent: 12.5,
+    },
+  });
+  const tonal = model.measuredEvidence.tonal;
+  assert.deepEqual(tonal.rgb.r, bins(60));
+  assert.equal(tonal.rgb.b.length, 64);
+  assert.deepEqual(tonal.clipLevels, { shadow: 25, highlight: 230 });
+  assert.equal(tonal.highlightClipping, 12.5);
+
+  // Older responses have no RGB data and no levels: no RGB curves, and the backend's defaults.
+  const legacy = getResultReadModel({ image_statistics: { rgb_histogram: { r: [1, 2], g: [1], b: 'x' } } }).measuredEvidence.tonal;
+  assert.equal(legacy.rgb, null);
+  assert.deepEqual(legacy.clipLevels, { shadow: 25, highlight: 230 });
+});

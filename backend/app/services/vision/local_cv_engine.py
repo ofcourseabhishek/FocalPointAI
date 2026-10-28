@@ -13,6 +13,13 @@ from pathlib import Path
 # memory limits.
 MAX_ANALYSIS_DIMENSION = 1600
 
+# Grayscale levels counted as clipped. The clipping percentages and the result page's
+# histogram clip zones both use these, so the chart and the numbers always agree.
+SHADOW_CLIP_LEVEL = 25
+HIGHLIGHT_CLIP_LEVEL = 230
+# Bins per channel for the camera-style RGB histogram (each bin covers 4 levels).
+RGB_HISTOGRAM_BINS = 64
+
 
 def simplified_aspect_ratio(width: int, height: int) -> str:
     """Reduce pixel dimensions to a friendly ratio string, e.g. 6000x4000 -> '3:2'."""
@@ -687,7 +694,7 @@ def analyze_cv_heuristics(oriented_rgb: np.ndarray, exif_summary: dict = None) -
         d_next = "Focus and stability are solid here -- no change needed for this kind of shot."
 
     # 6. Highlights
-    high_pixels = float(np.sum(img_gray > 230)) / img_gray.size
+    high_pixels = float(np.sum(img_gray > HIGHLIGHT_CLIP_LEVEL)) / img_gray.size
     if high_pixels > 0.10:
         # Stricter highlights score calculation
         high_score = int(50 + (35 * (1 - min(1.0, high_pixels * 2))))
@@ -706,7 +713,7 @@ def analyze_cv_heuristics(oriented_rgb: np.ndarray, exif_summary: dict = None) -
         h_next = "Highlight exposure is landing well -- keep metering the same way in similar light."
 
     # 7. Shadows
-    shadow_pixels = float(np.sum(img_gray < 25)) / img_gray.size
+    shadow_pixels = float(np.sum(img_gray < SHADOW_CLIP_LEVEL)) / img_gray.size
     if shadow_pixels > 0.15:
         # Stricter shadows score calculation
         shadow_score = int(55 + (30 * (1 - min(1.0, shadow_pixels * 2))))
@@ -986,6 +993,17 @@ def analyze_cv_heuristics(oriented_rgb: np.ndarray, exif_summary: dict = None) -
         round(float(value) / histogram_peak * 100, 1) if histogram_peak else 0.0
         for value in histogram_values
     ]
+    # Camera-style per-channel histograms. One shared peak keeps the channels comparable,
+    # so a red-heavy photo shows a taller red curve rather than three equal-height ones.
+    rgb_counts = {
+        name: cv2.calcHist([img_bgr], [channel], None, [RGB_HISTOGRAM_BINS], [0, 256]).flatten()
+        for name, channel in (("r", 2), ("g", 1), ("b", 0))
+    }
+    rgb_peak = max(float(counts.max()) for counts in rgb_counts.values()) or 1.0
+    rgb_histogram = {
+        name: [round(float(value) / rgb_peak * 100, 1) for value in counts]
+        for name, counts in rgb_counts.items()
+    }
     image_statistics = {
         "dimensions": f"{original_w}x{original_h}",
         "brightness": {
@@ -1011,6 +1029,8 @@ def analyze_cv_heuristics(oriented_rgb: np.ndarray, exif_summary: dict = None) -
         "eye_count": eye_count,
         "histogram": histogram_summary,
         "luminance_histogram": luminance_histogram,
+        "rgb_histogram": rgb_histogram,
+        "clipping_levels": {"shadow": SHADOW_CLIP_LEVEL, "highlight": HIGHLIGHT_CLIP_LEVEL},
         "highlight_clipping_percent": round(high_pixels * 100, 1),
         "shadow_clipping_percent": round(shadow_pixels * 100, 1),
     }

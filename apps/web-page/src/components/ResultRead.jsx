@@ -239,7 +239,8 @@ function MeasurementsSection({ evidence }) {
   const tonal = evidence?.tonal;
   const focus = evidence?.focus;
   const capture = evidence?.capture;
-  const hasTonal = tonal?.histogram?.length > 0 || tonal?.metrics?.length > 0;
+  const hasHistogram = Boolean(tonal?.rgb) || tonal?.histogram?.length > 0;
+  const hasTonal = hasHistogram || tonal?.metrics?.length > 0;
   const hasFocus = Boolean(focus?.map) || focus?.metrics?.length > 0;
   const hasColor = evidence?.palette?.length > 0;
   const hasCapture = capture?.hasSettings || capture?.supplemental?.length > 0;
@@ -249,13 +250,25 @@ function MeasurementsSection({ evidence }) {
     <div className="grid gap-6 md:grid-cols-2">
       {hasTonal && <article className={CARD}>
         <h3 className={EYEBROW}>Tonal range</h3>
-        {tonal.histogram?.length > 0 && <>
-          <div className="result-read__histogram-chart-mini mt-4" aria-hidden="true">
+        {hasHistogram && <>
+          <div className="result-read__histogram-chart-mini result-read__rgb-histogram mt-4 text-zinc-700 dark:text-zinc-300" aria-hidden="true">
             <Suspense fallback={<Skeleton className="result-read__histogram-skeleton h-24" />}>
-              <MeasuredHistogramChart data={tonal.histogram.map((value, index) => ({ bin: index + 1, value }))} />
+              <MeasuredHistogramChart
+                rgb={tonal.rgb}
+                luminance={tonal.histogram}
+                clipLevels={tonal.clipLevels}
+                shadowClipping={tonal.shadowClipping}
+                highlightClipping={tonal.highlightClipping}
+              />
             </Suspense>
           </div>
           <div className="mt-2 flex justify-between text-[10px] font-medium uppercase tracking-[0.1em] text-zinc-400"><span>Shadows</span><span>Midtones</span><span>Highlights</span></div>
+          <p className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-zinc-500 dark:text-zinc-400">
+            {tonal.rgb && [['Red', 'bg-red-500'], ['Green', 'bg-green-500'], ['Blue', 'bg-blue-500']].map(([name, swatch]) => (
+              <span className="inline-flex items-center gap-1.5" key={name}><span className={`size-2 rounded-full ${swatch}`} />{name}</span>
+            ))}
+            <span>Shaded edges: clipped below {tonal.clipLevels.shadow} or above {tonal.clipLevels.highlight} (gold when over 1%)</span>
+          </p>
         </>}
         {tonal.interpretation && <p className="mt-4 text-sm text-zinc-600 dark:text-zinc-400">{tonal.interpretation}</p>}
         <Facts items={tonal.metrics} />
