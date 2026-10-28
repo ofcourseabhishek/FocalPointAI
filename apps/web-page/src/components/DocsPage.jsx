@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 
 import '../result-read.css';
 import ScrollIndex from './kokonutui/scroll-index';
+import SlideTextButton from './kokonutui/slide-text-button';
 
 const REPO_URL = 'https://github.com/ofcourseabhishek/FocalPointAI';
 const UPDATED = '28 October 2026';
@@ -101,7 +102,8 @@ export default function DocsPage() {
   return <main className="result-read relative">
     <header className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 pt-6 sm:px-10">
       <a className="font-['Neue_Haas_Grotesk_Display',Geist,Inter,sans-serif] font-semibold text-xl tracking-tight text-zinc-900 dark:text-zinc-100" href="/">snapgrade</a>
-      <a className="text-sm font-medium text-zinc-600 hover:text-zinc-900 lg:mr-40 dark:text-zinc-400 dark:hover:text-zinc-100" href="/">Analyze a photograph <span aria-hidden="true">→</span></a>
+      {/* Pill-shaped and text-sm to match the site's other buttons; lg:mr-40 clears the lamp. */}
+      <SlideTextButton className="h-10 rounded-full px-5 text-sm tracking-tight md:min-w-0 lg:mr-40" href="/" text="Analyze a photograph" variant="ghost" />
     </header>
 
     {/* lg:pr-44 keeps the article clear of the fixed scroll index on the right. */}
